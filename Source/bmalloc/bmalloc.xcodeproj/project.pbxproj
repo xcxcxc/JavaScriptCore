@@ -447,6 +447,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 14B650C618F39F4800751968 /* bmalloc.xcconfig */;
 			buildSettings = {
+				SDKROOT = macosx;
 			};
 			name = Production;
 		};

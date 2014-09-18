@@ -1392,6 +1392,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 14C8279718FDD73400E1800C /* mbmalloc.xcconfig */;
 			buildSettings = {
+				SDKROOT = macosx;
 			};
 			name = Production;
 		};
@@ -1417,6 +1418,9 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 5D247B7314689C4700E78B76 /* WTF.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
+				GCC_ENABLE_OBJC_GC_macosx_Debug_or_Release_YES = NO;
+				GCC_ENABLE_OBJC_GC_macosx_Production = NO;
 			};
 			name = Debug;
 		};
@@ -1424,6 +1428,9 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 5D247B7314689C4700E78B76 /* WTF.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
+				GCC_ENABLE_OBJC_GC_macosx_Debug_or_Release_YES = NO;
+				GCC_ENABLE_OBJC_GC_macosx_Production = NO;
 			};
 			name = Release;
 		};
@@ -1438,6 +1445,11 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 5D247B7314689C4700E78B76 /* WTF.xcconfig */;
 			buildSettings = {
+				ARCHS = "$(ARCHS_STANDARD)";
+				GCC_ENABLE_OBJC_GC_macosx_Debug_or_Release_YES = NO;
+				GCC_ENABLE_OBJC_GC_macosx_Production = NO;
+				ONLY_ACTIVE_ARCH = NO;
+				SDKROOT = macosx;
 			};
 			name = Production;
 		};
