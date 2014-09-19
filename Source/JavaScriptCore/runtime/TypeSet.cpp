@@ -230,7 +230,7 @@ String TypeSet::displayName() const
 
     return ASCIILiteral("(many)");
 }
-
+#if ENABLE(INSPECTOR)
 PassRefPtr<Inspector::Protocol::Array<String>> TypeSet::allPrimitiveTypeNames() const
 {
     RefPtr<Inspector::Protocol::Array<String>> seen = Inspector::Protocol::Array<String>::create();
@@ -259,12 +259,12 @@ PassRefPtr<Inspector::Protocol::Array<Inspector::Protocol::Runtime::StructureDes
 
     return description.release();
 }
-
+#endif
 String TypeSet::leastCommonAncestor() const
 {
     return StructureShape::leastCommonAncestor(m_structureHistory);
 }
-
+#if ENABLE(INSPECTOR)
 PassRefPtr<Inspector::Protocol::Runtime::TypeSet> TypeSet::inspectorTypeSet() const
 {
     return Inspector::Protocol::Runtime::TypeSet::create()
@@ -278,7 +278,7 @@ PassRefPtr<Inspector::Protocol::Runtime::TypeSet> TypeSet::inspectorTypeSet() co
         .setIsObject(doesTypeConformTo(TypeObject))
         .release();
 }
-
+#endif
 String TypeSet::toJSONString() const
 {
     // This returns a JSON string representing an Object with the following properties:
@@ -531,7 +531,7 @@ String StructureShape::toJSONString() const
 
     return json.toString();
 }
-
+#if ENABLE(INSPECTOR)
 PassRefPtr<Inspector::Protocol::Runtime::StructureDescription> StructureShape::inspectorRepresentation()
 {
     RefPtr<Inspector::Protocol::Runtime::StructureDescription> base = Inspector::Protocol::Runtime::StructureDescription::create();
@@ -562,7 +562,7 @@ PassRefPtr<Inspector::Protocol::Runtime::StructureDescription> StructureShape::i
 
     return base.release();
 }
-
+#endif
 bool StructureShape::hasSamePrototypeChain(PassRefPtr<StructureShape> prpOther)
 {
     RefPtr<StructureShape> self = this;
@@ -584,6 +584,7 @@ PassRefPtr<StructureShape> StructureShape::merge(const PassRefPtr<StructureShape
     ASSERT(a->hasSamePrototypeChain(b));
 
     RefPtr<StructureShape> merged = StructureShape::create();
+#if ENABLE(INSPECTOR)
     for (auto field : a->m_fields) {
         if (b->m_fields.contains(field))
             merged->m_fields.add(field);
@@ -612,7 +613,7 @@ PassRefPtr<StructureShape> StructureShape::merge(const PassRefPtr<StructureShape
     }
 
     merged->markAsFinal();
-
+#endif
     return merged.release();
 }
 

@@ -2346,7 +2346,6 @@
 		5B185A5C19CA8C0B007D7E21 /* YarrSyntaxChecker.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 86704B4012DB8A8100A9FE7B /* YarrSyntaxChecker.cpp */; };
 		5B185A5E19CA8C0B007D7E21 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6560A4CF04B3B3E7008AE952 /* CoreFoundation.framework */; };
 		5B185A5F19CA8C0B007D7E21 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 51F0EB6105C86C6B00E6DF1B /* Foundation.framework */; };
-		5B185A6019CA8C0B007D7E21 /* libicucore.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 9322A00306C341D3009067BB /* libicucore.dylib */; };
 		5B185A6119CA8C0B007D7E21 /* libobjc.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 51F0EC0705C86C9A00E6DF1B /* libobjc.dylib */; };
 		5B185A6219CA8C0B007D7E21 /* libWTF.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A8A4748D151A8306004123FF /* libWTF.a */; };
 		5B185A6319CA8C0B007D7E21 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 371D842C17C98B6E00ECF994 /* libz.dylib */; };
@@ -3671,7 +3670,7 @@
 		0FCEFAA91804C13E00472CE4 /* FTLSaveRestore.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = FTLSaveRestore.cpp; path = ftl/FTLSaveRestore.cpp; sourceTree = "<group>"; };
 		0FCEFAAA1804C13E00472CE4 /* FTLSaveRestore.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = FTLSaveRestore.h; path = ftl/FTLSaveRestore.h; sourceTree = "<group>"; };
 		0FCEFAAE1805CA6D00472CE4 /* InitializeLLVM.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = InitializeLLVM.h; path = llvm/InitializeLLVM.h; sourceTree = "<group>"; };
-		0FCEFAB61805D61600472CE4 /* libllvmForJSC.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; name = libllvmForJSC.dylib; path = libllvmForJSC.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		0FCEFAB61805D61600472CE4 /* libllvmForJSC.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libllvmForJSC.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		0FCEFABE1805D86900472CE4 /* LLVMForJSC.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = LLVMForJSC.xcconfig; sourceTree = "<group>"; };
 		0FCEFAC01805D94100472CE4 /* LLVMOverrides.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = LLVMOverrides.cpp; sourceTree = "<group>"; };
 		0FCEFAC21805E74000472CE4 /* LLVMExports.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = LLVMExports.cpp; sourceTree = "<group>"; };
@@ -3983,9 +3982,9 @@
 		52C952B619A289850069B386 /* TypeProfiler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TypeProfiler.h; sourceTree = "<group>"; };
 		52C952B819A28A1C0069B386 /* TypeProfiler.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = TypeProfiler.cpp; sourceTree = "<group>"; };
 		5540758418F4A37500602A5D /* CompileRuntimeToLLVMIR.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = CompileRuntimeToLLVMIR.xcconfig; sourceTree = "<group>"; };
-		5B185A6D19CA8C0B007D7E21 /* JavaScriptCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; name = JavaScriptCore.framework; path = libJavaScriptCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		5B185A6D19CA8C0B007D7E21 /* libJavaScriptCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libJavaScriptCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B185A6E19CA8C0C007D7E21 /* JavaScriptCore copy-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = "JavaScriptCore copy-Info.plist"; path = "/Users/hoolai/WebKit-GIT/Source/JavaScriptCore/JavaScriptCore copy-Info.plist"; sourceTree = "<absolute>"; };
-		5B185A7C19CA8D1F007D7E21 /* JSCLLIntOffsetsExtractor */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; name = JSCLLIntOffsetsExtractor; path = libJSCLLIntOffsetsExtractor.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		5B185A7C19CA8D1F007D7E21 /* libJSCLLIntOffsetsExtractor.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libJSCLLIntOffsetsExtractor.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		5D53726D0E1C546B0021E549 /* Tracing.d */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Tracing.d; sourceTree = "<group>"; };
 		5D53726E0E1C54880021E549 /* Tracing.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Tracing.h; sourceTree = "<group>"; };
 		5D53727D0E1C55EC0021E549 /* TracingDtrace.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TracingDtrace.h; sourceTree = "<group>"; };
@@ -4795,7 +4794,6 @@
 			files = (
 				5B185A5E19CA8C0B007D7E21 /* CoreFoundation.framework in Frameworks */,
 				5B185A5F19CA8C0B007D7E21 /* Foundation.framework in Frameworks */,
-				5B185A6019CA8C0B007D7E21 /* libicucore.dylib in Frameworks */,
 				5B185A6119CA8C0B007D7E21 /* libobjc.dylib in Frameworks */,
 				5B185A6219CA8C0B007D7E21 /* libWTF.a in Frameworks */,
 				5B185A6319CA8C0B007D7E21 /* libz.dylib in Frameworks */,
@@ -4849,12 +4847,12 @@
 				0FF922CF14F46B130041A24E /* JSCLLIntOffsetsExtractor */,
 				932F5BD90822A1C700736975 /* JavaScriptCore.framework */,
 				932F5BE10822A1C700736975 /* jsc */,
-				0FCEFAB61805D61600472CE4 /* libllvmForJSC.dylib */,
+				0FCEFAB61805D61600472CE4 /* libllvmForJSC.a */,
 				141211200A48793C00480255 /* minidom */,
 				14BD59BF0A3E8F9000BAF59C /* testapi */,
 				6511230514046A4C002B101D /* testRegExp */,
-				5B185A6D19CA8C0B007D7E21 /* JavaScriptCore.framework */,
-				5B185A7C19CA8D1F007D7E21 /* JSCLLIntOffsetsExtractor */,
+				5B185A6D19CA8C0B007D7E21 /* libJavaScriptCore.a */,
+				5B185A7C19CA8D1F007D7E21 /* libJSCLLIntOffsetsExtractor.a */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -8515,7 +8513,7 @@
 			);
 			name = llvmForJSC;
 			productName = llvmForJSC;
-			productReference = 0FCEFAB61805D61600472CE4 /* libllvmForJSC.dylib */;
+			productReference = 0FCEFAB61805D61600472CE4 /* libllvmForJSC.a */;
 			productType = "com.apple.product-type.library.static";
 		};
 		0FF922C314F46B130041A24E /* JSCLLIntOffsetsExtractor */ = {
@@ -8593,7 +8591,7 @@
 			name = "JavaScriptCore iOS";
 			productInstallPath = "${SYSTEM_LIBRARY_DIR}/Frameworks/WebKit.framework/Versions/A/Frameworks";
 			productName = JavaScriptCore;
-			productReference = 5B185A6D19CA8C0B007D7E21 /* JavaScriptCore.framework */;
+			productReference = 5B185A6D19CA8C0B007D7E21 /* libJavaScriptCore.a */;
 			productType = "com.apple.product-type.library.static";
 		};
 		5B185A6F19CA8D1F007D7E21 /* JSCLLIntOffsetsExtractor iOS */ = {
@@ -8612,7 +8610,7 @@
 			name = "JSCLLIntOffsetsExtractor iOS";
 			productInstallPath = /usr/local/bin;
 			productName = jsc;
-			productReference = 5B185A7C19CA8D1F007D7E21 /* JSCLLIntOffsetsExtractor */;
+			productReference = 5B185A7C19CA8D1F007D7E21 /* libJSCLLIntOffsetsExtractor.a */;
 			productType = "com.apple.product-type.library.static";
 		};
 		651122F714046A4C002B101D /* testRegExp */ = {
@@ -10481,6 +10479,7 @@
 			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
+				ENABLE_INSPECTOR = "";
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
 					"HAVE_DTRACE=$(HAVE_DTRACE)",
@@ -10501,6 +10500,7 @@
 			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
+				ENABLE_INSPECTOR = "";
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
 					"HAVE_DTRACE=$(HAVE_DTRACE)",
@@ -10522,6 +10522,7 @@
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
 				BUILD_VARIANTS = normal;
+				ENABLE_INSPECTOR = "";
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
 					"HAVE_DTRACE=$(HAVE_DTRACE)",
@@ -10927,6 +10928,7 @@
 			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
+				ENABLE_INSPECTOR = "";
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
 					"HAVE_DTRACE=$(HAVE_DTRACE)",

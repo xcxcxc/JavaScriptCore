@@ -394,6 +394,10 @@
 #define WTF_OS_SOLARIS 1
 #endif
 
+#if defined(ANDROID)
+#define WTF_OS_ANDROID 1
+#endif
+
 /* OS(WINCE) - Windows CE; note that for this platform OS(WINDOWS) is also defined */
 #if defined(_WIN32_WCE)
 #define WTF_OS_WINCE 1
@@ -444,6 +448,8 @@
 #endif
 #elif OS(WINDOWS)
 #define WTF_PLATFORM_WIN 1
+#elif OS(ANDROID)
+#define WTF_PLATFORM_ANDROID 1
 #endif
 
 /* PLATFORM(COCOA) */

@@ -66,7 +66,9 @@
 #if OS(DARWIN) || (OS(LINUX) && !defined(__UCLIBC__))
 #include <cxxabi.h>
 #include <dlfcn.h>
+#if !OS(ANDROID)
 #include <execinfo.h>
+#endif
 #endif
 
 extern "C" {
@@ -233,7 +235,7 @@ void WTFReportArgumentAssertionFailure(const char* file, int line, const char* f
 
 void WTFGetBacktrace(void** stack, int* size)
 {
-#if OS(DARWIN) || (OS(LINUX) && !defined(__UCLIBC__))
+#if OS(DARWIN) || (OS(LINUX) && !defined(__UCLIBC__)) && !OS(ANDROID)
     *size = backtrace(stack, *size);
 #elif OS(WINDOWS) && !OS(WINCE)
     // The CaptureStackBackTrace function is available in XP, but it is not defined

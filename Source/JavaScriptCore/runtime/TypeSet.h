@@ -31,7 +31,7 @@
 #include <wtf/RefCounted.h>
 #include <wtf/text/WTFString.h>
 #include <wtf/Vector.h>
-
+#if ENABLE(INSPECTOR)
 namespace Inspector {
 namespace Protocol  {
 template<typename T> class Array;
@@ -43,7 +43,7 @@ class TypeSet;
 
 }
 }
-
+#endif
 namespace JSC {
 
 class JSValue;
@@ -72,7 +72,9 @@ public:
     void addProperty(RefPtr<StringImpl>);
     String stringRepresentation();
     String toJSONString() const;
+#if ENABLE(INSPECTOR)
     PassRefPtr<Inspector::Protocol::Runtime::StructureDescription> inspectorRepresentation();
+#endif
     void setConstructorName(String name) { m_constructorName = (name.isEmpty() ? "Object" : name); }
     String constructorName() { return m_constructorName; }
     void setProto(PassRefPtr<StructureShape> shape) { m_proto = shape; }
@@ -102,12 +104,16 @@ public:
     void invalidateCache();
     JS_EXPORT_PRIVATE String seenTypes() const;
     String displayName() const;
+#if ENABLE(INSPECTOR)
     PassRefPtr<Inspector::Protocol::Array<String>> allPrimitiveTypeNames() const;
     PassRefPtr<Inspector::Protocol::Array<Inspector::Protocol::Runtime::StructureDescription>> allStructureRepresentations() const;
+#endif
     String toJSONString() const;
     bool isOverflown() const { return m_isOverflown; }
     String leastCommonAncestor() const;
+#if ENABLE(INSPECTOR)
     PassRefPtr<Inspector::Protocol::Runtime::TypeSet> inspectorTypeSet() const;
+#endif
 
 private:
     void dumpSeenTypes();

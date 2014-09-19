@@ -515,7 +515,7 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #endif
 
 #if !defined(ENABLE_INSPECTOR)
-#define ENABLE_INSPECTOR 1
+#define ENABLE_INSPECTOR 0
 #endif
 
 #if !defined(ENABLE_JAVASCRIPT_I18N_API)

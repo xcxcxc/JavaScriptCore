@@ -21,7 +21,7 @@ class PebbleKitiOSException (Exception):
 def build(out, derived_data_path):
     outdir = out if out else tempfile.mkdtemp()
 
-    jsc = FrameworkBuild(workspace="JavaScriptCore-iOS.xcworkspace",
+    jsc = FrameworkBuild(workspace="JavaScriptCore.xcworkspace",
                          scheme="JavaScriptCore iOS",
                          name="JavaScriptCore",
                          conf="Production",
