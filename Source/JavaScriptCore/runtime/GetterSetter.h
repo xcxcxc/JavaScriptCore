@@ -26,6 +26,9 @@
 #include "JSCell.h"
 
 #include "CallFrame.h"
+#include "JSGlobalObject.h"
+#include "NullGetterFunction.h"
+#include "NullSetterFunction.h"
 #include "Structure.h"
 
 namespace JSC {
@@ -38,21 +41,24 @@ class JSObject;
 // that if a property holding a GetterSetter reference is constant-inferred and
 // that constant is observed to have a non-null setter (or getter) then we can
 // constant fold that setter (or getter).
-class GetterSetter : public JSCell {
+class GetterSetter final : public JSCell {
     friend class JIT;
 
-private:        
-    GetterSetter(VM& vm)
+private:
+    GetterSetter(VM& vm, JSGlobalObject* globalObject)
         : JSCell(vm, vm.getterSetterStructure.get())
     {
+        m_getter.set(vm, this, globalObject->nullGetterFunction());
+        m_setter.set(vm, this, globalObject->nullSetterFunction());
     }
 
 public:
     typedef JSCell Base;
+    static const unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
 
-    static GetterSetter* create(VM& vm)
+    static GetterSetter* create(VM& vm, JSGlobalObject* globalObject)
     {
-        GetterSetter* getterSetter = new (NotNull, allocateCell<GetterSetter>(vm.heap)) GetterSetter(vm);
+        GetterSetter* getterSetter = new (NotNull, allocateCell<GetterSetter>(vm.heap)) GetterSetter(vm, globalObject);
         getterSetter->finishCreation(vm);
         return getterSetter;
     }
@@ -68,13 +74,19 @@ public:
         return result;
     }
 
+    bool isGetterNull() const { return !!jsDynamicCast<NullGetterFunction*>(m_getter.get()); }
+    bool isSetterNull() const { return !!jsDynamicCast<NullSetterFunction*>(m_setter.get()); }
+
     // Set the getter. It's only valid to call this if you've never set the getter on this
     // object.
-    void setGetter(VM& vm, JSObject* getter)
+    void setGetter(VM& vm, JSGlobalObject* globalObject, JSObject* getter)
     {
-        RELEASE_ASSERT(!m_getter);
+        if (!getter)
+            getter = jsCast<JSObject*>(globalObject->nullGetterFunction());
+
+        RELEASE_ASSERT(isGetterNull());
         WTF::storeStoreFence();
-        m_getter.setMayBeNull(vm, this, getter);
+        m_getter.set(vm, this, getter);
     }
 
     JSObject* setter() const { return m_setter.get(); }
@@ -88,15 +100,18 @@ public:
 
     // Set the setter. It's only valid to call this if you've never set the setter on this
     // object.
-    void setSetter(VM& vm, JSObject* setter)
+    void setSetter(VM& vm, JSGlobalObject* globalObject, JSObject* setter)
     {
-        RELEASE_ASSERT(!m_setter);
+        if (!setter)
+            setter = jsCast<JSObject*>(globalObject->nullSetterFunction());
+
+        RELEASE_ASSERT(isSetterNull());
         WTF::storeStoreFence();
-        m_setter.setMayBeNull(vm, this, setter);
+        m_setter.set(vm, this, setter);
     }
 
-    GetterSetter* withGetter(VM&, JSObject* getter);
-    GetterSetter* withSetter(VM&, JSObject* setter);
+    GetterSetter* withGetter(VM&, JSGlobalObject*, JSObject* getter);
+    GetterSetter* withSetter(VM&, JSGlobalObject*, JSObject* setter);
 
     static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype)
     {

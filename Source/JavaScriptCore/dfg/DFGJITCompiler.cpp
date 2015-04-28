@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011, 2013, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2011, 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -55,7 +55,7 @@ JITCompiler::JITCompiler(Graph& dfg)
     , m_blockHeads(dfg.numBlocks())
 {
     if (shouldShowDisassembly() || m_graph.m_vm.m_perBytecodeProfiler)
-        m_disassembler = adoptPtr(new Disassembler(dfg));
+        m_disassembler = std::make_unique<Disassembler>(dfg);
 }
 
 JITCompiler::~JITCompiler()
@@ -122,6 +122,7 @@ void JITCompiler::compileExceptionHandlers()
         // lookupExceptionHandlerFromCallerFrame is passed two arguments, the VM and the exec (the CallFrame*).
         move(TrustedImmPtr(vm()), GPRInfo::argumentGPR0);
         move(GPRInfo::callFrameRegister, GPRInfo::argumentGPR1);
+        addPtr(TrustedImm32(m_graph.stackPointerOffset() * sizeof(Register)), GPRInfo::callFrameRegister, stackPointerRegister);
 
 #if CPU(X86)
         // FIXME: should use the call abstraction, but this is currently in the SpeculativeJIT layer!
@@ -160,9 +161,6 @@ void JITCompiler::link(LinkBuffer& linkBuffer)
     if (!m_graph.m_plan.inlineCallFrames->isEmpty())
         m_jitCode->common.inlineCallFrames = m_graph.m_plan.inlineCallFrames;
     
-    m_jitCode->common.machineCaptureStart = m_graph.m_machineCaptureStart;
-    m_jitCode->common.slowArguments = WTF::move(m_graph.m_slowArguments);
-
 #if USE(JSVALUE32_64)
     m_jitCode->common.doubleConstants = WTF::move(m_graph.m_doubleConstants);
 #endif
@@ -247,7 +245,7 @@ void JITCompiler::link(LinkBuffer& linkBuffer)
         JSCallRecord& record = m_jsCalls[i];
         CallLinkInfo& info = *record.m_info;
         ThunkGenerator generator = linkThunkGeneratorFor(
-            info.callType == CallLinkInfo::Construct ? CodeForConstruct : CodeForCall,
+            info.specializationKind(),
             RegisterPreservationNotRequired);
         linkBuffer.link(record.m_slowCall, FunctionPtr(m_vm->getCTIStub(generator).code().executableAddress()));
         info.callReturnLocation = linkBuffer.locationOfNearCall(record.m_slowCall);
@@ -291,11 +289,29 @@ void JITCompiler::compile()
 
     setStartOfCode();
     compileEntry();
-    m_speculative = adoptPtr(new SpeculativeJIT(*this));
+    m_speculative = std::make_unique<SpeculativeJIT>(*this);
+
+    // Plant a check that sufficient space is available in the JSStack.
+    addPtr(TrustedImm32(virtualRegisterForLocal(m_graph.requiredRegisterCountForExecutionAndExit() - 1).offset() * sizeof(Register)), GPRInfo::callFrameRegister, GPRInfo::regT1);
+    Jump stackOverflow = branchPtr(Above, AbsoluteAddress(m_vm->addressOfStackLimit()), GPRInfo::regT1);
+
     addPtr(TrustedImm32(m_graph.stackPointerOffset() * sizeof(Register)), GPRInfo::callFrameRegister, stackPointerRegister);
     checkStackPointerAlignment();
     compileBody();
     setEndOfMainPath();
+
+    // === Footer code generation ===
+    //
+    // Generate the stack overflow handling; if the stack check in the entry head fails,
+    // we need to call out to a helper function to throw the StackOverflowError.
+    stackOverflow.link(this);
+
+    emitStoreCodeOrigin(CodeOrigin(0));
+
+    if (maxFrameExtentForSlowPathCall)
+        addPtr(TrustedImm32(-maxFrameExtentForSlowPathCall), stackPointerRegister);
+
+    m_speculative->callOperationWithCallFrameRollbackOnException(operationThrowStackOverflowError, m_codeBlock);
 
     // Generate slow path code.
     m_speculative->runSlowPathGenerators();
@@ -306,13 +322,10 @@ void JITCompiler::compile()
     // Create OSR entry trampolines if necessary.
     m_speculative->createOSREntries();
     setEndOfCode();
-}
 
-void JITCompiler::link()
-{
-    OwnPtr<LinkBuffer> linkBuffer = adoptPtr(new LinkBuffer(*m_vm, *this, m_codeBlock, JITCompilationCanFail));
+    auto linkBuffer = std::make_unique<LinkBuffer>(*m_vm, *this, m_codeBlock, JITCompilationCanFail);
     if (linkBuffer->didFailToAllocate()) {
-        m_graph.m_plan.finalizer = adoptPtr(new FailedFinalizer(m_graph.m_plan));
+        m_graph.m_plan.finalizer = std::make_unique<FailedFinalizer>(m_graph.m_plan);
         return;
     }
     
@@ -324,8 +337,8 @@ void JITCompiler::link()
 
     disassemble(*linkBuffer);
     
-    m_graph.m_plan.finalizer = adoptPtr(new JITFinalizer(
-        m_graph.m_plan, m_jitCode.release(), linkBuffer.release()));
+    m_graph.m_plan.finalizer = std::make_unique<JITFinalizer>(
+        m_graph.m_plan, m_jitCode.release(), WTF::move(linkBuffer));
 }
 
 void JITCompiler::compileFunction()
@@ -349,7 +362,7 @@ void JITCompiler::compileFunction()
     checkStackPointerAlignment();
 
     // === Function body code generation ===
-    m_speculative = adoptPtr(new SpeculativeJIT(*this));
+    m_speculative = std::make_unique<SpeculativeJIT>(*this);
     compileBody();
     setEndOfMainPath();
 
@@ -393,7 +406,9 @@ void JITCompiler::compileFunction()
 #else
     thunkReg = GPRInfo::regT5;
 #endif
-    move(TrustedImmPtr(m_vm->arityCheckFailReturnThunks->returnPCsFor(*m_vm, m_codeBlock->numParameters())), thunkReg);
+    CodeLocationLabel* arityThunkLabels =
+        m_vm->arityCheckFailReturnThunks->returnPCsFor(*m_vm, m_codeBlock->numParameters());
+    move(TrustedImmPtr(arityThunkLabels), thunkReg);
     loadPtr(BaseIndex(thunkReg, GPRInfo::regT0, timesPtr()), thunkReg);
     m_callArityFixup = call();
     jump(fromArityCheck);
@@ -407,14 +422,11 @@ void JITCompiler::compileFunction()
     // Create OSR entry trampolines if necessary.
     m_speculative->createOSREntries();
     setEndOfCode();
-}
 
-void JITCompiler::linkFunction()
-{
     // === Link ===
-    OwnPtr<LinkBuffer> linkBuffer = adoptPtr(new LinkBuffer(*m_vm, *this, m_codeBlock, JITCompilationCanFail));
+    auto linkBuffer = std::make_unique<LinkBuffer>(*m_vm, *this, m_codeBlock, JITCompilationCanFail);
     if (linkBuffer->didFailToAllocate()) {
-        m_graph.m_plan.finalizer = adoptPtr(new FailedFinalizer(m_graph.m_plan));
+        m_graph.m_plan.finalizer = std::make_unique<FailedFinalizer>(m_graph.m_plan);
         return;
     }
     link(*linkBuffer);
@@ -429,14 +441,16 @@ void JITCompiler::linkFunction()
 
     MacroAssemblerCodePtr withArityCheck = linkBuffer->locationOf(m_arityCheck);
 
-    m_graph.m_plan.finalizer = adoptPtr(new JITFinalizer(
-        m_graph.m_plan, m_jitCode.release(), linkBuffer.release(), withArityCheck));
+    m_graph.m_plan.finalizer = std::make_unique<JITFinalizer>(
+        m_graph.m_plan, m_jitCode.release(), WTF::move(linkBuffer), withArityCheck);
 }
 
 void JITCompiler::disassemble(LinkBuffer& linkBuffer)
 {
-    if (shouldShowDisassembly())
+    if (shouldShowDisassembly()) {
         m_disassembler->dump(linkBuffer);
+        linkBuffer.didAlreadyDisassemble();
+    }
     
     if (m_graph.m_plan.compilation)
         m_disassembler->reportToProfiler(m_graph.m_plan.compilation.get(), linkBuffer);

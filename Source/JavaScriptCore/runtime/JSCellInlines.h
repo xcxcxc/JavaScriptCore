@@ -35,6 +35,7 @@
 #include "JSString.h"
 #include "MarkedBlock.h"
 #include "Structure.h"
+#include "Symbol.h"
 #include <wtf/CompilationThread.h>
 
 namespace JSC {
@@ -128,13 +129,7 @@ void* allocateCell(Heap& heap, size_t size)
 {
     ASSERT(!DisallowGC::isGCDisallowedOnCurrentThread());
     ASSERT(size >= sizeof(T));
-    JSCell* result = 0;
-    if (T::needsDestruction && T::hasImmortalStructure)
-        result = static_cast<JSCell*>(heap.allocateWithImmortalStructureDestructor(size));
-    else if (T::needsDestruction)
-        result = static_cast<JSCell*>(heap.allocateWithNormalDestructor(size));
-    else 
-        result = static_cast<JSCell*>(heap.allocateWithoutDestructor(size));
+    JSCell* result = static_cast<JSCell*>(heap.allocateObjectOfType<T>(size));
 #if ENABLE(GC_VALIDATION)
     ASSERT(!heap.vm()->isInitializingObject());
     heap.vm()->setInitializingObjectClass(T::info());
@@ -162,6 +157,11 @@ inline bool JSCell::isObject() const
 inline bool JSCell::isString() const
 {
     return m_type == StringType;
+}
+
+inline bool JSCell::isSymbol() const
+{
+    return m_type == SymbolType;
 }
 
 inline bool JSCell::isGetterSetter() const
@@ -240,22 +240,26 @@ inline bool JSCell::canUseFastGetOwnProperty(const Structure& structure)
 inline const ClassInfo* JSCell::classInfo() const
 {
     MarkedBlock* block = MarkedBlock::blockFor(this);
-    if (block->destructorType() == MarkedBlock::Normal)
+    if (block->needsDestruction() && !(inlineTypeFlags() & StructureIsImmortal))
         return static_cast<const JSDestructibleObject*>(this)->classInfo();
     return structure(*block->vm())->classInfo();
 }
 
 inline bool JSCell::toBoolean(ExecState* exec) const
 {
-    if (isString()) 
+    if (isString())
         return static_cast<const JSString*>(this)->toBoolean();
+    if (isSymbol())
+        return static_cast<const Symbol*>(this)->toBoolean();
     return !structure()->masqueradesAsUndefined(exec->lexicalGlobalObject());
 }
 
 inline TriState JSCell::pureToBoolean() const
 {
-    if (isString()) 
+    if (isString())
         return static_cast<const JSString*>(this)->toBoolean() ? TrueTriState : FalseTriState;
+    if (isSymbol())
+        return static_cast<const Symbol*>(this)->toBoolean() ? TrueTriState : FalseTriState;
     return MixedTriState;
 }
 

@@ -28,14 +28,14 @@
 
 namespace WebCore {
 
-FEMerge::FEMerge(Filter* filter) 
+FEMerge::FEMerge(Filter& filter)
     : FilterEffect(filter)
 {
 }
 
-PassRefPtr<FEMerge> FEMerge::create(Filter* filter)
+Ref<FEMerge> FEMerge::create(Filter& filter)
 {
-    return adoptRef(new FEMerge(filter));
+    return adoptRef(*new FEMerge(filter));
 }
 
 void FEMerge::platformApplySoftware()

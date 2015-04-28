@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -50,17 +50,13 @@ public:
         if (!Options::useFTLJIT())
             return false;
         
-        if (m_graph.m_profiledBlock->m_didFailFTLCompilation) {
-            removeFTLProfiling();
+        if (m_graph.m_profiledBlock->m_didFailFTLCompilation)
             return false;
-        }
         
 #if ENABLE(FTL_JIT)
         FTL::CapabilityLevel level = FTL::canCompile(m_graph);
-        if (level == FTL::CannotCompile) {
-            removeFTLProfiling();
+        if (level == FTL::CannotCompile)
             return false;
-        }
         
         if (!Options::enableOSREntryToFTL())
             level = FTL::CanCompile;
@@ -107,9 +103,10 @@ public:
                 break;
             }
             
-            if (block->last()->op() == Return) {
+            NodeAndIndex terminal = block->findTerminal();
+            if (terminal.node->op() == Return) {
                 insertionSet.insertNode(
-                    block->size() - 1, SpecNone, CheckTierUpAtReturn, block->last()->origin);
+                    terminal.index, SpecNone, CheckTierUpAtReturn, terminal.node->origin);
             }
             
             insertionSet.execute(block);
@@ -121,32 +118,6 @@ public:
         RELEASE_ASSERT_NOT_REACHED();
         return false;
 #endif // ENABLE(FTL_JIT)
-    }
-
-private:
-    void removeFTLProfiling()
-    {
-        for (BlockIndex blockIndex = m_graph.numBlocks(); blockIndex--;) {
-            BasicBlock* block = m_graph.block(blockIndex);
-            if (!block)
-                continue;
-            
-            for (unsigned nodeIndex = 0; nodeIndex < block->size(); ++nodeIndex) {
-                Node* node = block->at(nodeIndex);
-                switch (node->op()) {
-                case ProfiledCall:
-                    node->setOp(Call);
-                    break;
-                    
-                case ProfiledConstruct:
-                    node->setOp(Construct);
-                    break;
-                    
-                default:
-                    break;
-                }
-            }
-        }
     }
 };
 

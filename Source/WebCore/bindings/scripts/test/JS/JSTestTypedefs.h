@@ -23,21 +23,23 @@
 
 #include "JSDOMWrapper.h"
 #include "TestTypedefs.h"
+#include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
 
-class JSTestTypedefs : public JSDOMWrapper {
+class WEBCORE_EXPORT JSTestTypedefs : public JSDOMWrapper {
 public:
     typedef JSDOMWrapper Base;
-    static JSTestTypedefs* create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, PassRefPtr<TestTypedefs> impl)
+    static JSTestTypedefs* create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, Ref<TestTypedefs>&& impl)
     {
-        JSTestTypedefs* ptr = new (NotNull, JSC::allocateCell<JSTestTypedefs>(globalObject->vm().heap)) JSTestTypedefs(structure, globalObject, impl);
+        JSTestTypedefs* ptr = new (NotNull, JSC::allocateCell<JSTestTypedefs>(globalObject->vm().heap)) JSTestTypedefs(structure, globalObject, WTF::move(impl));
         ptr->finishCreation(globalObject->vm());
         return ptr;
     }
 
     static JSC::JSObject* createPrototype(JSC::VM&, JSC::JSGlobalObject*);
     static JSC::JSObject* getPrototype(JSC::VM&, JSC::JSGlobalObject*);
+    static TestTypedefs* toWrapped(JSC::JSValue);
     static bool getOwnPropertySlot(JSC::JSObject*, JSC::ExecState*, JSC::PropertyName, JSC::PropertySlot&);
     static void destroy(JSC::JSCell*);
     ~JSTestTypedefs();
@@ -63,8 +65,10 @@ public:
 
 private:
     TestTypedefs* m_impl;
+public:
+    static const unsigned StructureFlags = JSC::OverridesGetOwnPropertySlot | Base::StructureFlags;
 protected:
-    JSTestTypedefs(JSC::Structure*, JSDOMGlobalObject*, PassRefPtr<TestTypedefs>);
+    JSTestTypedefs(JSC::Structure*, JSDOMGlobalObject*, Ref<TestTypedefs>&&);
 
     void finishCreation(JSC::VM& vm)
     {
@@ -72,7 +76,6 @@ protected:
         ASSERT(inherits(info()));
     }
 
-    static const unsigned StructureFlags = JSC::OverridesGetOwnPropertySlot | Base::StructureFlags;
 };
 
 class JSTestTypedefsOwner : public JSC::WeakHandleOwner {
@@ -83,17 +86,12 @@ public:
 
 inline JSC::WeakHandleOwner* wrapperOwner(DOMWrapperWorld&, TestTypedefs*)
 {
-    DEPRECATED_DEFINE_STATIC_LOCAL(JSTestTypedefsOwner, jsTestTypedefsOwner, ());
-    return &jsTestTypedefsOwner;
-}
-
-inline void* wrapperContext(DOMWrapperWorld& world, TestTypedefs*)
-{
-    return &world;
+    static NeverDestroyed<JSTestTypedefsOwner> owner;
+    return &owner.get();
 }
 
 WEBCORE_EXPORT JSC::JSValue toJS(JSC::ExecState*, JSDOMGlobalObject*, TestTypedefs*);
-WEBCORE_EXPORT TestTypedefs* toTestTypedefs(JSC::JSValue);
+inline JSC::JSValue toJS(JSC::ExecState* exec, JSDOMGlobalObject* globalObject, TestTypedefs& impl) { return toJS(exec, globalObject, &impl); }
 
 
 } // namespace WebCore

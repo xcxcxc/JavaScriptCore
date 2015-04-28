@@ -42,7 +42,6 @@ public:
     SVGSMILElement(const QualifiedName&, Document&);
     virtual ~SVGSMILElement();
 
-    bool isSupportedAttribute(const QualifiedName&);
     virtual void parseAttribute(const QualifiedName&, const AtomicString&) override;
     virtual void svgAttributeChanged(const QualifiedName&) override;
     virtual InsertionNotificationRequest insertedInto(ContainerNode&) override;
@@ -131,6 +130,8 @@ private:
     virtual void startedActiveInterval() = 0;
     void endedActiveInterval();
     virtual void updateAnimation(float percent, unsigned repeat, SVGSMILElement* resultElement) = 0;
+
+    static bool isSupportedAttribute(const QualifiedName&);
 
     enum BeginOrEnd { Begin, End };
     
@@ -237,18 +238,11 @@ private:
     friend class ConditionEventListener;
 };
 
-void isSVGSMILElement(const SVGSMILElement&); // Catch unnecessary runtime check of type known at compile time.
-inline bool isSVGSMILElement(const SVGElement& element) { return element.isSMILElement(); }
-inline bool isSVGSMILElement(const Node& node) { return node.isSVGElement() && toSVGElement(node).isSMILElement(); }
+} // namespace WebCore
 
-template <typename ArgType>
-struct ElementTypeCastTraits<const SVGSMILElement, ArgType> {
-    static bool is(ArgType& node) { return isSVGSMILElement(node); }
-};
-
-
-NODE_TYPE_CASTS(SVGSMILElement)
-
-}
+SPECIALIZE_TYPE_TRAITS_BEGIN(WebCore::SVGSMILElement)
+    static bool isType(const WebCore::SVGElement& element) { return element.isSMILElement(); }
+    static bool isType(const WebCore::Node& node) { return is<WebCore::SVGElement>(node) && isType(downcast<WebCore::SVGElement>(node)); }
+SPECIALIZE_TYPE_TRAITS_END()
 
 #endif // SVGSMILElement_h

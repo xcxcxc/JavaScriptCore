@@ -26,7 +26,6 @@
 #include "config.h"
 #include "HTMLTextAreaElement.h"
 
-#include "Attribute.h"
 #include "BeforeTextInsertedEvent.h"
 #include "CSSValueKeywords.h"
 #include "Document.h"
@@ -101,11 +100,11 @@ HTMLTextAreaElement::HTMLTextAreaElement(const QualifiedName& tagName, Document&
     setFormControlValueMatchesRenderer(true);
 }
 
-PassRefPtr<HTMLTextAreaElement> HTMLTextAreaElement::create(const QualifiedName& tagName, Document& document, HTMLFormElement* form)
+Ref<HTMLTextAreaElement> HTMLTextAreaElement::create(const QualifiedName& tagName, Document& document, HTMLFormElement* form)
 {
-    RefPtr<HTMLTextAreaElement> textArea = adoptRef(new HTMLTextAreaElement(tagName, document, form));
+    Ref<HTMLTextAreaElement> textArea = adoptRef(*new HTMLTextAreaElement(tagName, document, form));
     textArea->ensureUserAgentShadowRoot();
-    return textArea.release();
+    return textArea;
 }
 
 void HTMLTextAreaElement::didAddUserAgentShadowRoot(ShadowRoot* root)
@@ -205,12 +204,12 @@ void HTMLTextAreaElement::parseAttribute(const QualifiedName& name, const Atomic
     } else if (name == accesskeyAttr) {
         // ignore for the moment
     } else if (name == maxlengthAttr)
-        setNeedsValidityCheck();
+        updateValidity();
     else
         HTMLTextFormControlElement::parseAttribute(name, value);
 }
 
-RenderPtr<RenderElement> HTMLTextAreaElement::createElementRenderer(PassRef<RenderStyle> style)
+RenderPtr<RenderElement> HTMLTextAreaElement::createElementRenderer(Ref<RenderStyle>&& style, const RenderTreePosition&)
 {
     return createRenderer<RenderTextControlMultiLine>(*this, WTF::move(style));
 }
@@ -270,8 +269,8 @@ void HTMLTextAreaElement::defaultEventHandler(Event* event)
 {
     if (renderer() && (event->isMouseEvent() || event->isDragEvent() || event->eventInterface() == WheelEventInterfaceType || event->type() == eventNames().blurEvent))
         forwardEvent(event);
-    else if (renderer() && event->isBeforeTextInsertedEvent())
-        handleBeforeTextInsertedEvent(toBeforeTextInsertedEvent(event));
+    else if (renderer() && is<BeforeTextInsertedEvent>(*event))
+        handleBeforeTextInsertedEvent(downcast<BeforeTextInsertedEvent>(event));
 
     HTMLTextFormControlElement::defaultEventHandler(event);
 }
@@ -280,7 +279,7 @@ void HTMLTextAreaElement::subtreeHasChanged()
 {
     setChangedSinceLastFormControlChangeEvent(true);
     setFormControlValueMatchesRenderer(false);
-    setNeedsValidityCheck();
+    updateValidity();
 
     if (!focused())
         return;
@@ -326,8 +325,7 @@ String HTMLTextAreaElement::sanitizeUserInputValue(const String& proposedValue, 
 
 TextControlInnerTextElement* HTMLTextAreaElement::innerTextElement() const
 {
-    Node* node = userAgentShadowRoot()->firstChild();
-    return toTextControlInnerTextElement(node);
+    return downcast<TextControlInnerTextElement>(userAgentShadowRoot()->firstChild());
 }
 
 void HTMLTextAreaElement::rendererWillBeDestroyed()
@@ -358,14 +356,14 @@ void HTMLTextAreaElement::setValue(const String& value)
 {
     setValueCommon(value);
     m_isDirty = true;
-    setNeedsValidityCheck();
+    updateValidity();
 }
 
 void HTMLTextAreaElement::setNonDirtyValue(const String& value)
 {
     setValueCommon(value);
     m_isDirty = false;
-    setNeedsValidityCheck();
+    updateValidity();
 }
 
 void HTMLTextAreaElement::setValueCommon(const String& newValue)
@@ -400,7 +398,7 @@ void HTMLTextAreaElement::setValueCommon(const String& newValue)
 
 String HTMLTextAreaElement::defaultValue() const
 {
-    return TextNodeTraversal::contentsAsString(this);
+    return TextNodeTraversal::contentsAsString(*this);
 }
 
 void HTMLTextAreaElement::setDefaultValue(const String& defaultValue)
@@ -409,7 +407,7 @@ void HTMLTextAreaElement::setDefaultValue(const String& defaultValue)
 
     // To preserve comments, remove only the text nodes, then add a single text node.
     Vector<RefPtr<Text>> textNodes;
-    for (Text* textNode = TextNodeTraversal::firstChild(this); textNode; textNode = TextNodeTraversal::nextSibling(textNode))
+    for (Text* textNode = TextNodeTraversal::firstChild(*this); textNode; textNode = TextNodeTraversal::nextSibling(*textNode))
         textNodes.append(textNode);
 
     size_t size = textNodes.size();
@@ -430,7 +428,7 @@ void HTMLTextAreaElement::setDefaultValue(const String& defaultValue)
 int HTMLTextAreaElement::maxLength() const
 {
     bool ok;
-    int value = getAttribute(maxlengthAttr).string().toInt(&ok);
+    int value = fastGetAttribute(maxlengthAttr).string().toInt(&ok);
     return ok && value >= 0 ? value : -1;
 }
 

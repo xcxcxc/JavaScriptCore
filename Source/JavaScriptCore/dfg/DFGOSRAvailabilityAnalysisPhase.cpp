@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,6 +32,7 @@
 #include "DFGGraph.h"
 #include "DFGInsertionSet.h"
 #include "DFGPhase.h"
+#include "DFGPromoteHeapAccess.h"
 #include "JSCInlines.h"
 
 namespace JSC { namespace DFG {
@@ -51,25 +52,19 @@ public:
             BasicBlock* block = m_graph.block(blockIndex);
             if (!block)
                 continue;
-            block->ssa->availabilityAtHead.fill(Availability());
-            block->ssa->availabilityAtTail.fill(Availability());
+            block->ssa->availabilityAtHead.clear();
+            block->ssa->availabilityAtTail.clear();
         }
         
         BasicBlock* root = m_graph.block(0);
-        for (unsigned argument = root->ssa->availabilityAtHead.numberOfArguments(); argument--;) {
-            root->ssa->availabilityAtHead.argument(argument) =
-                Availability::unavailable().withFlush(
-                    FlushedAt(FlushedJSValue, virtualRegisterForArgument(argument)));
+        root->ssa->availabilityAtHead.m_locals.fill(Availability::unavailable());
+        for (unsigned argument = m_graph.m_argumentFormats.size(); argument--;) {
+            FlushedAt flushedAt = FlushedAt(
+                m_graph.m_argumentFormats[argument],
+                virtualRegisterForArgument(argument));
+            root->ssa->availabilityAtHead.m_locals.argument(argument) = Availability(flushedAt);
         }
 
-        if (m_graph.m_plan.mode == FTLForOSREntryMode) {
-            for (unsigned local = m_graph.m_profiledBlock->m_numCalleeRegisters; local--;)
-                root->ssa->availabilityAtHead.local(local) = Availability::unavailable();
-        } else {
-            for (unsigned local = root->ssa->availabilityAtHead.numberOfLocals(); local--;)
-                root->ssa->availabilityAtHead.local(local) = Availability::unavailable();
-        }
-        
         // This could be made more efficient by processing blocks in reverse postorder.
         
         LocalOSRAvailabilityCalculator calculator;
@@ -87,6 +82,10 @@ public:
                 for (unsigned nodeIndex = 0; nodeIndex < block->size(); ++nodeIndex)
                     calculator.executeNode(block->at(nodeIndex));
                 
+                // FIXME: we should probably prune by liveness here.
+                // https://bugs.webkit.org/show_bug.cgi?id=143078
+                calculator.m_availability.prune();
+
                 if (calculator.m_availability == block->ssa->availabilityAtTail)
                     continue;
                 
@@ -95,11 +94,7 @@ public:
                 
                 for (unsigned successorIndex = block->numSuccessors(); successorIndex--;) {
                     BasicBlock* successor = block->successor(successorIndex);
-                    for (unsigned i = calculator.m_availability.size(); i--;) {
-                        successor->ssa->availabilityAtHead[i] =
-                            calculator.m_availability[i].merge(
-                                successor->ssa->availabilityAtHead[i]);
-                    }
+                    successor->ssa->availabilityAtHead.merge(calculator.m_availability);
                 }
             }
         } while (changed);
@@ -127,35 +122,92 @@ void LocalOSRAvailabilityCalculator::beginBlock(BasicBlock* block)
     m_availability = block->ssa->availabilityAtHead;
 }
 
+void LocalOSRAvailabilityCalculator::endBlock(BasicBlock* block)
+{
+    m_availability = block->ssa->availabilityAtTail;
+}
+
 void LocalOSRAvailabilityCalculator::executeNode(Node* node)
 {
     switch (node->op()) {
-    case SetLocal: {
-        VariableAccessData* variable = node->variableAccessData();
-        m_availability.operand(variable->local()) =
-            Availability(node->child1().node(), variable->flushedAt());
+    case PutStack: {
+        StackAccessData* data = node->stackAccessData();
+        m_availability.m_locals.operand(data->local).setFlush(data->flushedAt());
+        break;
+    }
+        
+    case KillStack: {
+        m_availability.m_locals.operand(node->unlinkedLocal()).setFlush(FlushedAt(ConflictingFlush));
         break;
     }
 
-    case GetArgument: {
-        VariableAccessData* variable = node->variableAccessData();
-        m_availability.operand(variable->local()) =
-            Availability(node, variable->flushedAt());
+    case GetStack: {
+        StackAccessData* data = node->stackAccessData();
+        m_availability.m_locals.operand(data->local) = Availability(node, data->flushedAt());
         break;
     }
 
     case MovHint: {
-        m_availability.operand(node->unlinkedLocal()) =
-            Availability(node->child1().node());
+        m_availability.m_locals.operand(node->unlinkedLocal()).setNode(node->child1().node());
         break;
     }
 
     case ZombieHint: {
-        m_availability.operand(node->unlinkedLocal()) =
-            Availability::unavailable();
+        m_availability.m_locals.operand(node->unlinkedLocal()).setNodeUnavailable();
         break;
     }
-
+        
+    case LoadVarargs:
+    case ForwardVarargs: {
+        LoadVarargsData* data = node->loadVarargsData();
+        m_availability.m_locals.operand(data->count) =
+            Availability(FlushedAt(FlushedInt32, data->machineCount));
+        for (unsigned i = data->limit; i--;) {
+            m_availability.m_locals.operand(VirtualRegister(data->start.offset() + i)) =
+                Availability(FlushedAt(FlushedJSValue, VirtualRegister(data->machineStart.offset() + i)));
+        }
+        break;
+    }
+        
+    case PhantomDirectArguments:
+    case PhantomClonedArguments: {
+        InlineCallFrame* inlineCallFrame = node->origin.semantic.inlineCallFrame;
+        if (!inlineCallFrame) {
+            // We don't need to record anything about how the arguments are to be recovered. It's just a
+            // given that we can read them from the stack.
+            break;
+        }
+        
+        if (inlineCallFrame->isVarargs()) {
+            // Record how to read each argument and the argument count.
+            Availability argumentCount =
+                m_availability.m_locals.operand(inlineCallFrame->stackOffset + JSStack::ArgumentCount);
+            
+            m_availability.m_heap.set(PromotedHeapLocation(ArgumentCountPLoc, node), argumentCount);
+        }
+        
+        if (inlineCallFrame->isClosureCall) {
+            Availability callee = m_availability.m_locals.operand(
+                inlineCallFrame->stackOffset + JSStack::Callee);
+            m_availability.m_heap.set(PromotedHeapLocation(ArgumentsCalleePLoc, node), callee);
+        }
+        
+        for (unsigned i = 0; i < inlineCallFrame->arguments.size() - 1; ++i) {
+            Availability argument = m_availability.m_locals.operand(
+                inlineCallFrame->stackOffset + CallFrame::argumentOffset(i));
+            
+            m_availability.m_heap.set(PromotedHeapLocation(ArgumentPLoc, node, i), argument);
+        }
+        break;
+    }
+        
+    case PutHint: {
+        m_availability.m_heap.set(
+            PromotedHeapLocation(node->child1().node(), node->promotedLocationDescriptor()),
+            Availability(node->child2().node()));
+        break;
+    }
+        
     default:
         break;
     }

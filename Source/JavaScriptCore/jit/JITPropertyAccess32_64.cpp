@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2009, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2008, 2009, 2014, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,6 +30,7 @@
 #include "JIT.h"
 
 #include "CodeBlock.h"
+#include "DirectArguments.h"
 #include "GCAwareJITStubRoutine.h"
 #include "Interpreter.h"
 #include "JITInlines.h"
@@ -612,11 +613,11 @@ void JIT::emitVarInjectionCheck(bool needsVarInjectionChecks)
     addSlowCase(branch8(Equal, AbsoluteAddress(m_codeBlock->globalObject()->varInjectionWatchpoint()->addressOfState()), TrustedImm32(IsInvalidated)));
 }
 
-void JIT::emitResolveClosure(int dst, bool needsVarInjectionChecks, unsigned depth)
+void JIT::emitResolveClosure(int dst, int scope, bool needsVarInjectionChecks, unsigned depth)
 {
     emitVarInjectionCheck(needsVarInjectionChecks);
     move(TrustedImm32(JSValue::CellTag), regT1);
-    emitLoadPayload(JSStack::ScopeChain, regT0);
+    emitLoadPayload(scope, regT0);
     for (unsigned i = 0; i < depth; ++i)
         loadPtr(Address(regT0, JSScope::offsetOfNext()), regT0);
     emitStore(dst, regT1, regT0);
@@ -625,8 +626,9 @@ void JIT::emitResolveClosure(int dst, bool needsVarInjectionChecks, unsigned dep
 void JIT::emit_op_resolve_scope(Instruction* currentInstruction)
 {
     int dst = currentInstruction[1].u.operand;
-    ResolveType resolveType = static_cast<ResolveType>(currentInstruction[3].u.operand);
-    unsigned depth = currentInstruction[4].u.operand;
+    int scope = currentInstruction[2].u.operand;
+    ResolveType resolveType = static_cast<ResolveType>(currentInstruction[4].u.operand);
+    unsigned depth = currentInstruction[5].u.operand;
 
     switch (resolveType) {
     case GlobalProperty:
@@ -640,25 +642,28 @@ void JIT::emit_op_resolve_scope(Instruction* currentInstruction)
         break;
     case ClosureVar:
     case ClosureVarWithVarInjectionChecks:
-        emitResolveClosure(dst, needsVarInjectionChecks(resolveType), depth);
+        emitResolveClosure(dst, scope, needsVarInjectionChecks(resolveType), depth);
         break;
     case Dynamic:
         addSlowCase(jump());
         break;
+    case LocalClosureVar:
+        RELEASE_ASSERT_NOT_REACHED();
     }
 }
 
 void JIT::emitSlow_op_resolve_scope(Instruction* currentInstruction, Vector<SlowCaseEntry>::iterator& iter)
 {
     int dst = currentInstruction[1].u.operand;
-    ResolveType resolveType = static_cast<ResolveType>(currentInstruction[3].u.operand);
+    ResolveType resolveType = static_cast<ResolveType>(currentInstruction[4].u.operand);
 
     if (resolveType == GlobalProperty || resolveType == GlobalVar || resolveType == ClosureVar)
         return;
 
     linkSlowCase(iter);
-    int32_t indentifierIndex = currentInstruction[2].u.operand;
-    callOperation(operationResolveScope, dst, indentifierIndex);
+    int32_t scope = currentInstruction[2].u.operand;
+    int32_t identifierIndex = currentInstruction[3].u.operand;
+    callOperation(operationResolveScope, dst, scope, identifierIndex);
 }
 
 void JIT::emitLoadWithStructureCheck(int scope, Structure** structureSlot)
@@ -684,9 +689,8 @@ void JIT::emitGetGlobalVar(uintptr_t operand)
 void JIT::emitGetClosureVar(int scope, uintptr_t operand)
 {
     emitLoad(scope, regT1, regT0);
-    loadPtr(Address(regT0, JSEnvironmentRecord::offsetOfRegisters()), regT0);
-    load32(Address(regT0, operand * sizeof(Register) + OBJECT_OFFSETOF(EncodedValueDescriptor, asBits.tag)), regT1);
-    load32(Address(regT0, operand * sizeof(Register) + OBJECT_OFFSETOF(EncodedValueDescriptor, asBits.payload)), regT0);
+    load32(Address(regT0, JSEnvironmentRecord::offsetOfVariables() + operand * sizeof(Register) + TagOffset), regT1);
+    load32(Address(regT0, JSEnvironmentRecord::offsetOfVariables() + operand * sizeof(Register) + PayloadOffset), regT0);
 }
 
 void JIT::emit_op_get_from_scope(Instruction* currentInstruction)
@@ -716,6 +720,8 @@ void JIT::emit_op_get_from_scope(Instruction* currentInstruction)
     case Dynamic:
         addSlowCase(jump());
         break;
+    case LocalClosureVar:
+        RELEASE_ASSERT_NOT_REACHED();
     }
     emitValueProfilingSite();
     emitStore(dst, regT1, regT0);
@@ -744,38 +750,21 @@ void JIT::emitPutGlobalProperty(uintptr_t* operandSlot, int value)
     store32(regT2, BaseIndex(regT0, regT1, TimesEight, (firstOutOfLineOffset - 2) * sizeof(EncodedJSValue) + OBJECT_OFFSETOF(EncodedValueDescriptor, asBits.payload)));
 }
 
-void JIT::emitNotifyWrite(RegisterID tag, RegisterID payload, RegisterID scratch, VariableWatchpointSet* set)
-{
-    if (!set || set->state() == IsInvalidated)
-        return;
-    
-    load8(set->addressOfState(), scratch);
-    Jump isDone = branch32(Equal, scratch, TrustedImm32(IsInvalidated));
-
-    JumpList notifySlow = branch32(
-        NotEqual, AbsoluteAddress(set->addressOfInferredValue()->payloadPointer()), payload);
-    notifySlow.append(branch32(
-        NotEqual, AbsoluteAddress(set->addressOfInferredValue()->tagPointer()), tag));
-    addSlowCase(notifySlow);
-
-    isDone.link(this);
-}
-
-void JIT::emitPutGlobalVar(uintptr_t operand, int value, VariableWatchpointSet* set)
+void JIT::emitPutGlobalVar(uintptr_t operand, int value, WatchpointSet* set)
 {
     emitLoad(value, regT1, regT0);
-    emitNotifyWrite(regT1, regT0, regT2, set);
+    emitNotifyWrite(set);
     store32(regT1, reinterpret_cast<char*>(operand) + OBJECT_OFFSETOF(EncodedValueDescriptor, asBits.tag));
     store32(regT0, reinterpret_cast<char*>(operand) + OBJECT_OFFSETOF(EncodedValueDescriptor, asBits.payload));
 }
 
-void JIT::emitPutClosureVar(int scope, uintptr_t operand, int value)
+void JIT::emitPutClosureVar(int scope, uintptr_t operand, int value, WatchpointSet* set)
 {
     emitLoad(value, regT3, regT2);
     emitLoad(scope, regT1, regT0);
-    loadPtr(Address(regT0, JSEnvironmentRecord::offsetOfRegisters()), regT0);
-    store32(regT3, Address(regT0, operand * sizeof(Register) + OBJECT_OFFSETOF(EncodedValueDescriptor, asBits.tag)));
-    store32(regT2, Address(regT0, operand * sizeof(Register) + OBJECT_OFFSETOF(EncodedValueDescriptor, asBits.payload)));
+    emitNotifyWrite(set);
+    store32(regT3, Address(regT0, JSEnvironmentRecord::offsetOfVariables() + operand * sizeof(Register) + TagOffset));
+    store32(regT2, Address(regT0, JSEnvironmentRecord::offsetOfVariables() + operand * sizeof(Register) + PayloadOffset));
 }
 
 void JIT::emit_op_put_to_scope(Instruction* currentInstruction)
@@ -799,11 +788,12 @@ void JIT::emit_op_put_to_scope(Instruction* currentInstruction)
         emitVarInjectionCheck(needsVarInjectionChecks(resolveType));
         emitPutGlobalVar(*operandSlot, value, currentInstruction[5].u.watchpointSet);
         break;
+    case LocalClosureVar:
     case ClosureVar:
     case ClosureVarWithVarInjectionChecks:
         emitWriteBarrier(scope, value, ShouldFilterValue);
         emitVarInjectionCheck(needsVarInjectionChecks(resolveType));
-        emitPutClosureVar(scope, *operandSlot, value);
+        emitPutClosureVar(scope, *operandSlot, value, currentInstruction[5].u.watchpointSet);
         break;
     case Dynamic:
         addSlowCase(jump());
@@ -815,11 +805,11 @@ void JIT::emitSlow_op_put_to_scope(Instruction* currentInstruction, Vector<SlowC
 {
     ResolveType resolveType = ResolveModeAndType(currentInstruction[4].u.operand).type();
     unsigned linkCount = 0;
-    if (resolveType != GlobalVar && resolveType != ClosureVar)
+    if (resolveType != GlobalVar && resolveType != ClosureVar && resolveType != LocalClosureVar)
         linkCount++;
-    if ((resolveType == GlobalVar || resolveType == GlobalVarWithVarInjectionChecks)
+    if ((resolveType == GlobalVar || resolveType == GlobalVarWithVarInjectionChecks || resolveType == LocalClosureVar)
         && currentInstruction[5].u.watchpointSet->state() != IsInvalidated)
-        linkCount += 2;
+        linkCount++;
     if (!linkCount)
         return;
     while (linkCount--)
@@ -827,9 +817,36 @@ void JIT::emitSlow_op_put_to_scope(Instruction* currentInstruction, Vector<SlowC
     callOperation(operationPutToScope, currentInstruction);
 }
 
+void JIT::emit_op_get_from_arguments(Instruction* currentInstruction)
+{
+    int dst = currentInstruction[1].u.operand;
+    int arguments = currentInstruction[2].u.operand;
+    int index = currentInstruction[3].u.operand;
+    
+    emitLoadPayload(arguments, regT0);
+    load32(Address(regT0, DirectArguments::storageOffset() + index * sizeof(WriteBarrier<Unknown>) + TagOffset), regT1);
+    load32(Address(regT0, DirectArguments::storageOffset() + index * sizeof(WriteBarrier<Unknown>) + PayloadOffset), regT0);
+    emitValueProfilingSite();
+    emitStore(dst, regT1, regT0);
+}
+
+void JIT::emit_op_put_to_arguments(Instruction* currentInstruction)
+{
+    int arguments = currentInstruction[1].u.operand;
+    int index = currentInstruction[2].u.operand;
+    int value = currentInstruction[3].u.operand;
+    
+    emitWriteBarrier(arguments, value, ShouldFilterValue);
+    
+    emitLoadPayload(arguments, regT0);
+    emitLoad(value, regT1, regT2);
+    store32(regT1, Address(regT0, DirectArguments::storageOffset() + index * sizeof(WriteBarrier<Unknown>) + TagOffset));
+    store32(regT2, Address(regT0, DirectArguments::storageOffset() + index * sizeof(WriteBarrier<Unknown>) + PayloadOffset));
+}
+
 void JIT::emit_op_init_global_const(Instruction* currentInstruction)
 {
-    WriteBarrier<Unknown>* registerPointer = currentInstruction[1].u.registerPointer;
+    WriteBarrier<Unknown>* variablePointer = currentInstruction[1].u.variablePointer;
     int value = currentInstruction[2].u.operand;
 
     JSGlobalObject* globalObject = m_codeBlock->globalObject();
@@ -838,8 +855,8 @@ void JIT::emit_op_init_global_const(Instruction* currentInstruction)
 
     emitLoad(value, regT1, regT0);
     
-    store32(regT1, registerPointer->tagPointer());
-    store32(regT0, registerPointer->payloadPointer());
+    store32(regT1, variablePointer->tagPointer());
+    store32(regT0, variablePointer->payloadPointer());
 }
 
 } // namespace JSC

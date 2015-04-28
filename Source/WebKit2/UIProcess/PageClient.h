@@ -47,14 +47,15 @@ OBJC_CLASS NSTextAlternatives;
 
 namespace WebCore {
 class Cursor;
-struct ViewportAttributes;
+class TextIndicator;
+class WebMediaSessionManager;
 struct Highlight;
+struct ViewportAttributes;
 }
 
 namespace WebKit {
 
 class DrawingAreaProxy;
-class FindIndicator;
 class NativeWebKeyboardEvent;
 class RemoteLayerTreeTransaction;
 class ViewSnapshot;
@@ -130,19 +131,17 @@ public:
 
     virtual void toolTipChanged(const String&, const String&) = 0;
 
-    virtual bool decidePolicyForGeolocationPermissionRequest(WebFrameProxy&, WebSecurityOrigin&, GeolocationPermissionRequestProxy&)
+    virtual bool decidePolicyForGeolocationPermissionRequest(WebFrameProxy&, API::SecurityOrigin&, GeolocationPermissionRequestProxy&)
     {
         return false;
     }
 
     virtual void didCommitLoadForMainFrame(const String& mimeType, bool useCustomContentProvider) = 0;
 
-#if USE(TILED_BACKING_STORE)
+#if USE(COORDINATED_GRAPHICS_MULTIPROCESS)
     virtual void pageDidRequestScroll(const WebCore::IntPoint&) = 0;
     virtual void didRenderFrame(const WebCore::IntSize& contentsSize, const WebCore::IntRect& coveredRect) = 0;
     virtual void pageTransitionViewportReady() = 0;
-#endif
-#if USE(COORDINATED_GRAPHICS)
     virtual void didFindZoomableArea(const WebCore::IntPoint&, const WebCore::IntRect&) = 0;
 #endif
 
@@ -154,11 +153,9 @@ public:
 
     virtual bool handleRunOpenPanel(WebPageProxy*, WebFrameProxy*, WebOpenPanelParameters*, WebOpenPanelResultListenerProxy*) { return false; }
 
-#if PLATFORM(EFL)
     virtual void didChangeContentSize(const WebCore::IntSize&) = 0;
-#endif
 
-#if PLATFORM(GTK)
+#if PLATFORM(GTK) && ENABLE(DRAG_SUPPORT)
     virtual void startDrag(const WebCore::DragData&, PassRefPtr<ShareableBitmap> dragImage) = 0;
 #endif
 
@@ -182,11 +179,21 @@ public:
     virtual LayerOrView *acceleratedCompositingRootLayer() const = 0;
     virtual PassRefPtr<ViewSnapshot> takeViewSnapshot() = 0;
     virtual void wheelEventWasNotHandledByWebCore(const NativeWebWheelEvent&) = 0;
+    virtual void selectionDidChange() = 0;
+#endif
+
+#if PLATFORM(MAC) && !USE(ASYNC_NSTEXTINPUTCLIENT)
+    virtual void notifyApplicationAboutInputContextChange() = 0;
 #endif
 
 #if USE(APPKIT)
-    virtual void setPromisedData(const String& pasteboardName, PassRefPtr<WebCore::SharedBuffer> imageBuffer, const String& filename, const String& extension, const String& title,
+    virtual void setPromisedDataForImage(const String& pasteboardName, PassRefPtr<WebCore::SharedBuffer> imageBuffer, const String& filename, const String& extension, const String& title,
                                  const String& url, const String& visibleUrl, PassRefPtr<WebCore::SharedBuffer> archiveBuffer) = 0;
+#if ENABLE(ATTACHMENT_ELEMENT)
+    virtual void setPromisedDataForAttachment(const String& pasteboardName, const String& filename, const String& extension, const String& title,
+                                         const String& url, const String& visibleUrl) = 0;
+
+#endif
 #endif
 
 #if PLATFORM(GTK)
@@ -213,7 +220,8 @@ public:
     virtual PassRefPtr<WebColorPicker> createColorPicker(WebPageProxy*, const WebCore::Color& initialColor, const WebCore::IntRect&) = 0;
 #endif
 
-    virtual void setFindIndicator(PassRefPtr<FindIndicator>, bool fadeOut, bool animate) = 0;
+    virtual void setTextIndicator(PassRefPtr<WebCore::TextIndicator>, bool fadeOut) = 0;
+    virtual void setTextIndicatorAnimationProgress(float) = 0;
 
     virtual void enterAcceleratedCompositingMode(const LayerTreeContext&) = 0;
     virtual void exitAcceleratedCompositingMode() = 0;
@@ -222,18 +230,20 @@ public:
 #if PLATFORM(MAC)
     virtual void pluginFocusOrWindowFocusChanged(uint64_t pluginComplexTextInputIdentifier, bool pluginHasFocusAndWindowHasFocus) = 0;
     virtual void setPluginComplexTextInputState(uint64_t pluginComplexTextInputIdentifier, PluginComplexTextInputState) = 0;
-    virtual void didPerformDictionaryLookup(const AttributedString&, const DictionaryPopupInfo&) = 0;
-    virtual void dismissDictionaryLookupPanel() = 0;
+    virtual void didPerformDictionaryLookup(const DictionaryPopupInfo&) = 0;
+    virtual void dismissContentRelativeChildWindows() = 0;
     virtual void showCorrectionPanel(WebCore::AlternativeTextType, const WebCore::FloatRect& boundingBoxOfReplacedString, const String& replacedString, const String& replacementString, const Vector<String>& alternativeReplacementStrings) = 0;
     virtual void dismissCorrectionPanel(WebCore::ReasonForDismissingAlternativeText) = 0;
     virtual String dismissCorrectionPanelSoon(WebCore::ReasonForDismissingAlternativeText) = 0;
     virtual void recordAutocorrectionResponse(WebCore::AutocorrectionResponseType, const String& replacedString, const String& replacementString) = 0;
-    virtual void recommendedScrollbarStyleDidChange(int32_t newStyle) = 0;
+    virtual void recommendedScrollbarStyleDidChange(WebCore::ScrollbarStyle) = 0;
     virtual void removeNavigationGestureSnapshot() = 0;
 
     virtual CGRect boundsOfLayerInLayerBackedWindowCoordinates(CALayer *) const = 0;
 
     virtual ColorSpaceData colorSpace() = 0;
+
+    virtual void showPlatformContextMenu(NSMenu *, WebCore::IntPoint) = 0;
 
 #if USE(APPKIT)
     virtual WKView* wkView() const = 0;
@@ -262,7 +272,6 @@ public:
     virtual void startAssistingNode(const AssistedNodeInformation&, bool userIsInteracting, bool blurPreviousNode, API::Object* userData) = 0;
     virtual void stopAssistingNode() = 0;
     virtual bool isAssistingNode() = 0;
-    virtual void selectionDidChange() = 0;
     virtual bool interpretKeyEvent(const NativeWebKeyboardEvent&, bool isCharEvent) = 0;
     virtual void positionInformationDidChange(const InteractionInformationAtPosition&) = 0;
     virtual void saveImageToLibrary(PassRefPtr<WebCore::SharedBuffer>) = 0;
@@ -270,7 +279,6 @@ public:
     virtual void showPlaybackTargetPicker(bool hasVideo, const WebCore::IntRect& elementRect) = 0;
     virtual void zoomToRect(WebCore::FloatRect, double minimumScale, double maximumScale) = 0;
     virtual void didChangeViewportMetaTagWidth(float) = 0;
-    virtual void setUsesMinimalUI(bool) = 0;
     virtual double minimumZoomScale() const = 0;
     virtual WebCore::FloatSize contentsSize() const = 0;
     virtual void overflowScrollViewWillStartPanGesture() = 0;
@@ -280,7 +288,6 @@ public:
     virtual void didFinishDrawingPagesToPDF(const IPC::DataReference&) = 0;
     virtual Vector<String> mimeTypesWithCustomContentProviders() = 0;
 
-#if ENABLE(INSPECTOR)
     virtual void showInspectorHighlight(const WebCore::Highlight&) = 0;
     virtual void hideInspectorHighlight() = 0;
 
@@ -289,7 +296,6 @@ public:
 
     virtual void enableInspectorNodeSearch() = 0;
     virtual void disableInspectorNodeSearch() = 0;
-#endif
 #endif
 
     // Auxiliary Client Creation
@@ -308,6 +314,17 @@ public:
     virtual void didFirstVisuallyNonEmptyLayoutForMainFrame() = 0;
     virtual void didFinishLoadForMainFrame() = 0;
     virtual void didSameDocumentNavigationForMainFrame(SameDocumentNavigationType) = 0;
+
+    virtual void didChangeBackgroundColor() = 0;
+
+#if PLATFORM(MAC)
+    virtual void didPerformActionMenuHitTest(const WebHitTestResult::Data&, bool forImmediateAction, bool contentPreventsDefault, API::Object*) = 0;
+#endif
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS)
+    virtual WebCore::WebMediaSessionManager& mediaSessionManager() = 0;
+#endif
+
 };
 
 } // namespace WebKit

@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2010, Google Inc. All rights reserved.
- * 
+ * Copyright (C) 2015 Apple Inc.  All rights reserved.
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
@@ -32,10 +33,15 @@
 #define ScrollAnimator_h
 
 #include "FloatSize.h"
+#include "LayoutUnit.h"
 #include "PlatformWheelEvent.h"
 #include "ScrollTypes.h"
 #include <wtf/FastMalloc.h>
 #include <wtf/Forward.h>
+
+#if (ENABLE(RUBBER_BANDING) || ENABLE(CSS_SCROLL_SNAP)) && PLATFORM(MAC)
+#include "ScrollController.h"
+#endif
 
 namespace WebCore {
 
@@ -44,11 +50,16 @@ class PlatformTouchEvent;
 class ScrollableArea;
 class Scrollbar;
 
+#if (ENABLE(CSS_SCROLL_SNAP) || ENABLE(RUBBER_BANDING)) && PLATFORM(MAC)
+class ScrollAnimator : private ScrollControllerClient {
+#else
 class ScrollAnimator {
+#endif
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static PassOwnPtr<ScrollAnimator> create(ScrollableArea*);
+    static std::unique_ptr<ScrollAnimator> create(ScrollableArea&);
 
+    explicit ScrollAnimator(ScrollableArea&);
     virtual ~ScrollAnimator();
 
     // Computes a scroll destination for the given parameters.  Returns false if
@@ -59,7 +70,7 @@ public:
 
     virtual void scrollToOffsetWithoutAnimation(const FloatPoint&);
 
-    ScrollableArea* scrollableArea() const { return m_scrollableArea; }
+    ScrollableArea& scrollableArea() const { return m_scrollableArea; }
 
     virtual bool handleWheelEvent(const PlatformWheelEvent&);
 
@@ -106,12 +117,20 @@ public:
 
     virtual bool isRubberBandInProgress() const { return false; }
 
-protected:
-    explicit ScrollAnimator(ScrollableArea*);
+#if ENABLE(CSS_SCROLL_SNAP) && PLATFORM(MAC)
+    bool processWheelEventForScrollSnap(const PlatformWheelEvent&);
+    void updateScrollAnimatorsAndTimers();
+    LayoutUnit scrollOffsetOnAxis(ScrollEventAxis) const override;
+    void immediateScrollOnAxis(ScrollEventAxis, float delta) override;
+#endif
 
+protected:
     virtual void notifyPositionChanged(const FloatSize& delta);
 
-    ScrollableArea* m_scrollableArea;
+    ScrollableArea& m_scrollableArea;
+#if (ENABLE(CSS_SCROLL_SNAP) || ENABLE(RUBBER_BANDING)) && PLATFORM(MAC)
+    ScrollController m_scrollController;
+#endif
     float m_currentPosX; // We avoid using a FloatPoint in order to reduce
     float m_currentPosY; // subclass code complexity.
 };

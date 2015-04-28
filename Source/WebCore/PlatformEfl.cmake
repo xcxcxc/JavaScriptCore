@@ -18,7 +18,7 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform/graphics/texmap"
     "${WEBCORE_DIR}/platform/graphics/texmap/coordinated"
     "${WEBCORE_DIR}/platform/linux"
-    "${WEBCORE_DIR}/platform/mediastream/gstreamer"
+    "${WEBCORE_DIR}/platform/mediastream/openwebrtc"
     "${WEBCORE_DIR}/platform/mock/mediasource"
     "${WEBCORE_DIR}/platform/network/soup"
     "${WEBCORE_DIR}/platform/text/efl"
@@ -58,22 +58,22 @@ list(APPEND WebCore_SOURCES
     page/efl/DragControllerEfl.cpp
     page/efl/EventHandlerEfl.cpp
 
+    page/scrolling/AxisScrollSnapOffsets.cpp
+
     page/scrolling/coordinatedgraphics/ScrollingCoordinatorCoordinatedGraphics.cpp
     page/scrolling/coordinatedgraphics/ScrollingStateNodeCoordinatedGraphics.cpp
     page/scrolling/coordinatedgraphics/ScrollingStateScrollingNodeCoordinatedGraphics.cpp
 
     platform/ContextMenuItemNone.cpp
     platform/ContextMenuNone.cpp
-    platform/Cursor.cpp
 
     platform/audio/efl/AudioBusEfl.cpp
 
     platform/audio/gstreamer/AudioDestinationGStreamer.cpp
     platform/audio/gstreamer/AudioFileReaderGStreamer.cpp
+    platform/audio/gstreamer/AudioSourceProviderGStreamer.cpp
     platform/audio/gstreamer/FFTFrameGStreamer.cpp
     platform/audio/gstreamer/WebKitWebAudioSourceGStreamer.cpp
-
-    platform/cairo/WidgetBackingStoreCairo.cpp
 
     platform/efl/BatteryProviderEfl.cpp
     platform/efl/CursorEfl.cpp
@@ -109,9 +109,9 @@ list(APPEND WebCore_SOURCES
     platform/graphics/ImageSource.cpp
     platform/graphics/WOFFFileFormat.cpp
 
+    platform/graphics/cairo/BackingStoreBackendCairoImpl.cpp
     platform/graphics/cairo/BitmapImageCairo.cpp
     platform/graphics/cairo/CairoUtilities.cpp
-    platform/graphics/cairo/DrawingBufferCairo.cpp
     platform/graphics/cairo/FontCairo.cpp
     platform/graphics/cairo/FontCairoHarfbuzzNG.cpp
     platform/graphics/cairo/GradientCairo.cpp
@@ -119,7 +119,6 @@ list(APPEND WebCore_SOURCES
     platform/graphics/cairo/ImageBufferCairo.cpp
     platform/graphics/cairo/ImageCairo.cpp
     platform/graphics/cairo/IntRectCairo.cpp
-    platform/graphics/cairo/OwnPtrCairo.cpp
     platform/graphics/cairo/PathCairo.cpp
     platform/graphics/cairo/PatternCairo.cpp
     platform/graphics/cairo/PlatformContextCairo.cpp
@@ -179,6 +178,10 @@ list(APPEND WebCore_SOURCES
 
     platform/graphics/surfaces/glx/X11Helper.cpp
 
+    platform/graphics/texmap/BitmapTexture.cpp
+    platform/graphics/texmap/BitmapTextureGL.cpp
+    platform/graphics/texmap/BitmapTextureImageBuffer.cpp
+    platform/graphics/texmap/BitmapTexturePool.cpp
     platform/graphics/texmap/GraphicsLayerTextureMapper.cpp
     platform/graphics/texmap/TextureMapperGL.cpp
     platform/graphics/texmap/TextureMapperShaderProgram.cpp
@@ -210,8 +213,10 @@ list(APPEND WebCore_SOURCES
     platform/image-decoders/webp/WEBPImageDecoder.cpp
 
     platform/linux/GamepadDeviceLinux.cpp
+    platform/linux/MemoryPressureHandlerLinux.cpp
 
-    platform/mediastream/gstreamer/MediaStreamCenterGStreamer.cpp
+    platform/mediastream/openwebrtc/OpenWebRTCUtilities.cpp
+    platform/mediastream/openwebrtc/RealtimeMediaSourceCenterOwr.cpp
 
     platform/network/efl/NetworkStateNotifierEfl.cpp
 
@@ -243,9 +248,6 @@ list(APPEND WebCore_SOURCES
     platform/text/efl/TextBreakIteratorInternalICUEfl.cpp
 
     platform/text/enchant/TextCheckerEnchant.cpp
-
-    plugins/PluginPackageNone.cpp
-    plugins/PluginViewNone.cpp
 )
 
 if (WTF_USE_GEOCLUE2)
@@ -257,15 +259,6 @@ if (WTF_USE_GEOCLUE2)
          OUTPUT ${DERIVED_SOURCES_WEBCORE_DIR}/Geoclue2Interface.c ${DERIVED_SOURCES_WEBCORE_DIR}/Geoclue2Interface.h
          COMMAND gdbus-codegen --interface-prefix org.freedesktop.GeoClue2. --c-namespace Geoclue --generate-c-code ${DERIVED_SOURCES_WEBCORE_DIR}/Geoclue2Interface ${GEOCLUE_DBUS_INTERFACE}
     )
-endif ()
-
-if (ENABLE_BATTERY_STATUS OR (EFL_REQUIRED_VERSION VERSION_LESS 1.8))
-    list(APPEND WebCore_INCLUDE_DIRECTORIES ${DBUS_INCLUDE_DIRS})
-    list(APPEND WebCore_INCLUDE_DIRECTORIES ${E_DBUS_INCLUDE_DIRS})
-    list(APPEND WebCore_INCLUDE_DIRECTORIES ${E_DBUS_EUKIT_INCLUDE_DIRS})
-    list(APPEND WebCore_LIBRARIES ${DBUS_LIBRARIES})
-    list(APPEND WebCore_LIBRARIES ${E_DBUS_LIBRARIES})
-    list(APPEND WebCore_LIBRARIES ${E_DBUS_EUKIT_LIBRARIES})
 endif ()
 
 if (ENABLE_GAMEPAD_DEPRECATED)
@@ -295,6 +288,7 @@ list(APPEND WebCore_LIBRARIES
     ${EDJE_LIBRARIES}
     ${EEZE_LIBRARIES}
     ${EINA_LIBRARIES}
+    ${ELDBUS_LIBRARIES}
     ${EO_LIBRARIES}
     ${EVAS_LIBRARIES}
     ${FONTCONFIG_LIBRARIES}
@@ -310,6 +304,7 @@ list(APPEND WebCore_LIBRARIES
     ${LIBXSLT_LIBRARIES}
     ${PNG_LIBRARIES}
     ${SQLITE_LIBRARIES}
+    ${WEBP_LIBRARIES}
     ${X11_X11_LIB}
     ${ZLIB_LIBRARIES}
 )
@@ -324,6 +319,7 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     ${EDJE_INCLUDE_DIRS}
     ${EEZE_INCLUDE_DIRS}
     ${EINA_INCLUDE_DIRS}
+    ${ELDBUS_INCLUDE_DIRS}
     ${EVAS_INCLUDE_DIRS}
     ${FREETYPE2_INCLUDE_DIRS}
     ${GEOCLUE_INCLUDE_DIRS}
@@ -331,11 +327,21 @@ list(APPEND WebCore_INCLUDE_DIRECTORIES
     ${LIBXML2_INCLUDE_DIR}
     ${LIBXSLT_INCLUDE_DIR}
     ${SQLITE_INCLUDE_DIR}
+    ${WEBP_INCLUDE_DIRS}
     ${GLIB_INCLUDE_DIRS}
     ${LIBSOUP_INCLUDE_DIRS}
     ${ZLIB_INCLUDE_DIRS}
     ${HARFBUZZ_INCLUDE_DIRS}
 )
+
+if (ENABLE_MEDIA_STREAM)
+    list(APPEND WebCore_INCLUDE_DIRECTORIES
+        ${OPENWEBRTC_INCLUDE_DIRS}
+    )
+    list(APPEND WebCore_LIBRARIES
+        ${OPENWEBRTC_LIBRARIES}
+    )
+endif ()
 
 if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
     list(APPEND WebCore_INCLUDE_DIRECTORIES
@@ -352,6 +358,7 @@ if (ENABLE_VIDEO OR ENABLE_WEB_AUDIO)
         ${GSTREAMER_BASE_LIBRARIES}
         ${GSTREAMER_LIBRARIES}
         ${GSTREAMER_PBUTILS_LIBRARIES}
+        ${GSTREAMER_AUDIO_LIBRARIES}
     )
     # Avoiding a GLib deprecation warning due to GStreamer API using deprecated classes.
     set_source_files_properties(platform/audio/gstreamer/WebKitWebAudioSourceGStreamer.cpp PROPERTIES COMPILE_DEFINITIONS "GLIB_DISABLE_DEPRECATION_WARNINGS=1")
@@ -433,7 +440,6 @@ if (ENABLE_WEB_AUDIO)
         ${GSTREAMER_FFT_INCLUDE_DIRS}
     )
     list(APPEND WebCore_LIBRARIES
-        ${GSTREAMER_AUDIO_LIBRARIES}
         ${GSTREAMER_FFT_LIBRARIES}
     )
     set(WEB_AUDIO_DIR ${CMAKE_INSTALL_PREFIX}/${DATA_INSTALL_DIR}/webaudio/resources)
@@ -471,5 +477,51 @@ if (ENABLE_SPEECH_SYNTHESIS)
     list(APPEND WebCore_SOURCES
         platform/efl/PlatformSpeechSynthesizerEfl.cpp
         platform/efl/PlatformSpeechSynthesisProviderEfl.cpp
+    )
+endif ()
+
+if (ENABLE_SUBTLE_CRYPTO)
+    list(APPEND WebCore_SOURCES
+        crypto/CryptoAlgorithm.cpp
+        crypto/CryptoAlgorithmDescriptionBuilder.cpp
+        crypto/CryptoAlgorithmRegistry.cpp
+        crypto/CryptoKey.cpp
+        crypto/CryptoKeyPair.cpp
+        crypto/SubtleCrypto.cpp
+        crypto/algorithms/CryptoAlgorithmAES_CBC.cpp
+        crypto/algorithms/CryptoAlgorithmAES_KW.cpp
+        crypto/algorithms/CryptoAlgorithmHMAC.cpp
+        crypto/algorithms/CryptoAlgorithmRSAES_PKCS1_v1_5.cpp
+        crypto/algorithms/CryptoAlgorithmRSA_OAEP.cpp
+        crypto/algorithms/CryptoAlgorithmRSASSA_PKCS1_v1_5.cpp
+        crypto/algorithms/CryptoAlgorithmSHA1.cpp
+        crypto/algorithms/CryptoAlgorithmSHA224.cpp
+        crypto/algorithms/CryptoAlgorithmSHA256.cpp
+        crypto/algorithms/CryptoAlgorithmSHA384.cpp
+        crypto/algorithms/CryptoAlgorithmSHA512.cpp
+
+        crypto/gnutls/CryptoAlgorithmRegistryGnuTLS.cpp
+        crypto/gnutls/CryptoAlgorithmAES_CBCGnuTLS.cpp
+        crypto/gnutls/CryptoAlgorithmAES_KWGnuTLS.cpp
+        crypto/gnutls/CryptoAlgorithmHMACGnuTLS.cpp
+        crypto/gnutls/CryptoAlgorithmRSAES_PKCS1_v1_5GnuTLS.cpp
+        crypto/gnutls/CryptoAlgorithmRSA_OAEPGnuTLS.cpp
+        crypto/gnutls/CryptoAlgorithmRSASSA_PKCS1_v1_5GnuTLS.cpp
+        crypto/gnutls/CryptoDigestGnuTLS.cpp
+        crypto/gnutls/CryptoKeyRSAGnuTLS.cpp
+        crypto/gnutls/SerializedCryptoKeyWrapGnuTLS.cpp
+
+        crypto/keys/CryptoKeyAES.cpp
+        crypto/keys/CryptoKeyDataOctetSequence.cpp
+        crypto/keys/CryptoKeyDataRSAComponents.cpp
+        crypto/keys/CryptoKeyHMAC.cpp
+        crypto/keys/CryptoKeySerializationRaw.cpp
+    )
+
+    list(APPEND WebCore_INCLUDE_DIRECTORIES
+        ${GNUTLS_INCLUDE_DIRS}
+    )
+    list(APPEND WebCore_LIBRARIES
+        ${GNUTLS_LIBRARIES}
     )
 endif ()

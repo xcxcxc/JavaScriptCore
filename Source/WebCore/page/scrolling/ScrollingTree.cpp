@@ -31,14 +31,14 @@
 #include "PlatformWheelEvent.h"
 #include "ScrollingStateTree.h"
 #include "ScrollingTreeNode.h"
+#include "ScrollingTreeOverflowScrollingNode.h"
 #include "ScrollingTreeScrollingNode.h"
 #include <wtf/TemporaryChange.h>
 
 namespace WebCore {
 
 ScrollingTree::ScrollingTree()
-    : m_hasWheelEventHandlers(false)
-    , m_rubberBandsAtLeft(true)
+    : m_rubberBandsAtLeft(true)
     , m_rubberBandsAtRight(true)
     , m_rubberBandsAtTop(true)
     , m_rubberBandsAtBottom(true)
@@ -63,9 +63,6 @@ bool ScrollingTree::shouldHandleWheelEventSynchronously(const PlatformWheelEvent
 {
     // This method is invoked by the event handling thread
     MutexLocker lock(m_mutex);
-
-    if (m_hasWheelEventHandlers)
-        return true;
 
     bool shouldSetLatch = wheelEvent.shouldConsiderLatching();
     
@@ -96,53 +93,44 @@ void ScrollingTree::setOrClearLatchedNode(const PlatformWheelEvent& wheelEvent, 
 void ScrollingTree::handleWheelEvent(const PlatformWheelEvent& wheelEvent)
 {
     if (m_rootNode)
-        toScrollingTreeScrollingNode(m_rootNode.get())->handleWheelEvent(wheelEvent);
+        downcast<ScrollingTreeScrollingNode>(*m_rootNode).handleWheelEvent(wheelEvent);
 }
 
 void ScrollingTree::viewportChangedViaDelegatedScrolling(ScrollingNodeID nodeID, const WebCore::FloatRect& fixedPositionRect, double scale)
 {
     ScrollingTreeNode* node = nodeForID(nodeID);
-    if (!node)
+    if (!is<ScrollingTreeScrollingNode>(node))
         return;
 
-    if (!node->isScrollingNode())
-        return;
-
-    toScrollingTreeScrollingNode(node)->updateLayersAfterViewportChange(fixedPositionRect, scale);
+    downcast<ScrollingTreeScrollingNode>(*node).updateLayersAfterViewportChange(fixedPositionRect, scale);
 }
 
 void ScrollingTree::scrollPositionChangedViaDelegatedScrolling(ScrollingNodeID nodeID, const WebCore::FloatPoint& scrollPosition, bool inUserInteration)
 {
     ScrollingTreeNode* node = nodeForID(nodeID);
-    if (!node)
-        return;
-
-    if (node->nodeType() != OverflowScrollingNode)
+    if (!is<ScrollingTreeOverflowScrollingNode>(node))
         return;
 
     // Update descendant nodes
-    toScrollingTreeScrollingNode(node)->updateLayersAfterDelegatedScroll(scrollPosition);
+    downcast<ScrollingTreeOverflowScrollingNode>(*node).updateLayersAfterDelegatedScroll(scrollPosition);
 
     // Update GraphicsLayers and scroll state.
     scrollingTreeNodeDidScroll(nodeID, scrollPosition, inUserInteration ? SyncScrollingLayerPosition : SetScrollingLayerPosition);
 }
 
-void ScrollingTree::commitNewTreeState(PassOwnPtr<ScrollingStateTree> scrollingStateTree)
+void ScrollingTree::commitNewTreeState(std::unique_ptr<ScrollingStateTree> scrollingStateTree)
 {
     bool rootStateNodeChanged = scrollingStateTree->hasNewRootStateNode();
     
     ScrollingStateScrollingNode* rootNode = scrollingStateTree->rootStateNode();
     if (rootNode
         && (rootStateNodeChanged
-            || rootNode->hasChangedProperty(ScrollingStateFrameScrollingNode::WheelEventHandlerCount)
             || rootNode->hasChangedProperty(ScrollingStateFrameScrollingNode::NonFastScrollableRegion)
             || rootNode->hasChangedProperty(ScrollingStateNode::ScrollLayer))) {
         MutexLocker lock(m_mutex);
 
         if (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateNode::ScrollLayer))
             m_mainFrameScrollPosition = FloatPoint();
-        if (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateFrameScrollingNode::WheelEventHandlerCount))
-            m_hasWheelEventHandlers = scrollingStateTree->rootStateNode()->wheelEventHandlerCount();
         if (rootStateNodeChanged || rootNode->hasChangedProperty(ScrollingStateFrameScrollingNode::NonFastScrollableRegion))
             m_nonFastScrollableRegion = scrollingStateTree->rootStateNode()->nonFastScrollableRegion();
     }

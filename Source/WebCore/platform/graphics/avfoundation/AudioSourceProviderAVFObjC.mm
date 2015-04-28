@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,41 +34,26 @@
 #import "CARingBuffer.h"
 #import "Logging.h"
 #import "MediaTimeAVFoundation.h"
-#import "SoftLinking.h"
 #import <AVFoundation/AVAssetTrack.h>
 #import <AVFoundation/AVAudioMix.h>
 #import <AVFoundation/AVMediaFormat.h>
 #import <AVFoundation/AVPlayerItem.h>
-#import <AVFoundation/AVPlayerItemTrack.h>
 #import <objc/runtime.h>
 #import <wtf/MainThread.h>
 
 #if !LOG_DISABLED
-#include <wtf/StringPrintStream.h>
+#import <wtf/StringPrintStream.h>
 #endif
+
+#import "CoreMediaSoftLink.h"
 
 SOFT_LINK_FRAMEWORK(AVFoundation)
 SOFT_LINK_FRAMEWORK(MediaToolbox)
 SOFT_LINK_FRAMEWORK(AudioToolbox)
-SOFT_LINK_FRAMEWORK(CoreMedia)
 
 SOFT_LINK_CLASS(AVFoundation, AVPlayerItem)
 SOFT_LINK_CLASS(AVFoundation, AVMutableAudioMix)
 SOFT_LINK_CLASS(AVFoundation, AVMutableAudioMixInputParameters)
-
-typedef struct opaqueCMNotificationCenter *CMNotificationCenterRef;
-typedef void (*CMNotificationCallback)(CMNotificationCenterRef inCenter, const void *inListener, CFStringRef inNotificationName, const void *inNotifyingObject, CFTypeRef inNotificationPayload);
-
-SOFT_LINK(CoreMedia, CMNotificationCenterGetDefaultLocalCenter, CMNotificationCenterRef, (void), ());
-SOFT_LINK(CoreMedia, CMNotificationCenterAddListener, OSStatus, (CMNotificationCenterRef center, const void* listener, CMNotificationCallback callback, CFStringRef notification, const void* object, UInt32 flags), (center, listener, callback, notification, object, flags))
-SOFT_LINK(CoreMedia, CMNotificationCenterRemoveListener, OSStatus, (CMNotificationCenterRef center, const void* listener, CMNotificationCallback callback, CFStringRef notification, const void* object), (center, listener, callback, notification, object))
-SOFT_LINK(CoreMedia, CMTimebaseGetTime, CMTime, (CMTimebaseRef timebase), (timebase))
-SOFT_LINK(CoreMedia, CMTimebaseGetEffectiveRate, Float64, (CMTimebaseRef timebase), (timebase))
-
-SOFT_LINK_CONSTANT(CoreMedia, kCMTimebaseNotification_EffectiveRateChanged, CFStringRef)
-SOFT_LINK_CONSTANT(CoreMedia, kCMTimebaseNotification_TimeJumped, CFStringRef)
-#define kCMTimebaseNotification_EffectiveRateChanged getkCMTimebaseNotification_EffectiveRateChanged()
-#define kCMTimebaseNotification_TimeJumped getkCMTimebaseNotification_TimeJumped()
 
 SOFT_LINK(AudioToolbox, AudioConverterConvertComplexBuffer, OSStatus, (AudioConverterRef inAudioConverter, UInt32 inNumberPCMFrames, const AudioBufferList* inInputData, AudioBufferList* outOutputData), (inAudioConverter, inNumberPCMFrames, inInputData, outOutputData))
 SOFT_LINK(AudioToolbox, AudioConverterNew, OSStatus, (const AudioStreamBasicDescription* inSourceFormat, const AudioStreamBasicDescription* inDestinationFormat, AudioConverterRef* outAudioConverter), (inSourceFormat, inDestinationFormat, outAudioConverter))
@@ -84,11 +69,11 @@ namespace WebCore {
 
 static double kRingBufferDuration = 1;
 
-PassRefPtr<AudioSourceProviderAVFObjC> AudioSourceProviderAVFObjC::create(AVPlayerItem *item)
+RefPtr<AudioSourceProviderAVFObjC> AudioSourceProviderAVFObjC::create(AVPlayerItem *item)
 {
     if (!canLoadMTAudioProcessingTapCreate())
         return nullptr;
-    return adoptRef(new AudioSourceProviderAVFObjC(item));
+    return adoptRef(*new AudioSourceProviderAVFObjC(item));
 }
 
 AudioSourceProviderAVFObjC::AudioSourceProviderAVFObjC(AVPlayerItem *item)
@@ -165,7 +150,21 @@ void AudioSourceProviderAVFObjC::setPlayerItem(AVPlayerItem *avPlayerItem)
 
     m_avPlayerItem = avPlayerItem;
 
-    if (m_client && m_avPlayerItem)
+    if (m_client && m_avPlayerItem && m_avAssetTrack)
+        createMix();
+}
+
+void AudioSourceProviderAVFObjC::setAudioTrack(AVAssetTrack *avAssetTrack)
+{
+    if (m_avAssetTrack == avAssetTrack)
+        return;
+
+    if (m_avAudioMix)
+        destroyMix();
+
+    m_avAssetTrack = avAssetTrack;
+
+    if (m_client && m_avPlayerItem && m_avAssetTrack)
         createMix();
 }
 
@@ -184,7 +183,7 @@ void AudioSourceProviderAVFObjC::createMix()
     ASSERT(m_avPlayerItem);
     ASSERT(m_client);
 
-    m_avAudioMix = adoptNS([[getAVMutableAudioMixClass() alloc] init]);
+    m_avAudioMix = adoptNS([allocAVMutableAudioMixInstance() init]);
 
     MTAudioProcessingTapCallbacks callbacks = {
         0,
@@ -201,18 +200,11 @@ void AudioSourceProviderAVFObjC::createMix()
     ASSERT(tap);
     ASSERT(m_tap == tap);
 
-    RetainPtr<AVMutableAudioMixInputParameters> parameters = adoptNS([[getAVMutableAudioMixInputParametersClass() alloc] init]);
+    RetainPtr<AVMutableAudioMixInputParameters> parameters = adoptNS([allocAVMutableAudioMixInputParametersInstance() init]);
     [parameters setAudioTapProcessor:m_tap.get()];
 
-    CMPersistentTrackID firstEnabledAudioTrackID = kCMPersistentTrackID_Invalid;
-    NSArray* tracks = [m_avPlayerItem tracks];
-    for (AVPlayerItemTrack* track in tracks) {
-        if ([track.assetTrack hasMediaCharacteristic:AVMediaCharacteristicAudible] && track.enabled) {
-            firstEnabledAudioTrackID = track.assetTrack.trackID;
-            break;
-        }
-    }
-    [parameters setTrackID:firstEnabledAudioTrackID];
+    CMPersistentTrackID trackID = m_avAssetTrack.get().trackID;
+    [parameters setTrackID:trackID];
     
     [m_avAudioMix setInputParameters:@[parameters.get()]];
     [m_avPlayerItem setAudioMix:m_avAudioMix.get()];
@@ -311,7 +303,7 @@ void AudioSourceProviderAVFObjC::prepare(CMItemCount maxFrames, const AudioStrea
     // Make the ringbuffer large enough to store at least two callbacks worth of audio, or 1s, whichever is larger.
     size_t capacity = std::max(static_cast<size_t>(2 * maxFrames), static_cast<size_t>(kRingBufferDuration * sampleRate));
 
-    m_ringBuffer = CARingBuffer::create();
+    m_ringBuffer = std::make_unique<CARingBuffer>();
     m_ringBuffer->allocate(numberOfChannels, bytesPerFrame, capacity);
 
     // AudioBufferList is a variable-length struct, so create on the heap with a generic new() operator

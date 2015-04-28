@@ -39,6 +39,7 @@ class AnimationControllerPrivate;
 class Document;
 class Element;
 class Frame;
+class LayoutRect;
 class RenderElement;
 class RenderStyle;
 
@@ -47,19 +48,24 @@ public:
     explicit AnimationController(Frame&);
     ~AnimationController();
 
-    void cancelAnimations(RenderElement*);
-    PassRef<RenderStyle> updateAnimations(RenderElement&, PassRef<RenderStyle> newStyle);
-    PassRefPtr<RenderStyle> getAnimatedStyleForRenderer(RenderElement*);
+    void cancelAnimations(RenderElement&);
+    bool updateAnimations(RenderElement&, RenderStyle& newStyle, Ref<RenderStyle>& animatedStyle);
+    PassRefPtr<RenderStyle> getAnimatedStyleForRenderer(RenderElement&);
+
+    // If possible, compute the visual extent of any transform animation on the given renderer
+    // using the given rect, returning the result in the rect. Return false if there is some
+    // transform animation but we were unable to cheaply compute its affect on the extent.
+    bool computeExtentOfAnimation(RenderElement&, LayoutRect&) const;
 
     // This is called when an accelerated animation or transition has actually started to animate.
-    void notifyAnimationStarted(RenderElement*, double startTime);
+    void notifyAnimationStarted(RenderElement&, double startTime);
 
     WEBCORE_EXPORT bool pauseAnimationAtTime(RenderElement*, const AtomicString& name, double t); // To be used only for testing
     WEBCORE_EXPORT bool pauseTransitionAtTime(RenderElement*, const String& property, double t); // To be used only for testing
     WEBCORE_EXPORT unsigned numberOfActiveAnimations(Document*) const; // To be used only for testing
     
-    bool isRunningAnimationOnRenderer(RenderElement*, CSSPropertyID, AnimationBase::RunningState) const;
-    bool isRunningAcceleratedAnimationOnRenderer(RenderElement*, CSSPropertyID, AnimationBase::RunningState) const;
+    bool isRunningAnimationOnRenderer(RenderElement&, CSSPropertyID, AnimationBase::RunningState) const;
+    bool isRunningAcceleratedAnimationOnRenderer(RenderElement&, CSSPropertyID, AnimationBase::RunningState) const;
 
     WEBCORE_EXPORT bool isSuspended() const;
     WEBCORE_EXPORT void suspendAnimations();
@@ -80,9 +86,13 @@ public:
     
     static bool supportsAcceleratedAnimationOfProperty(CSSPropertyID);
 
+#if ENABLE(CSS_ANIMATIONS_LEVEL_2)
+    bool wantsScrollUpdates() const;
+    void scrollWasUpdated();
+#endif
+
 private:
     const std::unique_ptr<AnimationControllerPrivate> m_data;
-    int m_beginAnimationUpdateCount;
 };
 
 class AnimationUpdateBlock {

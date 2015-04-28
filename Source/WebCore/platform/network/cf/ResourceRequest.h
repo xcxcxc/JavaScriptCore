@@ -30,6 +30,7 @@
 #include "ResourceRequestBase.h"
 #include <wtf/RetainPtr.h>
 
+OBJC_CLASS NSMutableURLRequest;
 OBJC_CLASS NSURLRequest;
 
 #if PLATFORM(COCOA) || USE(CFNETWORK)
@@ -99,7 +100,12 @@ namespace WebCore {
 #if ENABLE(CACHE_PARTITIONING)
         WEBCORE_EXPORT static String partitionName(const String& domain);
         const String& cachePartition() const { return m_cachePartition.isNull() ? emptyString() : m_cachePartition; }
-        void setCachePartition(const String& cachePartition) { m_cachePartition = partitionName(cachePartition); }
+        void setCachePartition(const String& cachePartition)
+        {
+            ASSERT(cachePartition == partitionName(cachePartition));
+            m_cachePartition = cachePartition;
+        }
+        void setDomainForCachePartition(const String& domain) { m_cachePartition = partitionName(domain); }
 #endif
 
 #if PLATFORM(COCOA) || USE(CFNETWORK)
@@ -111,10 +117,6 @@ namespace WebCore {
         WEBCORE_EXPORT static void setHTTPPipeliningEnabled(bool);
 
         static bool resourcePrioritiesEnabled();
-
-#if PLATFORM(COCOA)
-        static bool useQuickLookResourceCachingQuirks();
-#endif
 
 #if PLATFORM(IOS)
         // FIXME: deprecatedIsMainResourceRequest() does not return the correct value if the ResourceRequest has been
@@ -135,8 +137,12 @@ namespace WebCore {
         void doUpdatePlatformHTTPBody();
         void doUpdateResourceHTTPBody();
 
-        PassOwnPtr<CrossThreadResourceRequestData> doPlatformCopyData(PassOwnPtr<CrossThreadResourceRequestData>) const;
-        void doPlatformAdopt(PassOwnPtr<CrossThreadResourceRequestData>);
+#if PLATFORM(COCOA)
+        NSMutableURLRequest *ensureMutableNSURLRequest();
+#endif
+
+        std::unique_ptr<CrossThreadResourceRequestData> doPlatformCopyData(std::unique_ptr<CrossThreadResourceRequestData>) const;
+        void doPlatformAdopt(std::unique_ptr<CrossThreadResourceRequestData>);
 
 #if USE(CFNETWORK)
         RetainPtr<CFURLRequestRef> m_cfRequest;

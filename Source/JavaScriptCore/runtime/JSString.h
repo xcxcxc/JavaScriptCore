@@ -52,6 +52,7 @@ JSString* jsSubstring(ExecState*, const String&, unsigned offset, unsigned lengt
 // These functions are faster than just calling jsString.
 JSString* jsNontrivialString(VM*, const String&);
 JSString* jsNontrivialString(ExecState*, const String&);
+JSString* jsNontrivialString(ExecState*, String&&);
 
 // Should be used for strings that are owned by an object that will
 // likely outlive the JSValue this makes, such as the parse tree or a
@@ -72,9 +73,9 @@ public:
     friend struct ThunkHelpers;
 
     typedef JSCell Base;
+    static const unsigned StructureFlags = Base::StructureFlags | OverridesGetOwnPropertySlot | InterceptsGetOwnPropertySlotByIndexEvenWhenLengthIsNotZero | StructureIsImmortal;
 
     static const bool needsDestruction = true;
-    static const bool hasImmortalStructure = true;
     static void destroy(JSCell*);
 
 private:
@@ -106,7 +107,7 @@ private:
         Base::finishCreation(vm);
         m_length = length;
         setIs8Bit(m_value.impl()->is8Bit());
-        Heap::heap(this)->reportExtraMemoryCost(cost);
+        Heap::heap(this)->reportExtraMemoryAllocated(cost);
         vm.m_newStringsSinceLastHashCons++;
     }
 
@@ -181,8 +182,6 @@ public:
     };
 
 protected:
-    static const unsigned StructureFlags = OverridesGetOwnPropertySlot | InterceptsGetOwnPropertySlotByIndexEvenWhenLengthIsNotZero | StructureIsImmortal;
-
     friend class JSValue;
 
     bool isRope() const { return m_value.isNull(); }
@@ -218,11 +217,12 @@ private:
     friend JSString* jsSubstring(ExecState*, JSString*, unsigned offset, unsigned length);
 };
 
-class JSRopeString : public JSString {
+class JSRopeString final : public JSString {
     friend class JSString;
 
     friend JSRopeString* jsStringBuilder(VM*);
 
+public:
     class RopeBuilder {
     public:
         RopeBuilder(VM& vm)
@@ -457,9 +457,15 @@ inline JSString* jsNontrivialString(VM* vm, const String& s)
     return JSString::create(*vm, s.impl());
 }
 
+inline JSString* jsNontrivialString(VM* vm, String&& s)
+{
+    ASSERT(s.length() > 1);
+    return JSString::create(*vm, s.releaseImpl());
+}
+
 ALWAYS_INLINE Identifier JSString::toIdentifier(ExecState* exec) const
 {
-    return Identifier(exec, toAtomicString(exec));
+    return Identifier::fromString(exec, toAtomicString(exec));
 }
 
 ALWAYS_INLINE AtomicString JSString::toAtomicString(ExecState* exec) const
@@ -475,12 +481,7 @@ ALWAYS_INLINE AtomicStringImpl* JSString::toExistingAtomicString(ExecState* exec
         return static_cast<const JSRopeString*>(this)->resolveRopeToExistingAtomicString(exec);
     if (m_value.impl()->isAtomic())
         return static_cast<AtomicStringImpl*>(m_value.impl());
-    if (AtomicStringImpl* existingAtomicString = AtomicString::find(m_value.impl())) {
-        m_value = *existingAtomicString;
-        setIs8Bit(m_value.impl()->is8Bit());
-        return existingAtomicString;
-    }
-    return nullptr;
+    return AtomicString::find(m_value.impl());
 }
 
 inline const String& JSString::value(ExecState* exec) const
@@ -585,6 +586,7 @@ inline JSString* jsSingleCharacterString(ExecState* exec, UChar c) { return jsSi
 inline JSString* jsSubstring8(ExecState* exec, const String& s, unsigned offset, unsigned length) { return jsSubstring8(&exec->vm(), s, offset, length); }
 inline JSString* jsSubstring(ExecState* exec, const String& s, unsigned offset, unsigned length) { return jsSubstring(&exec->vm(), s, offset, length); }
 inline JSString* jsNontrivialString(ExecState* exec, const String& s) { return jsNontrivialString(&exec->vm(), s); }
+inline JSString* jsNontrivialString(ExecState* exec, String&& s) { return jsNontrivialString(&exec->vm(), WTF::move(s)); }
 inline JSString* jsOwnedString(ExecState* exec, const String& s) { return jsOwnedString(&exec->vm(), s); }
 
 JS_EXPORT_PRIVATE JSString* jsStringWithCacheSlowCase(VM&, StringImpl&);
@@ -622,10 +624,9 @@ ALWAYS_INLINE bool JSString::getStringPropertySlot(ExecState* exec, PropertyName
         return true;
     }
 
-    unsigned i = propertyName.asIndex();
-    if (i < m_length) {
-        ASSERT(i != PropertyName::NotAnIndex); // No need for an explicit check, the above test would always fail!
-        slot.setValue(this, DontDelete | ReadOnly, getIndex(exec, i));
+    Optional<uint32_t> index = parseIndex(propertyName);
+    if (index && index.value() < m_length) {
+        slot.setValue(this, DontDelete | ReadOnly, getIndex(exec, index.value()));
         return true;
     }
 

@@ -35,7 +35,7 @@
 
 #include <wtf/Platform.h>
 
-#if PLATFORM(WIN) && !OS(WINCE)
+#if PLATFORM(WIN)
 #ifndef WTF_USE_CG
 #define WTF_USE_CG 1
 #endif
@@ -54,7 +54,6 @@
 #include <WebCore/InspectorFrontendClientLocal.h>
 #include <WebCore/Page.h>
 
-#include <wtf/PassOwnPtr.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>

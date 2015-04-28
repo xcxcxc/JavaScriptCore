@@ -50,7 +50,7 @@ void WebContextMenuClient::contextMenuDestroyed()
 }
 
 #if USE(CROSS_PLATFORM_CONTEXT_MENUS)
-PassOwnPtr<ContextMenu> WebContextMenuClient::customizeMenu(PassOwnPtr<ContextMenu> menu)
+std::unique_ptr<ContextMenu> WebContextMenuClient::customizeMenu(std::unique_ptr<ContextMenu> menu)
 {
     // WebKit2 ignores this client callback and does context menu customization when it is told to show the menu.
     return menu;
@@ -72,6 +72,11 @@ void WebContextMenuClient::downloadURL(const URL&)
 {
     // This is handled in the UI process.
     ASSERT_NOT_REACHED();
+}
+
+ContextMenuItem WebContextMenuClient::shareMenuItem(const HitTestResult&)
+{
+    return ContextMenuItem(SubmenuType, ContextMenuItemTagShareMenu, emptyString());
 }
 
 #if !PLATFORM(COCOA)

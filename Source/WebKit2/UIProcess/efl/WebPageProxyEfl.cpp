@@ -83,6 +83,15 @@ void WebPageProxy::loadRecentSearches(const String&, Vector<String>&)
     notImplemented();
 }
 
+void WebPageProxy::editorStateChanged(const EditorState& editorState)
+{
+    m_editorState = editorState;
+    
+    if (editorState.shouldIgnoreCompositionSelectionChange)
+        return;
+    m_pageClient.updateTextInputState();
+}
+
 void WebPageProxy::setThemePath(const String& themePath)
 {
     if (!isValid())
@@ -139,5 +148,28 @@ void WebPageProxy::initializeUIPopupMenuClient(const WKPageUIPopupMenuClientBase
 {
     m_uiPopupMenuClient.initialize(client);
 }
+
+#if HAVE(ACCESSIBILITY) && defined(HAVE_ECORE_X)
+
+bool WebPageProxy::accessibilityObjectReadByPoint(const WebCore::IntPoint& point)
+{
+    UNUSED_PARAM(point);
+    notImplemented();
+    return false;
+}
+
+bool WebPageProxy::accessibilityObjectReadPrevious()
+{
+    notImplemented();
+    return false;
+}
+
+bool WebPageProxy::accessibilityObjectReadNext()
+{
+    notImplemented();
+    return false;
+}
+
+#endif
 
 } // namespace WebKit

@@ -31,15 +31,26 @@
 #import "DataReference.h"
 #import "WebKitSystemInterface.h"
 #import <WebCore/CertificateInfo.h>
-#import <WebCore/ContentFilter.h>
+#import <WebCore/ContentFilterUnblockHandler.h>
 #import <WebCore/Credential.h>
 #import <WebCore/KeyboardEvent.h>
+#import <WebCore/MachSendRight.h>
 #import <WebCore/ProtectionSpace.h>
 #import <WebCore/ResourceError.h>
 #import <WebCore/ResourceRequest.h>
 
 #if USE(CFNETWORK)
 #import <CFNetwork/CFURLRequest.h>
+#endif
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+#import <WebCore/AVFoundationSPI.h>
+#import <WebCore/MediaPlaybackTargetContext.h>
+#import <WebCore/SoftLinking.h>
+#import <objc/runtime.h>
+
+SOFT_LINK_FRAMEWORK_OPTIONAL(AVFoundation)
+SOFT_LINK_CLASS(AVFoundation, AVOutputContext)
 #endif
 
 using namespace WebCore;
@@ -198,6 +209,19 @@ void ArgumentCoder<ResourceError>::encodePlatformData(ArgumentEncoder& encoder, 
             CFDictionarySetValue(filteredUserInfo.get(), key, value);
     }];
 
+    if (NSArray *clientIdentityAndCertificates = [userInfo objectForKey:@"NSErrorClientCertificateChainKey"]) {
+        ASSERT([clientIdentityAndCertificates isKindOfClass:[NSArray class]]);
+        ASSERT(^{
+            for (id object in clientIdentityAndCertificates) {
+                if (CFGetTypeID(object) != SecIdentityGetTypeID() && CFGetTypeID(object) != SecCertificateGetTypeID())
+                    return false;
+            }
+            return true;
+        }());
+
+        CFDictionarySetValue(filteredUserInfo.get(), @"NSErrorClientCertificateChainKey", clientIdentityAndCertificates);
+    };
+
     IPC::encode(encoder, filteredUserInfo.get());
 
     id peerCertificateChain = [userInfo objectForKey:@"NSErrorPeerCertificateChainKey"];
@@ -282,16 +306,61 @@ bool ArgumentCoder<ProtectionSpace>::decodePlatformData(ArgumentDecoder& decoder
 
 void ArgumentCoder<Credential>::encodePlatformData(ArgumentEncoder& encoder, const Credential& credential)
 {
+    NSURLCredential *nsCredential = credential.nsCredential();
+    // NSURLCredential doesn't serialize identities correctly, so we encode the pieces individually
+    // in the identity case. See <rdar://problem/18802434>.
+    if (SecIdentityRef identity = nsCredential.identity) {
+        encoder << true;
+        IPC::encode(encoder, identity);
+
+        if (NSArray *certificates = nsCredential.certificates) {
+            encoder << true;
+            IPC::encode(encoder, reinterpret_cast<CFArrayRef>(certificates));
+        } else
+            encoder << false;
+
+        encoder << static_cast<uint64_t>(nsCredential.persistence);
+        return;
+    }
+
+    encoder << false;
     RetainPtr<NSMutableData> data = adoptNS([[NSMutableData alloc] init]);
     RetainPtr<NSKeyedArchiver> archiver = adoptNS([[NSKeyedArchiver alloc] initForWritingWithMutableData:data.get()]);
     [archiver setRequiresSecureCoding:YES];
-    [archiver encodeObject:credential.nsCredential() forKey:@"credential"];
+    [archiver encodeObject:nsCredential forKey:@"credential"];
     [archiver finishEncoding];
     IPC::encode(encoder, reinterpret_cast<CFDataRef>(data.get()));
 }
 
 bool ArgumentCoder<Credential>::decodePlatformData(ArgumentDecoder& decoder, Credential& credential)
 {
+    bool hasIdentity;
+    if (!decoder.decode(hasIdentity))
+        return false;
+
+    if (hasIdentity) {
+        RetainPtr<SecIdentityRef> identity;
+        if (!IPC::decode(decoder, identity))
+            return false;
+
+        RetainPtr<CFArrayRef> certificates;
+        bool hasCertificates;
+        if (!decoder.decode(hasCertificates))
+            return false;
+
+        if (hasCertificates) {
+            if (!IPC::decode(decoder, certificates))
+                return false;
+        }
+
+        uint64_t persistence;
+        if (!decoder.decode(persistence))
+            return false;
+
+        credential = Credential(adoptNS([[NSURLCredential alloc] initWithIdentity:identity.get() certificates:(NSArray *)certificates.get() persistence:(NSURLCredentialPersistence)persistence]).get());
+        return true;
+    }
+
     RetainPtr<CFDataRef> data;
     if (!IPC::decode(decoder, data))
         return false;
@@ -306,6 +375,29 @@ bool ArgumentCoder<Credential>::decodePlatformData(ArgumentDecoder& decoder, Cre
     }
 
     [unarchiver finishDecoding];
+    return true;
+}
+
+void ArgumentCoder<MachSendRight>::encode(ArgumentEncoder& encoder, const MachSendRight& sendRight)
+{
+    encoder << Attachment(sendRight.copySendRight().leakSendRight(), MACH_MSG_TYPE_MOVE_SEND);
+}
+
+void ArgumentCoder<MachSendRight>::encode(ArgumentEncoder& encoder, MachSendRight&& sendRight)
+{
+    encoder << Attachment(sendRight.leakSendRight(), MACH_MSG_TYPE_MOVE_SEND);
+}
+
+bool ArgumentCoder<MachSendRight>::decode(ArgumentDecoder& decoder, MachSendRight& sendRight)
+{
+    Attachment attachment;
+    if (!decoder.decode(attachment))
+        return false;
+
+    if (attachment.disposition() != MACH_MSG_TYPE_MOVE_SEND)
+        return false;
+
+    sendRight = MachSendRight::adopt(attachment.port());
     return true;
 }
 
@@ -325,17 +417,17 @@ bool ArgumentCoder<KeypressCommand>::decode(ArgumentDecoder& decoder, KeypressCo
     return true;
 }
 
-void ArgumentCoder<ContentFilter>::encode(ArgumentEncoder& encoder, const ContentFilter& contentFilter)
+void ArgumentCoder<ContentFilterUnblockHandler>::encode(ArgumentEncoder& encoder, const ContentFilterUnblockHandler& contentFilterUnblockHandler)
 {
     RetainPtr<NSMutableData> data = adoptNS([[NSMutableData alloc] init]);
     RetainPtr<NSKeyedArchiver> archiver = adoptNS([[NSKeyedArchiver alloc] initForWritingWithMutableData:data.get()]);
     [archiver setRequiresSecureCoding:YES];
-    contentFilter.encode(archiver.get());
+    contentFilterUnblockHandler.encode(archiver.get());
     [archiver finishEncoding];
     IPC::encode(encoder, reinterpret_cast<CFDataRef>(data.get()));
 }
 
-bool ArgumentCoder<ContentFilter>::decode(ArgumentDecoder& decoder, ContentFilter& contentFilter)
+bool ArgumentCoder<ContentFilterUnblockHandler>::decode(ArgumentDecoder& decoder, ContentFilterUnblockHandler& contentFilterUnblockHandler)
 {
     RetainPtr<CFDataRef> data;
     if (!IPC::decode(decoder, data))
@@ -343,11 +435,64 @@ bool ArgumentCoder<ContentFilter>::decode(ArgumentDecoder& decoder, ContentFilte
 
     RetainPtr<NSKeyedUnarchiver> unarchiver = adoptNS([[NSKeyedUnarchiver alloc] initForReadingWithData:(NSData *)data.get()]);
     [unarchiver setRequiresSecureCoding:YES];
-    if (!ContentFilter::decode(unarchiver.get(), contentFilter))
+    if (!ContentFilterUnblockHandler::decode(unarchiver.get(), contentFilterUnblockHandler))
         return false;
 
     [unarchiver finishDecoding];
     return true;
 }
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+
+static NSString *deviceContextKey()
+{
+    static NSString * const key = @"deviceContext";
+    return key;
+}
+
+void ArgumentCoder<MediaPlaybackTargetContext>::encodePlatformData(ArgumentEncoder& encoder, const MediaPlaybackTargetContext& target)
+{
+    ASSERT(target.type == MediaPlaybackTargetContext::AVOutputContextType);
+
+    RetainPtr<NSMutableData> data = adoptNS([[NSMutableData alloc] init]);
+    RetainPtr<NSKeyedArchiver> archiver = adoptNS([[NSKeyedArchiver alloc] initForWritingWithMutableData:data.get()]);
+    [archiver setRequiresSecureCoding:YES];
+
+    if ([getAVOutputContextClass() conformsToProtocol:@protocol(NSSecureCoding)])
+        [archiver encodeObject:target.context.avOutputContext forKey:deviceContextKey()];
+
+    [archiver finishEncoding];
+    IPC::encode(encoder, reinterpret_cast<CFDataRef>(data.get()));
+
+}
+
+bool ArgumentCoder<MediaPlaybackTargetContext>::decodePlatformData(ArgumentDecoder& decoder, MediaPlaybackTargetContext& target)
+{
+    ASSERT(target.type == MediaPlaybackTargetContext::AVOutputContextType);
+
+    if (![getAVOutputContextClass() conformsToProtocol:@protocol(NSSecureCoding)])
+        return false;
+
+    RetainPtr<CFDataRef> data;
+    if (!IPC::decode(decoder, data))
+        return false;
+
+    RetainPtr<NSKeyedUnarchiver> unarchiver = adoptNS([[NSKeyedUnarchiver alloc] initForReadingWithData:(NSData *)data.get()]);
+    [unarchiver setRequiresSecureCoding:YES];
+
+    AVOutputContext *context = nil;
+    @try {
+        context = [unarchiver decodeObjectOfClass:getAVOutputContextClass() forKey:deviceContextKey()];
+    } @catch (NSException *exception) {
+        LOG_ERROR("The target picker being decoded is not a AVOutputContext.");
+        return false;
+    }
+
+    target.context.avOutputContext = context;
+    
+    [unarchiver finishDecoding];
+    return true;
+}
+#endif
 
 } // namespace IPC

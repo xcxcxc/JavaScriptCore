@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2011, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,7 +30,6 @@
 #include "Page.h"
 #include "RenderLayer.h"
 #include "ScrollableArea.h"
-#include <wtf/PassOwnPtr.h>
 
 #if ENABLE(TOUCH_EVENTS)
 #include "PlatformTouchEventIOS.h"
@@ -40,12 +39,12 @@ using namespace WebCore;
 
 namespace WebCore {
 
-PassOwnPtr<ScrollAnimator> ScrollAnimator::create(ScrollableArea* scrollableArea)
+std::unique_ptr<ScrollAnimator> ScrollAnimator::create(ScrollableArea& scrollableArea)
 {
-    return adoptPtr(new ScrollAnimatorIOS(scrollableArea));
+    return std::make_unique<ScrollAnimatorIOS>(scrollableArea);
 }
 
-ScrollAnimatorIOS::ScrollAnimatorIOS(ScrollableArea* scrollableArea)
+ScrollAnimatorIOS::ScrollAnimatorIOS(ScrollableArea& scrollableArea)
     : ScrollAnimator(scrollableArea)
 #if ENABLE(TOUCH_EVENTS)
     , m_touchScrollAxisLatch(AxisLatchNotComputed)
@@ -82,7 +81,7 @@ bool ScrollAnimatorIOS::handleTouchEvent(const PlatformTouchEvent& touchEvent)
         m_inTouchSequence = false;
         m_scrollableAreaForTouchSequence = 0;
         if (m_startedScroll)
-            scrollableArea()->didEndScroll();
+            scrollableArea().didEndScroll();
         return false;
     }
 
@@ -92,7 +91,7 @@ bool ScrollAnimatorIOS::handleTouchEvent(const PlatformTouchEvent& touchEvent)
         m_inTouchSequence = false;
         m_scrollableAreaForTouchSequence = 0;
         if (m_startedScroll)
-            scrollableArea()->didEndScroll();
+            scrollableArea().didEndScroll();
         return false;
     }
     
@@ -105,8 +104,8 @@ bool ScrollAnimatorIOS::handleTouchEvent(const PlatformTouchEvent& touchEvent)
         determineScrollableAreaForTouchSequence(touchDelta);
 
     if (!m_committedToScrollAxis) {
-        bool horizontallyScrollable = m_scrollableArea->scrollSize(HorizontalScrollbar);
-        bool verticallyScrollable = m_scrollableArea->scrollSize(VerticalScrollbar);
+        bool horizontallyScrollable = m_scrollableArea.scrollSize(HorizontalScrollbar);
+        bool verticallyScrollable = m_scrollableArea.scrollSize(VerticalScrollbar);
 
         if (!horizontallyScrollable && !verticallyScrollable)
             return false;
@@ -128,7 +127,7 @@ bool ScrollAnimatorIOS::handleTouchEvent(const PlatformTouchEvent& touchEvent)
             if (m_touchScrollAxisLatch == AxisLatchNotComputed) {
                 const float lockAngleDegrees = 20;
                 if (deltaFromStart.width() && deltaFromStart.height()) {
-                    float dragAngle = atanf(fabsf(deltaFromStart.height()) / fabsf(deltaFromStart.width()));
+                    float dragAngle = atanf(static_cast<float>(abs(deltaFromStart.height())) / abs(deltaFromStart.width()));
                     if (dragAngle <= deg2rad(lockAngleDegrees))
                         m_touchScrollAxisLatch = AxisLatchHorizontal;
                     else if (dragAngle >= deg2rad(90 - lockAngleDegrees))
@@ -146,13 +145,13 @@ bool ScrollAnimatorIOS::handleTouchEvent(const PlatformTouchEvent& touchEvent)
     // Horizontal
     if (m_touchScrollAxisLatch != AxisLatchVertical) {
         int delta = touchDelta.width();
-        handled |= m_scrollableAreaForTouchSequence->scroll(delta < 0 ? ScrollLeft : ScrollRight, ScrollByPixel, fabsf(delta));
+        handled |= m_scrollableAreaForTouchSequence->scroll(delta < 0 ? ScrollLeft : ScrollRight, ScrollByPixel, abs(delta));
     }
     
     // Vertical
     if (m_touchScrollAxisLatch != AxisLatchHorizontal) {
         int delta = touchDelta.height();
-        handled |= m_scrollableAreaForTouchSequence->scroll(delta < 0 ? ScrollUp : ScrollDown, ScrollByPixel, fabsf(delta));
+        handled |= m_scrollableAreaForTouchSequence->scroll(delta < 0 ? ScrollUp : ScrollDown, ScrollByPixel, abs(delta));
     }
     
     // Return false until we manage to scroll at all, and then keep returning true until the gesture ends.
@@ -160,9 +159,9 @@ bool ScrollAnimatorIOS::handleTouchEvent(const PlatformTouchEvent& touchEvent)
         if (!handled)
             return false;
         m_startedScroll = true;
-        scrollableArea()->didStartScroll();
+        scrollableArea().didStartScroll();
     } else if (handled)
-        scrollableArea()->didUpdateScroll();
+        scrollableArea().didUpdateScroll();
     
     return true;
 }
@@ -171,7 +170,7 @@ void ScrollAnimatorIOS::determineScrollableAreaForTouchSequence(const IntSize& s
 {
     ASSERT(!m_scrollableAreaForTouchSequence);
 
-    ScrollableArea* scrollableArea = m_scrollableArea;
+    ScrollableArea* scrollableArea = &m_scrollableArea;
     while (true) {
         if (!scrollableArea->isPinnedInBothDirections(scrollDelta))
             break;

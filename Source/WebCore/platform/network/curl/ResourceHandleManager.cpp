@@ -228,8 +228,13 @@ inline static bool isHttpAuthentication(int statusCode)
     return statusCode == 401;
 }
 
+inline static bool isHttpNotModified(int statusCode)
+{
+    return statusCode == 304;
+}
+
 ResourceHandleManager::ResourceHandleManager()
-    : m_downloadTimer(this, &ResourceHandleManager::downloadTimerCallback)
+    : m_downloadTimer(*this, &ResourceHandleManager::downloadTimerCallback)
     , m_cookieJarFileName(cookieJarPath())
     , m_certificatePath (certificatePath())
     , m_runningJobs(0)
@@ -473,7 +478,7 @@ static size_t headerCallback(char* ptr, size_t size, size_t nmemb, void* data)
     size_t totalSize = size * nmemb;
     ResourceHandleClient* client = d->client();
 
-    String header = String::fromUTF8WithLatin1Fallback(static_cast<const char*>(ptr), totalSize);
+    String header(static_cast<const char*>(ptr), totalSize);
 
     /*
      * a) We can finish and send the ResourceResponse
@@ -510,7 +515,7 @@ static size_t headerCallback(char* ptr, size_t size, size_t nmemb, void* data)
             String boundary;
             bool parsed = MultipartHandle::extractBoundary(d->m_response.httpHeaderField(HTTPHeaderName::ContentType), boundary);
             if (parsed)
-                d->m_multipartHandle = MultipartHandle::create(job, boundary);
+                d->m_multipartHandle = std::make_unique<MultipartHandle>(job, boundary);
         }
 
 #if ENABLE(WEB_TIMING)
@@ -546,9 +551,14 @@ static size_t headerCallback(char* ptr, size_t size, size_t nmemb, void* data)
         }
 
         if (client) {
-            if (httpCode == 304) {
+            if (isHttpNotModified(httpCode)) {
                 const String& url = job->firstRequest().url().string();
-                CurlCacheManager::getInstance().getCachedResponse(url, d->m_response);
+                if (CurlCacheManager::getInstance().getCachedResponse(url, d->m_response)) {
+                    if (d->m_addedCacheValidationHeaders) {
+                        d->m_response.setHTTPStatusCode(200);
+                        d->m_response.setHTTPStatusText("OK");
+                    }
+                }
             }
             client->didReceiveResponse(job, d->m_response);
             CurlCacheManager::getInstance().didReceiveResponse(*job, d->m_response);
@@ -620,7 +630,7 @@ size_t readCallback(void* ptr, size_t size, size_t nmemb, void* data)
     return sent;
 }
 
-void ResourceHandleManager::downloadTimerCallback(Timer<ResourceHandleManager>* /* timer */)
+void ResourceHandleManager::downloadTimerCallback()
 {
     startScheduledJobs();
 
@@ -1080,7 +1090,9 @@ void ResourceHandleManager::initializeHandle(ResourceHandle* job)
     if (job->firstRequest().httpHeaderFields().size() > 0) {
         HTTPHeaderMap customHeaders = job->firstRequest().httpHeaderFields();
 
-        if (CurlCacheManager::getInstance().isCached(url)) {
+        bool hasCacheHeaders = customHeaders.contains(HTTPHeaderName::IfModifiedSince) || customHeaders.contains(HTTPHeaderName::IfNoneMatch);
+        if (!hasCacheHeaders && CurlCacheManager::getInstance().isCached(url)) {
+            CurlCacheManager::getInstance().addCacheEntryClient(url, job);
             HTTPHeaderMap& requestHeaders = CurlCacheManager::getInstance().requestHeaders(url);
 
             // append additional cache information
@@ -1090,6 +1102,7 @@ void ResourceHandleManager::initializeHandle(ResourceHandle* job)
                 customHeaders.set(it->key, it->value);
                 ++it;
             }
+            d->m_addedCacheValidationHeaders = true;
         }
 
         HTTPHeaderMap::const_iterator end = customHeaders.end();
@@ -1119,7 +1132,7 @@ void ResourceHandleManager::initializeHandle(ResourceHandle* job)
     else if ("HEAD" == method)
         curl_easy_setopt(d->m_handle, CURLOPT_NOBODY, TRUE);
     else {
-        curl_easy_setopt(d->m_handle, CURLOPT_CUSTOMREQUEST, method.latin1().data());
+        curl_easy_setopt(d->m_handle, CURLOPT_CUSTOMREQUEST, method.ascii().data());
         setupPUT(job, &headers);
     }
 

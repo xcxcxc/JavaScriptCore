@@ -33,7 +33,6 @@
 #include "CachedResourceRequest.h"
 #include "MediaPlayerPrivateAVFoundationCF.h"
 #include "NotImplemented.h"
-#include "ResourceBuffer.h"
 #include "ResourceLoaderOptions.h"
 #include "SharedBuffer.h"
 #include "SoftLinking.h"
@@ -81,7 +80,8 @@ void WebCoreAVCFResourceLoader::startLoading()
         m_resource->addClient(this);
     else {
         LOG_ERROR("Failed to start load for media at url %s", requestURL.string().ascii().data());
-        AVCFAssetResourceLoadingRequestFinishLoadingWithError(m_avRequest.get(), nullptr);
+        RetainPtr<CFErrorRef> error = adoptCF(CFErrorCreate(kCFAllocatorDefault, kCFErrorDomainCFNetwork, kCFURLErrorUnknown, nullptr));
+        AVCFAssetResourceLoadingRequestFinishLoadingWithError(m_avRequest.get(), error.get());
     }
 }
 
@@ -110,7 +110,8 @@ void WebCoreAVCFResourceLoader::responseReceived(CachedResource* resource, const
 
     int status = response.httpStatusCode();
     if (status && (status < 200 || status > 299)) {
-        AVCFAssetResourceLoadingRequestFinishLoadingWithError(m_avRequest.get(), nullptr);
+        RetainPtr<CFErrorRef> error = adoptCF(CFErrorCreate(kCFAllocatorDefault, kCFErrorDomainCFNetwork, status, nullptr));
+        AVCFAssetResourceLoadingRequestFinishLoadingWithError(m_avRequest.get(), error.get());
         return;
     }
 
@@ -131,7 +132,8 @@ void WebCoreAVCFResourceLoader::notifyFinished(CachedResource* resource)
         // FIXME:    [[m_avRequest.get() contentInformationRequest] setContentType:@""];
         notImplemented();
 
-        AVCFAssetResourceLoadingRequestFinishLoadingWithError(m_avRequest.get(), nullptr);
+        RetainPtr<CFErrorRef> error = adoptCF(CFErrorCreate(kCFAllocatorDefault, kCFErrorDomainCFNetwork, kCFURLErrorUnknown, nullptr));
+        AVCFAssetResourceLoadingRequestFinishLoadingWithError(m_avRequest.get(), error.get());
     } else {
         fulfillRequestWithResource(resource);
         // FIXME: [m_avRequest.get() finishLoading];

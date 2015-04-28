@@ -1,7 +1,7 @@
 add_custom_target(WebKitTestRunner-forwarding-headers
-    COMMAND ${PERL_EXECUTABLE} ${WEBKIT2_DIR}/Scripts/generate-forwarding-headers.pl ${WEBKIT_TESTRUNNER_DIR} ${FORWARDING_HEADERS_DIR} gtk
-    COMMAND ${PERL_EXECUTABLE} ${WEBKIT2_DIR}/Scripts/generate-forwarding-headers.pl ${WEBKIT_TESTRUNNER_DIR} ${FORWARDING_HEADERS_DIR} soup
+    COMMAND ${PERL_EXECUTABLE} ${WEBKIT2_DIR}/Scripts/generate-forwarding-headers.pl --include-path ${WEBKIT_TESTRUNNER_DIR} --output ${FORWARDING_HEADERS_DIR} --platform gtk --platform soup
 )
+
 set(ForwardingHeadersForWebKitTestRunner_NAME WebKitTestRunner-forwarding-headers)
 
 list(APPEND WebKitTestRunner_SOURCES

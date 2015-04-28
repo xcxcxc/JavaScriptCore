@@ -102,7 +102,7 @@ public:
 
     bool lineCanAccommodateEllipsis(bool ltr, int blockEdge, int lineBoxEdge, int ellipsisWidth);
     // Return the truncatedWidth, the width of the truncated text + ellipsis.
-    float placeEllipsis(const AtomicString& ellipsisStr, bool ltr, float blockLeftEdge, float blockRightEdge, float ellipsisWidth, InlineBox* markupBox = 0);
+    float placeEllipsis(const AtomicString& ellipsisStr, bool ltr, float blockLeftEdge, float blockRightEdge, float ellipsisWidth, InlineBox* markupBox = nullptr);
     // Return the position of the EllipsisBox or -1.
     virtual float placeEllipsisBox(bool ltr, float blockLeftEdge, float blockRightEdge, float ellipsisWidth, float &truncatedWidth, bool& foundBox) override final;
 
@@ -119,7 +119,7 @@ public:
     virtual LayoutUnit lineHeight() const override final;
 
     virtual void paint(PaintInfo&, const LayoutPoint&, LayoutUnit lineTop, LayoutUnit lineBottom) override;
-    virtual bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, LayoutUnit lineTop, LayoutUnit lineBottom) override final;
+    virtual bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const HitTestLocation& locationInContainer, const LayoutPoint& accumulatedOffset, LayoutUnit lineTop, LayoutUnit lineBottom, HitTestAction) override final;
 
     using InlineBox::hasSelectedChildren;
     using InlineBox::setHasSelectedChildren;
@@ -143,6 +143,13 @@ public:
             m_floats->append(&floatingBox);
         else
             m_floats = std::make_unique<Vector<RenderBox*>>(1, &floatingBox);
+    }
+
+    void removeFloat(RenderBox& floatingBox)
+    {
+        ASSERT(m_floats);
+        ASSERT(m_floats->contains(&floatingBox));
+        m_floats->remove(m_floats->find(&floatingBox));
     }
 
     Vector<RenderBox*>* floatsPtr() { ASSERT(!isDirty()); return m_floats.get(); }
@@ -180,13 +187,10 @@ public:
         return InlineFlowBox::logicalBottomLayoutOverflow(lineBottom());
     }
 
-    // Used to calculate the underline offset for TextUnderlinePositionUnder.
-    float maxLogicalTop() const;
-
     Node* getLogicalStartBoxWithNode(InlineBox*&) const;
     Node* getLogicalEndBoxWithNode(InlineBox*&) const;
 
-#ifndef NDEBUG
+#if ENABLE(TREE_DEBUGGING)
     virtual const char* boxName() const override final;
 #endif
 private:
@@ -224,18 +228,18 @@ private:
     std::unique_ptr<Vector<RenderBox*>> m_floats;
 };
 
-INLINE_BOX_OBJECT_TYPE_CASTS(RootInlineBox, isRootInlineBox())
-
 inline RootInlineBox* RootInlineBox::nextRootBox() const
 {
-    return toRootInlineBox(m_nextLineBox);
+    return downcast<RootInlineBox>(m_nextLineBox);
 }
 
 inline RootInlineBox* RootInlineBox::prevRootBox() const
 {
-    return toRootInlineBox(m_prevLineBox);
+    return downcast<RootInlineBox>(m_prevLineBox);
 }
 
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_INLINE_BOX(RootInlineBox, isRootInlineBox())
 
 #endif // RootInlineBox_h

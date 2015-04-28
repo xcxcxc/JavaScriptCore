@@ -26,8 +26,8 @@
 #ifndef JSCallee_h
 #define JSCallee_h
 
-#include "JSDestructibleObject.h"
 #include "JSGlobalObject.h"
+#include "JSObject.h"
 #include "JSScope.h"
 
 namespace JSC {
@@ -36,7 +36,7 @@ class JSGlobalObject;
 class LLIntOffsetsExtractor;
 
 
-class JSCallee : public JSDestructibleObject {
+class JSCallee : public JSNonFinalObject {
     friend class JIT;
 #if ENABLE(DFG_JIT)
     friend class DFG::SpeculativeJIT;
@@ -45,7 +45,8 @@ class JSCallee : public JSDestructibleObject {
     friend class VM;
 
 public:
-    typedef JSDestructibleObject Base;
+    typedef JSNonFinalObject Base;
+    const static unsigned StructureFlags = Base::StructureFlags | ImplementsHasInstance;
 
     static JSCallee* create(VM& vm, JSGlobalObject* globalObject, JSScope* scope)
     {
@@ -54,8 +55,6 @@ public:
         return callee;
     }
     
-    static void destroy(JSCell*);
-
     JSScope* scope()
     {
         return m_scope.get();
@@ -90,8 +89,6 @@ public:
     }
 
 protected:
-    const static unsigned StructureFlags = OverridesGetOwnPropertySlot | ImplementsHasInstance | OverridesGetPropertyNames | JSObject::StructureFlags;
-
     JS_EXPORT_PRIVATE JSCallee(VM&, JSGlobalObject*, Structure*);
     JSCallee(VM&, JSScope*, Structure*);
 
@@ -99,12 +96,6 @@ protected:
     using Base::finishCreation;
 
     static void visitChildren(JSCell*, SlotVisitor&);
-
-    static bool getOwnPropertySlot(JSObject*, ExecState*, PropertyName, PropertySlot&);
-    static void getOwnNonIndexPropertyNames(JSObject*, ExecState*, PropertyNameArray&, EnumerationMode = ExcludeDontEnumProperties);
-    static bool defineOwnProperty(JSObject*, ExecState*, PropertyName, const PropertyDescriptor&, bool shouldThrow);
-    static void put(JSCell*, ExecState*, PropertyName, JSValue, PutPropertySlot&);
-    static bool deleteProperty(JSCell*, ExecState*, PropertyName);
 
 private:
     friend class LLIntOffsetsExtractor;

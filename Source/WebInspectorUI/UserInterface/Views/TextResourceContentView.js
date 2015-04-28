@@ -52,10 +52,9 @@ WebInspector.TextResourceContentView = function(resource)
     this._prettyPrintButtonNavigationItem.addEventListener(WebInspector.ButtonNavigationItem.Event.Clicked, this._togglePrettyPrint, this);
     this._prettyPrintButtonNavigationItem.enabled = false; // Enabled when the text editor is populated with content.
 
-    var showTypesImageSize = WebInspector.Platform.isLegacyMacOS ? 15 : 16;
     var toolTipTypes = WebInspector.UIString("Show type information");
     var activatedToolTipTypes = WebInspector.UIString("Hide type information");
-    this._showTypesButtonNavigationItem = new WebInspector.ActivateButtonNavigationItem("show-types", toolTipTypes, activatedToolTipTypes, "Images/NavigationItemTypes.svg", showTypesImageSize, showTypesImageSize);
+    this._showTypesButtonNavigationItem = new WebInspector.ActivateButtonNavigationItem("show-types", toolTipTypes, activatedToolTipTypes, "Images/NavigationItemTypes.svg", 13, 14);
     this._showTypesButtonNavigationItem.addEventListener(WebInspector.ButtonNavigationItem.Event.Clicked, this._toggleTypeAnnotations, this);
     this._showTypesButtonNavigationItem.enabled = false;
 
@@ -122,7 +121,7 @@ WebInspector.TextResourceContentView.prototype = {
     {
         WebInspector.ResourceContentView.prototype.closed.call(this);
 
-        this.resource.removeEventListener(WebInspector.SourceCode.Event.ContentDidChange, this._sourceCodeContentDidChange, this);
+        this.resource.removeEventListener(null, null, this);
 
         this._textEditor.close();
     },

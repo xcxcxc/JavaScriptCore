@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006, 2007, 2008, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2006, 2007, 2008, 2014-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -71,13 +71,13 @@ void ScrollView::addChild(PassRefPtr<Widget> prpChild)
         platformAddChild(child);
 }
 
-void ScrollView::removeChild(Widget* child)
+void ScrollView::removeChild(Widget& child)
 {
-    ASSERT(child->parent() == this);
-    child->setParent(0);
-    m_children.remove(child);
-    if (child->platformWidget())
-        platformRemoveChild(child);
+    ASSERT(child.parent() == this);
+    child.setParent(nullptr);
+    m_children.remove(&child);
+    if (child.platformWidget())
+        platformRemoveChild(&child);
 }
 
 bool ScrollView::setHasHorizontalScrollbar(bool hasBar, bool* contentSizeAffected)
@@ -96,8 +96,8 @@ bool ScrollView::setHasHorizontalScrollbar(bool hasBar, bool* contentSizeAffecte
     if (!hasBar && m_horizontalScrollbar) {
         bool wasOverlayScrollbar = m_horizontalScrollbar->isOverlayScrollbar();
         willRemoveScrollbar(m_horizontalScrollbar.get(), HorizontalScrollbar);
-        removeChild(m_horizontalScrollbar.get());
-        m_horizontalScrollbar = 0;
+        removeChild(*m_horizontalScrollbar);
+        m_horizontalScrollbar = nullptr;
         if (contentSizeAffected)
             *contentSizeAffected = !wasOverlayScrollbar;
         return true;
@@ -122,8 +122,8 @@ bool ScrollView::setHasVerticalScrollbar(bool hasBar, bool* contentSizeAffected)
     if (!hasBar && m_verticalScrollbar) {
         bool wasOverlayScrollbar = m_verticalScrollbar->isOverlayScrollbar();
         willRemoveScrollbar(m_verticalScrollbar.get(), VerticalScrollbar);
-        removeChild(m_verticalScrollbar.get());
-        m_verticalScrollbar = 0;
+        removeChild(*m_verticalScrollbar);
+        m_verticalScrollbar = nullptr;
         if (contentSizeAffected)
             *contentSizeAffected = !wasOverlayScrollbar;
         return true;
@@ -134,7 +134,7 @@ bool ScrollView::setHasVerticalScrollbar(bool hasBar, bool* contentSizeAffected)
 
 PassRefPtr<Scrollbar> ScrollView::createScrollbar(ScrollbarOrientation orientation)
 {
-    return Scrollbar::createNativeScrollbar(this, orientation, RegularScrollbar);
+    return Scrollbar::createNativeScrollbar(*this, orientation, RegularScrollbar);
 }
 
 void ScrollView::setScrollbarModes(ScrollbarMode horizontalMode, ScrollbarMode verticalMode,
@@ -310,7 +310,7 @@ IntRect ScrollView::visibleContentRectInternal(VisibleContentRectIncludesScrollb
 #if PLATFORM(IOS)
     if (visibleContentRectBehavior == LegacyIOSDocumentViewRect) {
         if (platformWidget())
-            return platformVisibleContentRect(true /* include scrollbars */);
+            return platformVisibleContentRect(scrollbarInclusion == IncludeScrollbars);
     }
     
     if (platformWidget())
@@ -346,7 +346,7 @@ void ScrollView::setFixedLayoutSize(const IntSize& newSize)
         return;
     m_fixedLayoutSize = newSize;
     if (m_useFixedLayout)
-        fixedLayoutSizeChanged();
+        availableContentSizeChanged(AvailableSizeChangeReason::AreaSizeChanged);
 }
 
 bool ScrollView::useFixedLayout() const
@@ -360,13 +360,18 @@ void ScrollView::setUseFixedLayout(bool enable)
         return;
     m_useFixedLayout = enable;
     if (!m_fixedLayoutSize.isEmpty())
-        fixedLayoutSizeChanged();
+        availableContentSizeChanged(AvailableSizeChangeReason::AreaSizeChanged);
 }
 
-void ScrollView::fixedLayoutSizeChanged()
+void ScrollView::availableContentSizeChanged(AvailableSizeChangeReason reason)
 {
-    updateScrollbars(scrollOffset());
-    contentsResized();
+    ScrollableArea::availableContentSizeChanged(reason);
+
+    if (platformWidget())
+        return;
+
+    if (reason != AvailableSizeChangeReason::ScrollbarsChanged)
+        updateScrollbars(scrollOffset());
 }
 
 IntSize ScrollView::contentsSize() const
@@ -457,10 +462,41 @@ void ScrollView::setScrollOffset(const IntPoint& offset)
     scrollTo(newOffset);
 }
 
+void ScrollView::scrollPositionChangedViaPlatformWidget(const IntPoint& oldPosition, const IntPoint& newPosition)
+{
+    // We should not attempt to actually modify (paint) platform widgets if the layout phase
+    // is not complete. Instead, defer the scroll event until the layout finishes.
+    if (shouldDeferScrollUpdateAfterContentSizeChange()) {
+        // We only care about the most recent scroll position change request
+        m_deferredScrollPositions = std::make_unique<std::pair<IntPoint, IntPoint>>(std::make_pair(oldPosition, newPosition));
+        return;
+    }
+
+    scrollPositionChangedViaPlatformWidgetImpl(oldPosition, newPosition);
+}
+
+void ScrollView::handleDeferredScrollUpdateAfterContentSizeChange()
+{
+    ASSERT(!shouldDeferScrollUpdateAfterContentSizeChange());
+
+    if (!m_deferredScrollDelta && !m_deferredScrollPositions)
+        return;
+
+    ASSERT(static_cast<bool>(m_deferredScrollDelta) != static_cast<bool>(m_deferredScrollPositions));
+
+    if (m_deferredScrollDelta)
+        completeUpdatesAfterScrollTo(*m_deferredScrollDelta);
+    else if (m_deferredScrollPositions)
+        scrollPositionChangedViaPlatformWidgetImpl(m_deferredScrollPositions->first, m_deferredScrollPositions->second);
+    
+    m_deferredScrollDelta = nullptr;
+    m_deferredScrollPositions = nullptr;
+}
+
 void ScrollView::scrollTo(const IntSize& newOffset)
 {
     IntSize scrollDelta = newOffset - m_scrollOffset;
-    if (scrollDelta == IntSize())
+    if (scrollDelta.isZero())
         return;
     m_scrollOffset = newOffset;
 
@@ -469,10 +505,23 @@ void ScrollView::scrollTo(const IntSize& newOffset)
 
 #if USE(TILED_BACKING_STORE)
     if (delegatesScrolling()) {
-        hostWindow()->delegatedScrollRequested(IntPoint(newOffset));
+        requestScrollPositionUpdate(IntPoint(newOffset));
         return;
     }
 #endif
+    // We should not attempt to actually modify layer contents if the layout phase
+    // is not complete. Instead, defer the scroll event until the layout finishes.
+    if (shouldDeferScrollUpdateAfterContentSizeChange()) {
+        ASSERT(!m_deferredScrollDelta);
+        m_deferredScrollDelta = std::make_unique<IntSize>(scrollDelta);
+        return;
+    }
+
+    completeUpdatesAfterScrollTo(scrollDelta);
+}
+
+void ScrollView::completeUpdatesAfterScrollTo(const IntSize& scrollDelta)
+{
     updateLayerPositionsAfterScrolling();
     scrollContents(scrollDelta);
     updateCompositingLayersAfterScrolling();
@@ -555,12 +604,12 @@ void ScrollView::updateScrollbars(const IntSize& desiredOffset)
 
     bool hasOverlayScrollbars = (!m_horizontalScrollbar || m_horizontalScrollbar->isOverlayScrollbar()) && (!m_verticalScrollbar || m_verticalScrollbar->isOverlayScrollbar());
 
-    // If we came in here with the view already needing a layout, then go ahead and do that
-    // first.  (This will be the common case, e.g., when the page changes due to window resizing for example).
+    // If we came in here with the view already needing a layout then do that first.
+    // (This will be the common case, e.g., when the page changes due to window resizing for example).
     // This layout will not re-enter updateScrollbars and does not count towards our max layout pass total.
     if (!m_scrollbarsSuppressed && !hasOverlayScrollbars) {
         m_inUpdateScrollbars = true;
-        visibleContentsResized();
+        updateContentsSize();
         m_inUpdateScrollbars = false;
     }
 
@@ -652,8 +701,8 @@ void ScrollView::updateScrollbars(const IntSize& desiredOffset)
         const unsigned cMaxUpdateScrollbarsPass = 2;
         if ((sendContentResizedNotification || needAnotherPass) && m_updateScrollbarsPass < cMaxUpdateScrollbarsPass) {
             m_updateScrollbarsPass++;
-            contentsResized();
-            visibleContentsResized();
+            availableContentSizeChanged(AvailableSizeChangeReason::ScrollbarsChanged);
+            updateContentsSize();
             IntSize newDocSize = totalContentsSize();
             if (newDocSize == docSize) {
                 // The layout with the new scroll state had no impact on
@@ -790,9 +839,8 @@ void ScrollView::scrollContents(const IntSize& scrollDelta)
         if (!scrollContentsFastPath(-scrollDelta, scrollViewRect, clipRect))
             scrollContentsSlowPath(updateRect);
     } else { 
-       // We need to go ahead and repaint the entire backing store.  Do it now before moving the
-       // windowed plugins.
-       scrollContentsSlowPath(updateRect);
+        // We need to repaint the entire backing store. Do it now before moving the windowed plugins.
+        scrollContentsSlowPath(updateRect);
     }
 
     // Invalidate the overhang areas if they are visible.
@@ -1003,13 +1051,12 @@ void ScrollView::setFrameRect(const IntRect& newRect)
         return;
 
     Widget::setFrameRect(newRect);
-
     frameRectsChanged();
 
     updateScrollbars(scrollOffset());
-
+    
     if (!m_useFixedLayout && oldRect.size() != newRect.size())
-        contentsResized();
+        availableContentSizeChanged(AvailableSizeChangeReason::AreaSizeChanged);
 }
 
 void ScrollView::frameRectsChanged()
@@ -1118,12 +1165,12 @@ bool ScrollView::isScrollCornerVisible() const
     return !scrollCornerRect().isEmpty();
 }
 
-void ScrollView::scrollbarStyleChanged(int, bool forceUpdate)
+void ScrollView::scrollbarStyleChanged(ScrollbarStyle newStyle, bool forceUpdate)
 {
+    ScrollableArea::scrollbarStyleChanged(newStyle, forceUpdate);
     if (!forceUpdate)
         return;
 
-    contentsResized();
     updateScrollbars(scrollOffset());
     positionScrollbarLayers();
 }

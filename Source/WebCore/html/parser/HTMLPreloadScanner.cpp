@@ -109,7 +109,9 @@ public:
         if (!m_srcSetAttribute.isEmpty()) {
             unsigned sourceSize = 0;
 #if ENABLE(PICTURE_SIZES)
-            sourceSize = SourceSizeList::parseSizesAttribute(m_sizesAttribute, document.renderView(), document.frame());
+            sourceSize = parseSizesAttribute(m_sizesAttribute, document.renderView(), document.frame());
+#else
+            UNUSED_PARAM(document);
 #endif
             ImageCandidate imageCandidate = bestFitSourceForImageAttributes(m_deviceScaleFactor, m_urlToLoad, m_srcSetAttribute, sourceSize);
             setUrlToLoad(imageCandidate.string.toString(), true);
@@ -169,8 +171,8 @@ private:
 
     static bool relAttributeIsStyleSheet(const String& attributeValue)
     {
-        LinkRelAttribute rel(attributeValue);
-        return rel.m_isStyleSheet && !rel.m_isAlternate && rel.m_iconType == InvalidIcon && !rel.m_isDNSPrefetch;
+        LinkRelAttribute parsedAttribute { attributeValue };
+        return parsedAttribute.isStyleSheet && !parsedAttribute.isAlternate && parsedAttribute.iconType == InvalidIcon && !parsedAttribute.isDNSPrefetch;
     }
 
     void setUrlToLoad(const String& value, bool allowReplacement = false)
@@ -240,40 +242,8 @@ private:
 
 TokenPreloadScanner::TokenPreloadScanner(const URL& documentURL, float deviceScaleFactor)
     : m_documentURL(documentURL)
-    , m_inStyle(false)
     , m_deviceScaleFactor(deviceScaleFactor)
-#if ENABLE(TEMPLATE_ELEMENT)
-    , m_templateCount(0)
-#endif
 {
-}
-
-TokenPreloadScanner::~TokenPreloadScanner()
-{
-}
-
-TokenPreloadScannerCheckpoint TokenPreloadScanner::createCheckpoint()
-{
-    TokenPreloadScannerCheckpoint checkpoint = m_checkpoints.size();
-    m_checkpoints.append(Checkpoint(m_predictedBaseElementURL, m_inStyle
-#if ENABLE(TEMPLATE_ELEMENT)
-                                    , m_templateCount
-#endif
-                                    ));
-    return checkpoint;
-}
-
-void TokenPreloadScanner::rewindTo(TokenPreloadScannerCheckpoint checkpointIndex)
-{
-    ASSERT(checkpointIndex < m_checkpoints.size()); // If this ASSERT fires, checkpointIndex is invalid.
-    const Checkpoint& checkpoint = m_checkpoints[checkpointIndex];
-    m_predictedBaseElementURL = checkpoint.predictedBaseElementURL;
-    m_inStyle = checkpoint.inStyle;
-#if ENABLE(TEMPLATE_ELEMENT)
-    m_templateCount = checkpoint.templateCount;
-#endif
-    m_cssScanner.reset();
-    m_checkpoints.clear();
 }
 
 void TokenPreloadScanner::scan(const HTMLToken& token, Vector<std::unique_ptr<PreloadRequest>>& requests, Document& document)
@@ -282,11 +252,11 @@ void TokenPreloadScanner::scan(const HTMLToken& token, Vector<std::unique_ptr<Pr
     case HTMLToken::Character:
         if (!m_inStyle)
             return;
-        m_cssScanner.scan(token.data(), requests);
+        m_cssScanner.scan(token.characters(), requests);
         return;
 
     case HTMLToken::EndTag: {
-        TagId tagId = tagIdFor(token.data());
+        TagId tagId = tagIdFor(token.name());
 #if ENABLE(TEMPLATE_ELEMENT)
         if (tagId == TagId::Template) {
             if (m_templateCount)
@@ -307,7 +277,7 @@ void TokenPreloadScanner::scan(const HTMLToken& token, Vector<std::unique_ptr<Pr
         if (m_templateCount)
             return;
 #endif
-        TagId tagId = tagIdFor(token.data());
+        TagId tagId = tagIdFor(token.name());
 #if ENABLE(TEMPLATE_ELEMENT)
         if (tagId == TagId::Template) {
             ++m_templateCount;
@@ -338,21 +308,16 @@ void TokenPreloadScanner::scan(const HTMLToken& token, Vector<std::unique_ptr<Pr
     }
 }
 
-template<typename Token>
-void TokenPreloadScanner::updatePredictedBaseURL(const Token& token)
+void TokenPreloadScanner::updatePredictedBaseURL(const HTMLToken& token)
 {
     ASSERT(m_predictedBaseElementURL.isEmpty());
-    if (const typename Token::Attribute* hrefAttribute = token.getAttributeItem(hrefAttr))
-        m_predictedBaseElementURL = URL(m_documentURL, stripLeadingAndTrailingHTMLSpaces(hrefAttribute->value)).copy();
+    if (auto* hrefAttribute = findAttribute(token.attributes(), hrefAttr.localName().string()))
+        m_predictedBaseElementURL = URL(m_documentURL, stripLeadingAndTrailingHTMLSpaces(StringImpl::create8BitIfPossible(hrefAttribute->value))).copy();
 }
 
 HTMLPreloadScanner::HTMLPreloadScanner(const HTMLParserOptions& options, const URL& documentURL, float deviceScaleFactor)
     : m_scanner(documentURL, deviceScaleFactor)
-    , m_tokenizer(std::make_unique<HTMLTokenizer>(options))
-{
-}
-
-HTMLPreloadScanner::~HTMLPreloadScanner()
+    , m_tokenizer(options)
 {
 }
 
@@ -361,7 +326,7 @@ void HTMLPreloadScanner::appendToEnd(const SegmentedString& source)
     m_source.append(source);
 }
 
-void HTMLPreloadScanner::scan(HTMLResourcePreloader* preloader, Document& document)
+void HTMLPreloadScanner::scan(HTMLResourcePreloader& preloader, Document& document)
 {
     ASSERT(isMainThread()); // HTMLTokenizer::updateStateFor only works on the main thread.
 
@@ -373,14 +338,13 @@ void HTMLPreloadScanner::scan(HTMLResourcePreloader* preloader, Document& docume
 
     PreloadRequestStream requests;
 
-    while (m_tokenizer->nextToken(m_source, m_token)) {
-        if (m_token.type() == HTMLToken::StartTag)
-            m_tokenizer->updateStateFor(AtomicString(m_token.name()));
-        m_scanner.scan(m_token, requests, document);
-        m_token.clear();
+    while (auto token = m_tokenizer.nextToken(m_source)) {
+        if (token->type() == HTMLToken::StartTag)
+            m_tokenizer.updateStateFor(AtomicString(token->name()));
+        m_scanner.scan(*token, requests, document);
     }
 
-    preloader->preload(WTF::move(requests));
+    preloader.preload(WTF::move(requests));
 }
 
 }

@@ -43,13 +43,12 @@ class ShouldBuildTest(unittest.TestCase):
         (["LayoutTests/platform/win-xp/foo"], ["win"]),
         (["LayoutTests/platform/win-wk2/foo"], ["win"]),
         (["LayoutTests/platform/win/foo"], ["win"]),
-        (["Source/WebCore.exp.in", "Source/WebKit/mac/WebKit.exp"], ["mac-leopard", "mac-lion",  "mac-mountainlion", "mac-snowleopard"]),
+        (["Source/WebKit/mac/WebKit.exp"], ["mac-leopard", "mac-lion",  "mac-mountainlion", "mac-snowleopard"]),
         (["Source/WebCore/mac/foo"], ["mac-leopard", "mac-lion",  "mac-mountainlion", "mac-snowleopard"]),
         (["Source/WebCore/win/foo"], ["win"]),
         (["Source/WebCore/platform/graphics/gpu/foo"], ["mac-leopard", "mac-lion",  "mac-mountainlion", "mac-snowleopard"]),
         (["Source/WebCore/platform/wx/wxcode/win/foo"], []),
         (["Source/WebCore/rendering/RenderThemeMac.mm", "Source/WebCore/rendering/RenderThemeMac.h"], ["mac-leopard", "mac-lion",  "mac-mountainlion", "mac-snowleopard"]),
-        (["Source/WebCore/rendering/RenderThemeWinCE.h"], []),
         (["Tools/BuildSlaveSupport/build.webkit.org-config/public_html/LeaksViewer/LeaksViewer.js"], []),
     ]
 

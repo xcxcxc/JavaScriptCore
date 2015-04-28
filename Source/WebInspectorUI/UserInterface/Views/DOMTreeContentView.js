@@ -42,9 +42,11 @@ WebInspector.DOMTreeContentView = function(representedObject)
     this._compositingBordersButtonNavigationItem.addEventListener(WebInspector.ButtonNavigationItem.Event.Clicked, this._toggleCompositingBorders, this);
     this._compositingBordersButtonNavigationItem.enabled = !!PageAgent.getCompositingBordersVisible;
 
+    WebInspector.showPaintRectsSetting.addEventListener(WebInspector.Setting.Event.Changed, this._showPaintRectsSettingChanged, this);
     this._paintFlashingButtonNavigationItem = new WebInspector.ActivateButtonNavigationItem("paint-flashing", WebInspector.UIString("Enable paint flashing"), WebInspector.UIString("Disable paint flashing"), "Images/PaintFlashing.svg", 16, 16);
     this._paintFlashingButtonNavigationItem.addEventListener(WebInspector.ButtonNavigationItem.Event.Clicked, this._togglePaintFlashing, this);
-    this._paintFlashingButtonNavigationItem.enabled = true;
+    this._paintFlashingButtonNavigationItem.enabled = !!PageAgent.setShowPaintRects;
+    this._paintFlashingButtonNavigationItem.activated = PageAgent.setShowPaintRects && WebInspector.showPaintRectsSetting.value;
 
     WebInspector.showShadowDOMSetting.addEventListener(WebInspector.Setting.Event.Changed, this._showShadowDOMSettingChanged, this);
     this._showsShadowDOMButtonNavigationItem = new WebInspector.ActivateButtonNavigationItem("shows-shadow-DOM", WebInspector.UIString("Show shadow DOM nodes"), WebInspector.UIString("Hide shadow DOM nodes"), shadowDOMImage.src, shadowDOMImage.width, shadowDOMImage.height);
@@ -54,9 +56,10 @@ WebInspector.DOMTreeContentView = function(representedObject)
     this.element.classList.add(WebInspector.DOMTreeContentView.StyleClassName);
     this.element.addEventListener("click", this._mouseWasClicked.bind(this), false);
 
-    this._domTreeOutline = new WebInspector.DOMTreeOutline(true, true, false);
+    this._domTreeOutline = new WebInspector.DOMTreeOutline(true, true, true);
     this._domTreeOutline.addEventListener(WebInspector.DOMTreeOutline.Event.SelectedNodeChanged, this._selectedNodeDidChange, this);
     this._domTreeOutline.wireToDomAgent();
+    this._domTreeOutline.editable = true;
     this.element.appendChild(this._domTreeOutline.element);
 
     WebInspector.domTreeManager.addEventListener(WebInspector.DOMTreeManager.Event.AttributeModified, this._domNodeChanged, this);
@@ -135,6 +138,18 @@ WebInspector.DOMTreeContentView.prototype = {
         }
 
         return pathComponents;
+    },
+
+    restoreFromCookie: function(cookie)
+    {
+        if (!cookie || !cookie.nodeToSelect)
+            return;
+
+        this.selectAndRevealDOMNode(cookie.nodeToSelect);
+
+        // Because nodeToSelect is ephemeral, we don't want to keep
+        // it around in the back-forward history entries.
+        cookie.nodeToSelect = undefined;
     },
 
     selectAndRevealDOMNode: function(domNode, preventFocusChange)
@@ -430,11 +445,7 @@ WebInspector.DOMTreeContentView.prototype = {
 
     _togglePaintFlashing: function(event)
     {
-        console.assert(PageAgent.setShowPaintRects);
-
-        var activated = !this._paintFlashingButtonNavigationItem.activated;
-        this._paintFlashingButtonNavigationItem.activated = activated;
-        PageAgent.setShowPaintRects(activated);
+        WebInspector.showPaintRectsSetting.value = !WebInspector.showPaintRectsSetting.value;
     },
 
     _updateCompositingBordersButtonToMatchPageSettings: function()
@@ -448,7 +459,17 @@ WebInspector.DOMTreeContentView.prototype = {
         // in a different way than just using the navigation bar button.
         PageAgent.getCompositingBordersVisible(function(error, compositingBordersVisible) {
             button.activated = error ? false : compositingBordersVisible;
+            button.enabled = error !== "unsupported";
         });
+    },
+
+    _showPaintRectsSettingChanged: function(event)
+    {
+        console.assert(PageAgent.setShowPaintRects);
+
+        this._paintFlashingButtonNavigationItem.activated = WebInspector.showPaintRectsSetting.value;
+
+        PageAgent.setShowPaintRects(this._paintFlashingButtonNavigationItem.activated);
     },
 
     _showShadowDOMSettingChanged: function(event)

@@ -53,6 +53,9 @@
 #endif
 #endif
 
+#undef WEBCORE_EXPORT
+#define WEBCORE_EXPORT WTF_EXPORT_DECLARATION
+
 #else
 
 #include <pthread.h>
@@ -79,37 +82,9 @@
 #endif
 
 #ifdef __cplusplus
-
-
-#include <ciso646>
-
-#if defined(_LIBCPP_VERSION)
-
-// Add work around for a bug in libc++ that caused standard heap
-// APIs to not compile <rdar://problem/10858112>.
-
-#include <type_traits>
-
-namespace WebCore {
-    class TimerHeapReference;
-}
-
-_LIBCPP_BEGIN_NAMESPACE_STD
-
-inline _LIBCPP_INLINE_VISIBILITY
-const WebCore::TimerHeapReference& move(const WebCore::TimerHeapReference& t)
-{
-    return t;
-}
-
-_LIBCPP_END_NAMESPACE_STD
-
-#endif // defined(_LIBCPP_VERSION)
-
 #include <algorithm>
 #include <cstddef>
 #include <new>
-
 #endif
 
 #if defined(__APPLE__)
@@ -122,6 +97,32 @@ _LIBCPP_END_NAMESPACE_STD
 #endif
 
 #include <CoreFoundation/CoreFoundation.h>
+
+#if OS(WINDOWS)
+#ifndef CF_IMPLICIT_BRIDGING_ENABLED
+#define CF_IMPLICIT_BRIDGING_ENABLED
+#endif
+
+#ifndef CF_IMPLICIT_BRIDGING_DISABLED
+#define CF_IMPLICIT_BRIDGING_DISABLED
+#endif
+
+#include <CoreFoundation/CFBase.h>
+
+#ifndef CF_ENUM
+#define CF_ENUM(_type, _name) _type _name; enum
+#endif
+#ifndef CF_OPTIONS
+#define CF_OPTIONS(_type, _name) _type _name; enum
+#endif
+#ifndef CF_ENUM_DEPRECATED
+#define CF_ENUM_DEPRECATED(_macIntro, _macDep, _iosIntro, _iosDep)
+#endif
+#ifndef CF_ENUM_AVAILABLE
+#define CF_ENUM_AVAILABLE(_mac, _ios)
+#endif
+#endif
+
 #if PLATFORM(WIN_CAIRO)
 #include <ConditionalMacros.h>
 #include <windows.h>

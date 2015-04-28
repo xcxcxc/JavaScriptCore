@@ -32,19 +32,18 @@
 #include "CSSPropertyAnimation.h"
 #include "CompositeAnimation.h"
 #include "EventNames.h"
+#include "GeometryUtilities.h"
 #include "ImplicitAnimation.h"
 #include "KeyframeAnimation.h"
-#include "RenderBoxModelObject.h"
+#include "RenderBox.h"
 
 namespace WebCore {
 
-ImplicitAnimation::ImplicitAnimation(const Animation& transition, CSSPropertyID animatingProperty, RenderElement* renderer, CompositeAnimation* compAnim, RenderStyle* fromStyle)
+ImplicitAnimation::ImplicitAnimation(Animation& transition, CSSPropertyID animatingProperty, RenderElement* renderer, CompositeAnimation* compAnim, RenderStyle* fromStyle)
     : AnimationBase(transition, renderer, compAnim)
+    , m_fromStyle(fromStyle)
     , m_transitionProperty(transition.property())
     , m_animatingProperty(animatingProperty)
-    , m_overridden(false)
-    , m_active(true)
-    , m_fromStyle(fromStyle)
 {
     ASSERT(animatingProperty != CSSPropertyInvalid);
 }
@@ -61,12 +60,14 @@ bool ImplicitAnimation::shouldSendEventForListener(Document::ListenerType inList
     return m_object->document().hasListenerType(inListenerType);
 }
 
-void ImplicitAnimation::animate(CompositeAnimation*, RenderElement*, const RenderStyle*, RenderStyle* targetStyle, RefPtr<RenderStyle>& animatedStyle)
+bool ImplicitAnimation::animate(CompositeAnimation*, RenderElement*, const RenderStyle*, RenderStyle* targetStyle, RefPtr<RenderStyle>& animatedStyle)
 {
     // If we get this far and the animation is done, it means we are cleaning up a just finished animation.
     // So just return. Everything is already all cleaned up.
     if (postActive())
-        return;
+        return false;
+
+    AnimationState oldState = state();
 
     // Reset to start the transition if we are new
     if (isNew())
@@ -80,15 +81,18 @@ void ImplicitAnimation::animate(CompositeAnimation*, RenderElement*, const Rende
     bool needsAnim = CSSPropertyAnimation::blendProperties(this, m_animatingProperty, animatedStyle.get(), m_fromStyle.get(), m_toStyle.get(), progress(1, 0, 0));
     // FIXME: we also need to detect cases where we have to software animate for other reasons,
     // such as a child using inheriting the transform. https://bugs.webkit.org/show_bug.cgi?id=23902
-    if (!needsAnim)
+    if (!needsAnim) {
         // If we are running an accelerated animation, set a flag in the style which causes the style
         // to compare as different to any other style. This ensures that changes to the property
         // that is animating are correctly detected during the animation (e.g. when a transition
         // gets interrupted).
+        // FIXME: still need this hack?
         animatedStyle->setIsRunningAcceleratedAnimation();
+    }
 
     // Fire the start timeout if needed
     fireAnimationEventsIfNeeded();
+    return state() != oldState;
 }
 
 void ImplicitAnimation::getAnimatedStyle(RefPtr<RenderStyle>& animatedStyle)
@@ -99,10 +103,43 @@ void ImplicitAnimation::getAnimatedStyle(RefPtr<RenderStyle>& animatedStyle)
     CSSPropertyAnimation::blendProperties(this, m_animatingProperty, animatedStyle.get(), m_fromStyle.get(), m_toStyle.get(), progress(1, 0, 0));
 }
 
+bool ImplicitAnimation::computeExtentOfTransformAnimation(LayoutRect& bounds) const
+{
+    ASSERT(hasStyle());
+
+    if (!is<RenderBox>(m_object))
+        return true; // Non-boxes don't get transformed;
+
+    ASSERT(m_animatingProperty == CSSPropertyTransform);
+
+    RenderBox& box = downcast<RenderBox>(*m_object);
+    FloatRect rendererBox = snapRectToDevicePixels(box.borderBoxRect(), box.document().deviceScaleFactor());
+
+    LayoutRect startBounds = bounds;
+    LayoutRect endBounds = bounds;
+
+    if (isTransformFunctionListValid()) {
+        if (!computeTransformedExtentViaTransformList(rendererBox, *m_fromStyle, startBounds))
+            return false;
+
+        if (!computeTransformedExtentViaTransformList(rendererBox, *m_toStyle, endBounds))
+            return false;
+    } else {
+        if (!computeTransformedExtentViaMatrix(rendererBox, *m_fromStyle, startBounds))
+            return false;
+
+        if (!computeTransformedExtentViaMatrix(rendererBox, *m_toStyle, endBounds))
+            return false;
+    }
+
+    bounds = unionRect(startBounds, endBounds);
+    return true;
+}
+
 bool ImplicitAnimation::startAnimation(double timeOffset)
 {
     if (m_object && m_object->isComposited())
-        return toRenderBoxModelObject(m_object)->startTransition(timeOffset, m_animatingProperty, m_fromStyle.get(), m_toStyle.get());
+        return downcast<RenderBoxModelObject>(*m_object).startTransition(timeOffset, m_animatingProperty, m_fromStyle.get(), m_toStyle.get());
     return false;
 }
 
@@ -112,7 +149,7 @@ void ImplicitAnimation::pauseAnimation(double timeOffset)
         return;
 
     if (m_object->isComposited())
-        toRenderBoxModelObject(m_object)->transitionPaused(timeOffset, m_animatingProperty);
+        downcast<RenderBoxModelObject>(*m_object).transitionPaused(timeOffset, m_animatingProperty);
     // Restore the original (unanimated) style
     if (!paused())
         setNeedsStyleRecalc(m_object->element());
@@ -121,7 +158,7 @@ void ImplicitAnimation::pauseAnimation(double timeOffset)
 void ImplicitAnimation::endAnimation()
 {
     if (m_object && m_object->isComposited())
-        toRenderBoxModelObject(m_object)->transitionFinished(m_animatingProperty);
+        downcast<RenderBoxModelObject>(*m_object).transitionFinished(m_animatingProperty);
 }
 
 void ImplicitAnimation::onAnimationEnd(double elapsedTime)
@@ -155,7 +192,7 @@ bool ImplicitAnimation::sendTransitionEvent(const AtomicString& eventType, doubl
                 return false;
 
             // Schedule event handling
-            m_compositeAnimation->animationController()->addEventToDispatch(element, eventType, propertyName, elapsedTime);
+            m_compositeAnimation->animationController().addEventToDispatch(element, eventType, propertyName, elapsedTime);
 
             // Restore the original (unanimated) style
             if (eventType == eventNames().transitionendEvent && element->renderer())

@@ -23,12 +23,21 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+WebInspector.DebuggableType = {
+    Web: "web",
+    JavaScript: "javascript"
+};
+
 WebInspector.loaded = function()
 {
+    this.debuggableType = WebInspector.DebuggableType.Web;
+    this.hasExtraDomains = false;
+
     // Register observers for events from the InspectorBackend.
     // The initialization order should match the same in Main.js.
     InspectorBackend.registerInspectorDispatcher(new WebInspector.InspectorObserver);
     InspectorBackend.registerPageDispatcher(new WebInspector.PageObserver);
+    InspectorBackend.registerConsoleDispatcher(new WebInspector.ConsoleObserver);
     InspectorBackend.registerDOMDispatcher(new WebInspector.DOMObserver);
     InspectorBackend.registerNetworkDispatcher(new WebInspector.NetworkObserver);
     InspectorBackend.registerDebuggerDispatcher(new WebInspector.DebuggerObserver);
@@ -42,28 +51,38 @@ WebInspector.loaded = function()
     this.frameResourceManager = new WebInspector.FrameResourceManager;
     this.domTreeManager = new WebInspector.DOMTreeManager;
     this.cssStyleManager = new WebInspector.CSSStyleManager;
+    this.logManager = new WebInspector.LogManager;
+    this.issueManager = new WebInspector.IssueManager;
     this.runtimeManager = new WebInspector.RuntimeManager;
     this.timelineManager = new WebInspector.TimelineManager;
     this.debuggerManager = new WebInspector.DebuggerManager;
     this.probeManager = new WebInspector.ProbeManager;
     this.replayManager = new WebInspector.ReplayManager;
 
+    // Global controllers.
+    this.quickConsole = {executionContextIdentifier: undefined};
+
     document.addEventListener("DOMContentLoaded", this.contentLoaded.bind(this));
 
     // Enable agents.
     InspectorAgent.enable();
+    ConsoleAgent.enable();
 
     // Perform one-time tasks.
     WebInspector.CSSCompletions.requestCSSNameCompletions();
 
-    // Establish communication with the InspectorBackend.
-    InspectorFrontendHost.loaded();
+    // Global settings.
+    this.showShadowDOMSetting = new WebInspector.Setting("show-shadow-dom", true);
 }
 
 WebInspector.contentLoaded = function()
 {
     // Signal that the frontend is now ready to receive messages.
     InspectorFrontendAPI.loadCompleted();
+
+    // Tell the InspectorFrontendHost we loaded, which causes the window to display
+    // and pending InspectorFrontendAPI commands to be sent.
+    InspectorFrontendHost.loaded();
 }
 
 WebInspector.UIString = function(string)
@@ -88,7 +107,8 @@ InspectorTest.dumpMessagesToConsole = false;
 // prototype, and prototype chain for the singleton InspectorTest.
 InspectorTest.EventDispatcher = function()
 {
-    WebInspector.Object.call(this);
+    // FIXME: Convert this to a WebInspector.Object subclass, and call super().
+    // WebInspector.Object.call(this);
 };
 
 InspectorTest.EventDispatcher.Event = {
@@ -165,7 +185,7 @@ InspectorTest.evaluateInPage = function(codeString, callback)
 {
     // If we load this page outside of the inspector, or hit an early error when loading
     // the test frontend, then defer evaluating the commands (indefinitely in the former case).
-    if (!RuntimeAgent) {
+    if (!window.RuntimeAgent) {
         this._originalConsoleMethods["error"]("Tried to evaluate in test page, but connection not yet established:", codeString);
         return;
     }
@@ -245,10 +265,16 @@ InspectorTest._originalConsoleMethods = {};
 // Catch syntax errors, type errors, and other exceptions.
 window.onerror = InspectorTest.reportUncaughtException.bind(InspectorTest);
 
-for (var logType of ["log", "error", "info"]) {
-    // Redirect console methods to log messages into the test page's DOM.
-    InspectorTest._originalConsoleMethods[logType] = console[logType].bind(console);
-    console[logType] = function() {
-        InspectorTest.addResult(logType.toUpperCase() + ": " + Array.prototype.slice.call(arguments).toString());
-    };
-}
+// Redirect frontend console methods to log messages into the test result.
+(function() {
+    function createProxyConsoleHandler(type) {
+        return function() {
+            InspectorTest.addResult(type + ": " + Array.from(arguments).join(" "));
+        };
+    }
+
+    for (var type of ["log", "error", "info"]) {
+        InspectorTest._originalConsoleMethods[type] = console[type].bind(console);
+        console[type] = createProxyConsoleHandler(type.toUpperCase());
+    }
+})();

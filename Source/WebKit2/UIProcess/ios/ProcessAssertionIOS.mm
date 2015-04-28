@@ -28,7 +28,7 @@
 
 #if PLATFORM(IOS)
 
-#import <AssertionServices/BKSProcessAssertion.h>
+#import "BKSProcessAssertionSPI.h"
 #import <UIKit/UIApplication.h>
 
 #if !PLATFORM(IOS_SIMULATOR)
@@ -130,9 +130,9 @@
 namespace WebKit {
 
 const BKSProcessAssertionFlags suspendedTabFlags = (BKSProcessAssertionAllowIdleSleep);
-const BKSProcessAssertionFlags backgroundTabFlags = (BKSProcessAssertionAllowIdleSleep | BKSProcessAssertionPreventTaskSuspend | BKSProcessAssertionAllowSuspendOnSleep);
-const BKSProcessAssertionFlags foregroundTabFlags = (BKSProcessAssertionAllowIdleSleep | BKSProcessAssertionPreventTaskSuspend | BKSProcessAssertionAllowSuspendOnSleep | BKSProcessAssertionWantsForegroundResourcePriority | BKSProcessAssertionPreventTaskThrottleDown);
-    
+const BKSProcessAssertionFlags backgroundTabFlags = (BKSProcessAssertionAllowIdleSleep | BKSProcessAssertionPreventTaskSuspend);
+const BKSProcessAssertionFlags foregroundTabFlags = (BKSProcessAssertionAllowIdleSleep | BKSProcessAssertionPreventTaskSuspend | BKSProcessAssertionWantsForegroundResourcePriority | BKSProcessAssertionPreventTaskThrottleDown);
+
 static BKSProcessAssertionFlags flagsForState(AssertionState assertionState)
 {
     switch (assertionState) {

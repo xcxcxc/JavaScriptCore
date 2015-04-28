@@ -56,7 +56,6 @@
 #include <runtime/ArrayBuffer.h>
 #include <runtime/ArrayBufferView.h>
 #include <wtf/HashSet.h>
-#include <wtf/PassOwnPtr.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
@@ -147,6 +146,7 @@ WebSocket::WebSocket(ScriptExecutionContext& context)
     , m_binaryType(BinaryTypeBlob)
     , m_subprotocol("")
     , m_extensions("")
+    , m_resumeTimer(*this, &WebSocket::resumeTimerFired)
 {
 }
 
@@ -239,9 +239,9 @@ void WebSocket::connect(const String& url, const Vector<String>& protocols, Exce
 
     // FIXME: Convert this to check the isolated world's Content Security Policy once webkit.org/b/104520 is solved.
     bool shouldBypassMainWorldContentSecurityPolicy = false;
-    if (scriptExecutionContext()->isDocument()) {
-        Document* document = toDocument(scriptExecutionContext());
-        shouldBypassMainWorldContentSecurityPolicy = document->frame()->script().shouldBypassMainWorldContentSecurityPolicy();
+    if (is<Document>(*scriptExecutionContext())) {
+        Document& document = downcast<Document>(*scriptExecutionContext());
+        shouldBypassMainWorldContentSecurityPolicy = document.frame()->script().shouldBypassMainWorldContentSecurityPolicy();
     }
     if (!shouldBypassMainWorldContentSecurityPolicy && !scriptExecutionContext()->contentSecurityPolicy()->allowConnectToSource(m_url)) {
         m_state = CLOSED;
@@ -461,21 +461,49 @@ void WebSocket::contextDestroyed()
     ActiveDOMObject::contextDestroyed();
 }
 
-bool WebSocket::canSuspend() const
+bool WebSocket::canSuspendForPageCache() const
 {
-    return !m_channel;
+    return true;
 }
 
-void WebSocket::suspend(ReasonForSuspension)
+void WebSocket::suspend(ReasonForSuspension reason)
 {
-    if (m_channel)
-        m_channel->suspend();
+    if (m_resumeTimer.isActive())
+        m_resumeTimer.stop();
+
+    m_shouldDelayEventFiring = true;
+
+    if (m_channel) {
+        if (reason == ActiveDOMObject::PageCache) {
+            // This will cause didClose() to be called.
+            m_channel->fail("WebSocket is closed due to suspension.");
+        } else
+            m_channel->suspend();
+    }
 }
 
 void WebSocket::resume()
 {
     if (m_channel)
         m_channel->resume();
+    else if (!m_pendingEvents.isEmpty() && !m_resumeTimer.isActive()) {
+        // Fire the pending events in a timer as we are not allowed to execute arbitrary JS from resume().
+        m_resumeTimer.startOneShot(0);
+    }
+
+    m_shouldDelayEventFiring = false;
+}
+
+void WebSocket::resumeTimerFired()
+{
+    Ref<WebSocket> protect(*this);
+
+    ASSERT(!m_pendingEvents.isEmpty());
+
+    // Check m_shouldDelayEventFiring when iterating in case firing an event causes
+    // suspend() to be called.
+    while (!m_pendingEvents.isEmpty() && !m_shouldDelayEventFiring)
+        dispatchEvent(m_pendingEvents.takeFirst());
 }
 
 void WebSocket::stop()
@@ -485,9 +513,15 @@ void WebSocket::stop()
         m_channel->disconnect();
     m_channel = 0;
     m_state = CLOSED;
+    m_pendingEvents.clear();
     ActiveDOMObject::stop();
     if (pending)
         ActiveDOMObject::unsetPendingActivity(this);
+}
+
+const char* WebSocket::activeDOMObjectName() const
+{
+    return "WebSocket";
 }
 
 void WebSocket::didConnect()
@@ -513,19 +547,19 @@ void WebSocket::didReceiveMessage(const String& msg)
     dispatchEvent(MessageEvent::create(msg, SecurityOrigin::create(m_url)->toString()));
 }
 
-void WebSocket::didReceiveBinaryData(PassOwnPtr<Vector<char>> binaryData)
+void WebSocket::didReceiveBinaryData(Vector<char>&& binaryData)
 {
-    LOG(Network, "WebSocket %p didReceiveBinaryData() %lu byte binary message", this, static_cast<unsigned long>(binaryData->size()));
+    LOG(Network, "WebSocket %p didReceiveBinaryData() %lu byte binary message", this, static_cast<unsigned long>(binaryData.size()));
     switch (m_binaryType) {
     case BinaryTypeBlob: {
         // FIXME: We just received the data from NetworkProcess, and are sending it back. This is inefficient.
-        RefPtr<Blob> blob = Blob::create(WTF::move(*binaryData), emptyString());
+        RefPtr<Blob> blob = Blob::create(WTF::move(binaryData), emptyString());
         dispatchEvent(MessageEvent::create(blob.release(), SecurityOrigin::create(m_url)->toString()));
         break;
     }
 
     case BinaryTypeArrayBuffer:
-        dispatchEvent(MessageEvent::create(ArrayBuffer::create(binaryData->data(), binaryData->size()), SecurityOrigin::create(m_url)->toString()));
+        dispatchEvent(MessageEvent::create(ArrayBuffer::create(binaryData.data(), binaryData.size()), SecurityOrigin::create(m_url)->toString()));
         break;
     }
 }
@@ -535,7 +569,7 @@ void WebSocket::didReceiveMessageError()
     LOG(Network, "WebSocket %p didReceiveErrorMessage()", this);
     m_state = CLOSED;
     ASSERT(scriptExecutionContext());
-    dispatchEvent(Event::create(eventNames().errorEvent, false, false));
+    dispatchOrQueueEvent(Event::create(eventNames().errorEvent, false, false));
 }
 
 void WebSocket::didUpdateBufferedAmount(unsigned long bufferedAmount)
@@ -561,11 +595,12 @@ void WebSocket::didClose(unsigned long unhandledBufferedAmount, ClosingHandshake
     m_state = CLOSED;
     m_bufferedAmount = unhandledBufferedAmount;
     ASSERT(scriptExecutionContext());
-    RefPtr<CloseEvent> event = CloseEvent::create(wasClean, code, reason);
-    dispatchEvent(event);
+
+    dispatchOrQueueEvent(CloseEvent::create(wasClean, code, reason));
+
     if (m_channel) {
         m_channel->disconnect();
-        m_channel = 0;
+        m_channel = nullptr;
     }
     if (hasPendingActivity())
         ActiveDOMObject::unsetPendingActivity(this);
@@ -583,6 +618,14 @@ size_t WebSocket::getFramingOverhead(size_t payloadSize)
     else if (payloadSize >= minimumPayloadSizeWithTwoByteExtendedPayloadLength)
         overhead += 2;
     return overhead;
+}
+
+void WebSocket::dispatchOrQueueEvent(Ref<Event>&& event)
+{
+    if (m_shouldDelayEventFiring)
+        m_pendingEvents.append(WTF::move(event));
+    else
+        dispatchEvent(WTF::move(event));
 }
 
 }  // namespace WebCore

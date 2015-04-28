@@ -103,14 +103,6 @@ public:
 
     void close(ExceptionCode&);
 
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(negotiationneeded);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(icecandidate);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(signalingstatechange);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(addstream);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(removestream);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(iceconnectionstatechange);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(datachannel);
-
     // RTCPeerConnectionHandlerClient
     virtual void negotiationNeeded() override;
     virtual void didGenerateIceCandidate(PassRefPtr<RTCIceCandidateDescriptor>) override;
@@ -125,9 +117,6 @@ public:
     virtual EventTargetInterface eventTargetInterface() const override { return RTCPeerConnectionEventTargetInterfaceType; }
     virtual ScriptExecutionContext* scriptExecutionContext() const override { return ActiveDOMObject::scriptExecutionContext(); }
 
-    // ActiveDOMObject
-    virtual void stop() override;
-
     // MediaStream::Observer
     virtual void didAddOrRemoveTrack() override;
 
@@ -139,12 +128,17 @@ private:
 
     static PassRefPtr<RTCConfiguration> parseConfiguration(const Dictionary& configuration, ExceptionCode&);
     void scheduleDispatchEvent(PassRefPtr<Event>);
-    void scheduledEventTimerFired(Timer<RTCPeerConnection>*);
+    void scheduledEventTimerFired();
     bool hasLocalStreamWithTrackId(const String& trackId);
 
     // EventTarget implementation.
     virtual void refEventTarget() override { ref(); }
     virtual void derefEventTarget() override { deref(); }
+
+    // ActiveDOMObject
+    void stop() override;
+    const char* activeDOMObjectName() const override;
+    bool canSuspendForPageCache() const override;
 
     void changeSignalingState(SignalingState);
     void changeIceGatheringState(IceGatheringState);
@@ -164,7 +158,7 @@ private:
 
     std::unique_ptr<RTCPeerConnectionHandler> m_peerHandler;
 
-    Timer<RTCPeerConnection> m_scheduledEventTimer;
+    Timer m_scheduledEventTimer;
     Vector<RefPtr<Event>> m_scheduledEvents;
 
     RefPtr<RTCConfiguration> m_configuration;

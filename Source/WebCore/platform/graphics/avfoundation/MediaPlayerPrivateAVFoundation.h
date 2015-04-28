@@ -46,7 +46,6 @@ class GenericCueData;
 class MediaPlayerPrivateAVFoundation : public MediaPlayerPrivateInterface, public AVFInbandTrackParent
 {
 public:
-
     virtual void repaint();
     virtual void metadataLoaded();
     virtual void playabilityKnown();
@@ -60,7 +59,7 @@ public:
     virtual void configureInbandTracks();
     virtual void setCurrentTextTrack(InbandTextTrackPrivateAVF*) { }
     virtual InbandTextTrackPrivateAVF* currentTextTrack() const = 0;
-#if ENABLE(IOS_AIRPLAY)
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
     void playbackTargetIsWirelessChanged();
 #endif
     
@@ -144,7 +143,7 @@ public:
 #endif
 
 protected:
-    MediaPlayerPrivateAVFoundation(MediaPlayer*);
+    explicit MediaPlayerPrivateAVFoundation(MediaPlayer*);
     virtual ~MediaPlayerPrivateAVFoundation();
 
     WeakPtr<MediaPlayerPrivateAVFoundation> createWeakPtr() { return m_weakPtrFactory.createWeakPtr(); }
@@ -154,6 +153,9 @@ protected:
 #if ENABLE(MEDIA_SOURCE)
     virtual void load(const String&, MediaSourcePrivateClient*);
 #endif
+#if ENABLE(MEDIA_STREAM)
+    virtual void load(MediaStreamPrivate*) { }
+#endif
     virtual void cancelLoad() = 0;
 
     virtual void prepareToPlay() override;
@@ -162,7 +164,7 @@ protected:
     virtual void play() override;
     virtual void pause() override;
 
-    virtual IntSize naturalSize() const override;
+    virtual FloatSize naturalSize() const override;
     virtual bool hasVideo() const override { return m_cachedHasVideo; }
     virtual bool hasAudio() const override { return m_cachedHasAudio; }
     virtual void setVisible(bool) override;
@@ -171,7 +173,6 @@ protected:
     virtual void seek(const MediaTime&) override;
     virtual void seekWithTolerance(const MediaTime&, const MediaTime&, const MediaTime&) override;
     virtual bool seeking() const override;
-    virtual void setRate(float) override;
     virtual bool paused() const override;
     virtual void setVolume(float) = 0;
     virtual bool hasClosedCaptions() const override { return m_cachedHasCaptions; }
@@ -183,14 +184,15 @@ protected:
     virtual std::unique_ptr<PlatformTimeRanges> buffered() const override;
     virtual bool didLoadingProgress() const override;
     virtual void setSize(const IntSize&) override;
-    virtual void paint(GraphicsContext*, const IntRect&) = 0;
-    virtual void paintCurrentFrameInContext(GraphicsContext*, const IntRect&) = 0;
+    virtual void paint(GraphicsContext*, const FloatRect&) = 0;
+    virtual void paintCurrentFrameInContext(GraphicsContext*, const FloatRect&) = 0;
     virtual void setPreload(MediaPlayer::Preload) override;
     virtual PlatformLayer* platformLayer() const { return 0; }
     virtual bool supportsAcceleratedRendering() const = 0;
     virtual void acceleratedRenderingStateChanged() override;
     virtual bool shouldMaintainAspectRatio() const override { return m_shouldMaintainAspectRatio; }
     virtual void setShouldMaintainAspectRatio(bool) override;
+    virtual bool canSaveMediaData() const override;
 
     virtual MediaPlayer::MovieLoadType movieLoadType() const;
     virtual void prepareForRendering();
@@ -225,13 +227,12 @@ protected:
         MediaPlayerAVAssetStatusPlayable,
     };
     virtual AssetStatus assetStatus() const = 0;
+    virtual long assetErrorCode() const = 0;
 
     virtual void platformSetVisible(bool) = 0;
     virtual void platformPlay() = 0;
     virtual void platformPause() = 0;
     virtual void checkPlayability() = 0;
-    virtual void updateRate() = 0;
-    virtual float rate() const = 0;
     virtual void seekToTime(const MediaTime&, const MediaTime& negativeTolerance, const MediaTime& positiveTolerance) = 0;
     virtual unsigned long long totalBytes() const = 0;
     virtual std::unique_ptr<PlatformTimeRanges> platformBufferedTimeRanges() const = 0;
@@ -267,15 +268,17 @@ protected:
     void setDelayCharacteristicsChangedNotification(bool);
     void setDelayCallbacks(bool) const;
     void setIgnoreLoadStateChanges(bool delay) { m_ignoreLoadStateChanges = delay; }
-    void setNaturalSize(IntSize);
+    void setNaturalSize(FloatSize);
     bool isLiveStream() const { return std::isinf(duration()); }
+    void setNetworkState(MediaPlayer::NetworkState);
+    void setReadyState(MediaPlayer::ReadyState);
 
     enum MediaRenderingMode { MediaRenderingNone, MediaRenderingToContext, MediaRenderingToLayer };
     MediaRenderingMode currentRenderingMode() const;
     MediaRenderingMode preferredRenderingMode() const;
 
     bool metaDataAvailable() const { return m_readyState >= MediaPlayer::HaveMetadata; }
-    float requestedRate() const { return m_requestedRate; }
+    double requestedRate() const;
     MediaTime maxTimeLoaded() const;
     bool isReadyForVideoSetup() const;
     virtual void setUpVideoRendering();
@@ -291,8 +294,7 @@ protected:
     MediaPlayer* player() { return m_player; }
 
     virtual String engineDescription() const { return "AVFoundation"; }
-
-    virtual size_t extraMemoryCost() const override;
+    virtual long platformErrorCode() const { return assetErrorCode(); }
 
     virtual void trackModeChanged() override;
 #if ENABLE(AVF_CAPTIONS)
@@ -302,6 +304,8 @@ protected:
     void processNewAndRemovedTextTracks(const Vector<RefPtr<InbandTextTrackPrivateAVF>>&);
     void clearTextTracks();
     Vector<RefPtr<InbandTextTrackPrivateAVF>> m_textTracks;
+
+virtual URL resolvedURL() const;
 
 private:
     MediaPlayer* m_player;
@@ -321,14 +325,13 @@ private:
     String m_assetURL;
     MediaPlayer::Preload m_preload;
 
-    IntSize m_cachedNaturalSize;
+    FloatSize m_cachedNaturalSize;
     mutable MediaTime m_cachedMaxTimeLoaded;
     mutable MediaTime m_cachedMaxTimeSeekable;
     mutable MediaTime m_cachedMinTimeSeekable;
     mutable MediaTime m_cachedDuration;
     MediaTime m_reportedDuration;
     mutable MediaTime m_maxTimeLoadedAtLastDidLoadingProgress;
-    float m_requestedRate;
     mutable int m_delayCallbacks;
     int m_delayCharacteristicsChangedNotification;
     bool m_mainThreadCallPending;

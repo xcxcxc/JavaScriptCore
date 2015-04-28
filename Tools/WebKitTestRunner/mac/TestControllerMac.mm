@@ -31,8 +31,12 @@
 #import "PoseAsClass.h"
 #import "TestInvocation.h"
 #import "WebKitTestRunnerPasteboard.h"
+#import <WebKit/WKPageGroup.h>
 #import <WebKit/WKStringCF.h>
-#import <mach-o/dyld.h> 
+#import <WebKit/WKURLCF.h>
+#import <WebKit/_WKUserContentExtensionStore.h>
+#import <WebKit/_WKUserContentExtensionStorePrivate.h>
+#import <mach-o/dyld.h>
 
 @interface NSSound (Details)
 + (void)_setAlertType:(NSUInteger)alertType;
@@ -73,16 +77,29 @@ void TestController::platformWillRunTest(const TestInvocation& testInvocation)
     setCrashReportApplicationSpecificInformationToURL(testInvocation.url());
 }
 
-static bool shouldUseThreadedScrolling(const char* pathOrURL)
+static bool shouldUseThreadedScrolling(const TestInvocation& test)
 {
-    return strstr(pathOrURL, "tiled-drawing/");
+    return test.urlContains("tiled-drawing/");
+}
+
+void TestController::platformResetPreferencesToConsistentValues()
+{
+#if WK_API_ENABLED
+    __block bool doneRemoving = false;
+    [[_WKUserContentExtensionStore defaultStore] removeContentExtensionForIdentifier:@"TestContentExtensions" completionHandler:^(NSError *error)
+    {
+        doneRemoving = true;
+    }];
+    platformRunUntil(doneRemoving, 0);
+    [[_WKUserContentExtensionStore defaultStore] _removeAllContentExtensions];
+#endif
 }
 
 void TestController::platformConfigureViewForTest(const TestInvocation& test)
 {
     auto viewOptions = adoptWK(WKMutableDictionaryCreate());
     auto useThreadedScrollingKey = adoptWK(WKStringCreateWithUTF8CString("ThreadedScrolling"));
-    auto useThreadedScrollingValue = adoptWK(WKBooleanCreate(shouldUseThreadedScrolling(test.pathOrURL())));
+    auto useThreadedScrollingValue = adoptWK(WKBooleanCreate(shouldUseThreadedScrolling(test)));
     WKDictionarySetItem(viewOptions.get(), useThreadedScrollingKey.get(), useThreadedScrollingValue.get());
 
     auto useRemoteLayerTreeKey = adoptWK(WKStringCreateWithUTF8CString("RemoteLayerTree"));
@@ -90,6 +107,30 @@ void TestController::platformConfigureViewForTest(const TestInvocation& test)
     WKDictionarySetItem(viewOptions.get(), useRemoteLayerTreeKey.get(), useRemoteLayerTreeValue.get());
 
     ensureViewSupportsOptions(viewOptions.get());
+
+    if (!test.urlContains("contentextensions/"))
+        return;
+
+    RetainPtr<CFURLRef> testURL = adoptCF(WKURLCopyCFURL(kCFAllocatorDefault, test.url()));
+    NSURL *filterURL = [(NSURL *)testURL.get() URLByAppendingPathExtension:@"json"];
+
+    NSStringEncoding encoding;
+    NSString *contentExtensionString = [NSString stringWithContentsOfURL:filterURL usedEncoding:&encoding error:NULL];
+    if (!contentExtensionString)
+        return;
+    
+#if WK_API_ENABLED
+    __block bool doneCompiling = false;
+    [[_WKUserContentExtensionStore defaultStore] compileContentExtensionForIdentifier:@"TestContentExtensions" encodedContentExtension:contentExtensionString completionHandler:^(_WKUserContentFilter *filter, NSError *error)
+    {
+        if (!error)
+            WKPageGroupAddUserContentFilter(WKPageGetPageGroup(TestController::singleton().mainWebView()->page()), (__bridge WKUserContentFilterRef)filter);
+        else
+            NSLog(@"%@", [error helpAnchor]);
+        doneCompiling = true;
+    }];
+    platformRunUntil(doneCompiling, 0);
+#endif
 }
 
 void TestController::platformRunUntil(bool& done, double timeout)
@@ -102,6 +143,14 @@ void TestController::platformRunUntil(bool& done, double timeout)
 
 void TestController::platformInitializeContext()
 {
+    // Testing uses a private session, which is memory only. However creating one instantiates a shared NSURLCache,
+    // and if we haven't created one yet, the default one will be created on disk.
+    // Making the shared cache memory-only avoids touching the file system.
+    RetainPtr<NSURLCache> sharedCache =
+        adoptNS([[NSURLCache alloc] initWithMemoryCapacity:1024 * 1024
+                                      diskCapacity:0
+                                          diskPath:nil]);
+    [NSURLCache setSharedURLCache:sharedCache.get()];
 }
 
 void TestController::setHidden(bool hidden)

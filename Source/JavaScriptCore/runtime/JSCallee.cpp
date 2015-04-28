@@ -39,11 +39,6 @@ namespace JSC {
 
 const ClassInfo JSCallee::s_info = { "Callee", &Base::s_info, 0, CREATE_METHOD_TABLE(JSCallee) };
 
-void JSCallee::destroy(JSCell* cell)
-{
-    static_cast<JSCallee*>(cell)->JSCallee::~JSCallee();
-}
-
 JSCallee::JSCallee(VM& vm, JSGlobalObject* globalObject, Structure* structure)
     : Base(vm, structure)
     , m_scope(vm, this, globalObject)
@@ -69,31 +64,6 @@ void JSCallee::visitChildren(JSCell* cell, SlotVisitor& visitor)
     Base::visitChildren(thisObject, visitor);
 
     visitor.append(&thisObject->m_scope);
-}
-
-bool JSCallee::getOwnPropertySlot(JSObject* object, ExecState* exec, PropertyName propertyName, PropertySlot& slot)
-{
-    return Base::getOwnPropertySlot(object, exec, propertyName, slot);
-}
-
-void JSCallee::getOwnNonIndexPropertyNames(JSObject* object, ExecState* exec, PropertyNameArray& propertyNames, EnumerationMode mode)
-{
-    Base::getOwnNonIndexPropertyNames(object, exec, propertyNames, mode);
-}
-
-void JSCallee::put(JSCell* cell, ExecState* exec, PropertyName propertyName, JSValue value, PutPropertySlot& slot)
-{
-    Base::put(cell, exec, propertyName, value, slot);
-}
-
-bool JSCallee::deleteProperty(JSCell* cell, ExecState* exec, PropertyName propertyName)
-{
-    return Base::deleteProperty(cell, exec, propertyName);
-}
-
-bool JSCallee::defineOwnProperty(JSObject* object, ExecState* exec, PropertyName propertyName, const PropertyDescriptor& descriptor, bool throwException)
-{
-    return Base::defineOwnProperty(object, exec, propertyName, descriptor, throwException);
 }
 
 } // namespace JSC

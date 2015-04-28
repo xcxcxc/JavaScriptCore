@@ -34,7 +34,6 @@
 
 #include "DatabaseManager.h"
 #include "MediaPlayer.h"
-#include "SharedWorkerRepository.h"
 #include "WebSocket.h"
 #include <wtf/NeverDestroyed.h>
 
@@ -100,6 +99,9 @@ RuntimeEnabledFeatures::RuntimeEnabledFeatures()
 #if ENABLE(GAMEPAD)
     , m_areGamepadsEnabled(false)
 #endif
+#if ENABLE(CSS_ANIMATIONS_LEVEL_2)
+    , m_areAnimationTriggersEnabled(false)
+#endif
 {
 }
 
@@ -156,13 +158,6 @@ bool RuntimeEnabledFeatures::mediaErrorEnabled() const
 bool RuntimeEnabledFeatures::timeRangesEnabled() const
 {
     return MediaPlayer::isAvailable();
-}
-#endif
-
-#if ENABLE(SHARED_WORKERS)
-bool RuntimeEnabledFeatures::sharedWorkerEnabled() const
-{
-    return SharedWorkerRepository::isAvailable();
 }
 #endif
 

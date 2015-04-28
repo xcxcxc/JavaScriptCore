@@ -42,13 +42,10 @@ public:
 
     void updateCounter();
 
-protected:
-    virtual void willBeDestroyed();
-
 private:
-    virtual const char* renderName() const;
-    virtual bool isCounter() const;
-    virtual String originalText() const;
+    virtual const char* renderName() const override;
+    virtual bool isCounter() const override;
+    virtual String originalText() const override;
     
     virtual void computePreferredLogicalWidths(float leadWidth) override;
 
@@ -62,11 +59,11 @@ private:
     friend class CounterNode;
 };
 
-RENDER_OBJECT_TYPE_CASTS(RenderCounter, isCounter())
-
 } // namespace WebCore
 
-#ifndef NDEBUG
+SPECIALIZE_TYPE_TRAITS_RENDER_OBJECT(RenderCounter, isCounter())
+
+#if ENABLE(TREE_DEBUGGING)
 // Outside the WebCore namespace for ease of invocation from gdb.
 void showCounterRendererTree(const WebCore::RenderObject*, const char* counterName = 0);
 #endif

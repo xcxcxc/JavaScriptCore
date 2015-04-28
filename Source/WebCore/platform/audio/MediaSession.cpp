@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -59,7 +59,7 @@ std::unique_ptr<MediaSession> MediaSession::create(MediaSessionClient& client)
 
 MediaSession::MediaSession(MediaSessionClient& client)
     : m_client(client)
-    , m_clientDataBufferingTimer(this, &MediaSession::clientDataBufferingTimerFired)
+    , m_clientDataBufferingTimer(*this, &MediaSession::clientDataBufferingTimerFired)
     , m_state(Idle)
     , m_stateToRestore(Idle)
     , m_notifyingClient(false)
@@ -81,48 +81,63 @@ void MediaSession::setState(State state)
 
 void MediaSession::beginInterruption(InterruptionType type)
 {
-    LOG(Media, "MediaSession::beginInterruption(%p), state = %s", this, stateName(m_state));
+    LOG(Media, "MediaSession::beginInterruption(%p), state = %s, interruption count = %i", this, stateName(m_state), m_interruptionCount);
 
-    if (type == EnteringBackground && client().overrideBackgroundPlaybackRestriction())
+    if (++m_interruptionCount > 1 || (type == EnteringBackground && client().overrideBackgroundPlaybackRestriction()))
         return;
 
     m_stateToRestore = state();
     m_notifyingClient = true;
-    client().pausePlayback();
     setState(Interrupted);
+    client().suspendPlayback();
     m_notifyingClient = false;
 }
 
 void MediaSession::endInterruption(EndInterruptionFlags flags)
 {
-    LOG(Media, "MediaSession::endInterruption(%p) - flags = %i, stateToRestore = %s", this, (int)flags, stateName(m_stateToRestore));
+    LOG(Media, "MediaSession::endInterruption(%p) - flags = %i, stateToRestore = %s, interruption count = %i", this, (int)flags, stateName(m_stateToRestore), m_interruptionCount);
+
+    if (!m_interruptionCount) {
+        LOG(Media, "MediaSession::endInterruption(%p) - !! ignoring spurious interruption end !!", this);
+        return;
+    }
+
+    if (--m_interruptionCount)
+        return;
 
     State stateToRestore = m_stateToRestore;
     m_stateToRestore = Idle;
     setState(Paused);
 
-    if (flags & MayResumePlaying && stateToRestore == Playing) {
-        LOG(Media, "MediaSession::endInterruption - resuming playback");
-        client().resumePlayback();
-    }
+    bool shouldResume = flags & MayResumePlaying && stateToRestore == Playing;
+    client().mayResumePlayback(shouldResume);
 }
 
 bool MediaSession::clientWillBeginPlayback()
 {
+    if (m_notifyingClient)
+        return true;
+
+    if (!MediaSessionManager::sharedManager().sessionWillBeginPlayback(*this)) {
+        if (state() == Interrupted)
+            m_stateToRestore = Playing;
+        return false;
+    }
+
     setState(Playing);
-    MediaSessionManager::sharedManager().sessionWillBeginPlayback(*this);
     updateClientDataBuffering();
     return true;
 }
 
 bool MediaSession::clientWillPausePlayback()
 {
+    if (m_notifyingClient)
+        return true;
+
     LOG(Media, "MediaSession::clientWillPausePlayback(%p)- state = %s", this, stateName(m_state));
     if (state() == Interrupted) {
-        if (!m_notifyingClient) {
-            m_stateToRestore = Paused;
-            LOG(Media, "      setting stateToRestore to \"Paused\"");
-        }
+        m_stateToRestore = Paused;
+        LOG(Media, "      setting stateToRestore to \"Paused\"");
         return false;
     }
     
@@ -136,7 +151,7 @@ bool MediaSession::clientWillPausePlayback()
 void MediaSession::pauseSession()
 {
     LOG(Media, "MediaSession::pauseSession(%p)", this);
-    m_client.pausePlayback();
+    m_client.suspendPlayback();
 }
 
 MediaSession::MediaType MediaSession::mediaType() const
@@ -180,9 +195,18 @@ void MediaSession::visibilityChanged()
         m_clientDataBufferingTimer.startOneShot(kClientDataBufferingTimerThrottleDelay);
 }
 
-void MediaSession::clientDataBufferingTimerFired(Timer<WebCore::MediaSession> &)
+void MediaSession::clientDataBufferingTimerFired()
 {
+    LOG(Media, "MediaSession::clientDataBufferingTimerFired(%p)- visible = %s", this, m_client.elementIsHidden() ? "false" : "true");
+
     updateClientDataBuffering();
+
+    if (m_state != Playing || !m_client.elementIsHidden())
+        return;
+
+    MediaSessionManager::SessionRestrictions restrictions = MediaSessionManager::sharedManager().restrictions(mediaType());
+    if ((restrictions & MediaSessionManager::BackgroundTabPlaybackRestricted) == MediaSessionManager::BackgroundTabPlaybackRestricted)
+        pauseSession();
 }
 
 void MediaSession::updateClientDataBuffering()
@@ -190,8 +214,17 @@ void MediaSession::updateClientDataBuffering()
     if (m_clientDataBufferingTimer.isActive())
         m_clientDataBufferingTimer.stop();
 
-    bool shouldBuffer = m_state == Playing || !m_client.elementIsHidden();
-    m_client.setShouldBufferData(shouldBuffer);
+    m_client.setShouldBufferData(MediaSessionManager::sharedManager().sessionCanLoadMedia(*this));
+}
+
+bool MediaSession::isHidden() const
+{
+    return m_client.elementIsHidden();
+}
+
+MediaSession::DisplayType MediaSession::displayType() const
+{
+    return m_client.displayType();
 }
 
 String MediaSessionClient::mediaSessionTitle() const
@@ -208,6 +241,5 @@ double MediaSessionClient::mediaSessionCurrentTime() const
 {
     return MediaPlayer::invalidTime();
 }
-
 }
 #endif

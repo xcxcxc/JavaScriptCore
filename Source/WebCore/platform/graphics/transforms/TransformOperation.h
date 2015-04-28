@@ -29,6 +29,7 @@
 #include "TransformationMatrix.h"
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
+#include <wtf/TypeCasts.h>
 
 namespace WebCore {
 
@@ -53,6 +54,8 @@ public:
 
     virtual ~TransformOperation() { }
 
+    virtual PassRefPtr<TransformOperation> clone() const = 0;
+
     virtual bool operator==(const TransformOperation&) const = 0;
     bool operator!=(const TransformOperation& o) const { return !(*this == o); }
 
@@ -65,6 +68,8 @@ public:
 
     virtual OperationType type() const = 0;
     virtual bool isSameType(const TransformOperation&) const { return false; }
+
+    virtual bool isAffectedByTransformOrigin() const { return false; }
     
     bool is3DOperation() const
     {
@@ -101,9 +106,11 @@ public:
     }
 };
 
-#define TRANSFORMOPERATION_TYPE_CASTS(ToValueTypeName, predicate) \
-    TYPE_CASTS_BASE(ToValueTypeName, WebCore::TransformOperation, value, value->predicate, value.predicate)
-
 } // namespace WebCore
+
+#define SPECIALIZE_TYPE_TRAITS_TRANSFORMOPERATION(ToValueTypeName, predicate) \
+SPECIALIZE_TYPE_TRAITS_BEGIN(ToValueTypeName) \
+    static bool isType(const WebCore::TransformOperation& operation) { return operation.predicate; } \
+SPECIALIZE_TYPE_TRAITS_END()
 
 #endif // TransformOperation_h

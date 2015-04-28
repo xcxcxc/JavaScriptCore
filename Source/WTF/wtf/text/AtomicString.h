@@ -86,8 +86,14 @@ public:
     AtomicString(WTF::HashTableDeletedValueType) : m_string(WTF::HashTableDeletedValue) { }
     bool isHashTableDeletedValue() const { return m_string.isHashTableDeletedValue(); }
 
-    WTF_EXPORT_STRING_API static AtomicStringImpl* find(LChar*, unsigned length);
-    WTF_EXPORT_STRING_API static AtomicStringImpl* find(UChar*, unsigned length);
+    static AtomicStringImpl* find(LChar* characters, unsigned length)
+    {
+        return findInternal(characters, length);
+    }
+    static AtomicStringImpl* find(UChar* characters, unsigned length)
+    {
+        return findInternal(characters, length);
+    }
     static AtomicStringImpl* find(StringImpl* string)
     {
         if (!string || string->isAtomic())
@@ -115,18 +121,30 @@ public:
     bool contains(UChar c) const { return m_string.contains(c); }
     bool contains(const LChar* s, bool caseSensitive = true) const
         { return m_string.contains(s, caseSensitive); }
-    bool contains(const String& s, bool caseSensitive = true) const
+    bool contains(const String& s) const
+        { return m_string.contains(s); }
+    bool contains(const String& s, bool caseSensitive) const
         { return m_string.contains(s, caseSensitive); }
+    bool containsIgnoringASCIICase(const String& s) const
+        { return m_string.containsIgnoringASCIICase(s); }
 
     size_t find(UChar c, unsigned start = 0) const { return m_string.find(c, start); }
     size_t find(const LChar* s, unsigned start = 0, bool caseSentitive = true) const
         { return m_string.find(s, start, caseSentitive); }
     size_t find(const String& s, unsigned start = 0, bool caseSentitive = true) const
         { return m_string.find(s, start, caseSentitive); }
+    size_t findIgnoringASCIICase(const String& s) const
+        { return m_string.findIgnoringASCIICase(s); }
+    size_t findIgnoringASCIICase(const String& s, unsigned startOffset) const
+        { return m_string.findIgnoringASCIICase(s, startOffset); }
     size_t find(CharacterMatchFunctionPtr matchFunction, unsigned start = 0) const
         { return m_string.find(matchFunction, start); }
 
-    bool startsWith(const String& s, bool caseSensitive = true) const
+    bool startsWith(const String& s) const
+        { return m_string.startsWith(s); }
+    bool startsWithIgnoringASCIICase(const String& s) const
+        { return m_string.startsWithIgnoringASCIICase(s); }
+    bool startsWith(const String& s, bool caseSensitive) const
         { return m_string.startsWith(s, caseSensitive); }
     bool startsWith(UChar character) const
         { return m_string.startsWith(character); }
@@ -134,7 +152,11 @@ public:
     bool startsWith(const char (&prefix)[matchLength], bool caseSensitive = true) const
         { return m_string.startsWith<matchLength>(prefix, caseSensitive); }
 
-    bool endsWith(const String& s, bool caseSensitive = true) const
+    bool endsWith(const String& s) const
+        { return m_string.endsWith(s); }
+    bool endsWithIgnoringASCIICase(const String& s) const
+        { return m_string.endsWithIgnoringASCIICase(s); }
+    bool endsWith(const String& s, bool caseSensitive) const
         { return m_string.endsWith(s, caseSensitive); }
     bool endsWith(UChar character) const
         { return m_string.endsWith(character); }
@@ -173,52 +195,69 @@ public:
     void show() const;
 #endif
 
-    WTF_EXPORT_STRING_API static PassRefPtr<StringImpl> add(const LChar*);
-    ALWAYS_INLINE static PassRefPtr<StringImpl> add(const char* s) { return add(reinterpret_cast<const LChar*>(s)); };
-    WTF_EXPORT_STRING_API static PassRefPtr<StringImpl> add(const LChar*, unsigned length);
-    WTF_EXPORT_STRING_API static PassRefPtr<StringImpl> add(const UChar*, unsigned length);
-    ALWAYS_INLINE static PassRefPtr<StringImpl> add(const char* s, unsigned length) { return add(reinterpret_cast<const LChar*>(s), length); };
-    WTF_EXPORT_STRING_API static PassRefPtr<StringImpl> add(const UChar*, unsigned length, unsigned existingHash);
-    WTF_EXPORT_STRING_API static PassRefPtr<StringImpl> add(const UChar*);
-    WTF_EXPORT_STRING_API static PassRefPtr<StringImpl> add(StringImpl*, unsigned offset, unsigned length);
-    ALWAYS_INLINE static PassRefPtr<StringImpl> add(StringImpl* string)
+    WTF_EXPORT_STRING_API static RefPtr<StringImpl> add(const LChar*);
+    ALWAYS_INLINE static RefPtr<StringImpl> add(const char* s) { return add(reinterpret_cast<const LChar*>(s)); };
+    WTF_EXPORT_STRING_API static RefPtr<StringImpl> add(const LChar*, unsigned length);
+    WTF_EXPORT_STRING_API static RefPtr<StringImpl> add(const UChar*, unsigned length);
+    ALWAYS_INLINE static RefPtr<StringImpl> add(const char* s, unsigned length) { return add(reinterpret_cast<const LChar*>(s), length); };
+    WTF_EXPORT_STRING_API static Ref<StringImpl> add(const UChar*, unsigned length, unsigned existingHash);
+    WTF_EXPORT_STRING_API static RefPtr<StringImpl> add(const UChar*);
+    WTF_EXPORT_STRING_API static RefPtr<StringImpl> add(StringImpl*, unsigned offset, unsigned length);
+    ALWAYS_INLINE static RefPtr<StringImpl> add(StringImpl* string)
     {
-        if (!string || string->isAtomic()) {
-            ASSERT_WITH_MESSAGE(!string || !string->length() || isInAtomicStringTable(string), "The atomic string comes from an other thread!");
+        if (!string)
             return string;
-        }
-        return addSlowCase(*string);
+        return add(*string);
     }
-    WTF_EXPORT_STRING_API static PassRefPtr<StringImpl> addFromLiteralData(const char* characters, unsigned length);
+    WTF_EXPORT_STRING_API static Ref<StringImpl> addFromLiteralData(const char* characters, unsigned length);
 #if USE(CF)
-    WTF_EXPORT_STRING_API static PassRefPtr<StringImpl> add(CFStringRef);
+    WTF_EXPORT_STRING_API static RefPtr<StringImpl> add(CFStringRef);
 #endif
 
     template<typename StringTableProvider>
-    ALWAYS_INLINE static PassRefPtr<StringImpl> addWithStringTableProvider(StringTableProvider& stringTableProvider, StringImpl* string)
+    ALWAYS_INLINE static RefPtr<StringImpl> addWithStringTableProvider(StringTableProvider& stringTableProvider, StringImpl* string)
     {
-        if (!string || string->isAtomic()) {
-            ASSERT_WITH_MESSAGE(!string || !string->length() || isInAtomicStringTable(string), "The atomic string comes from an other thread!");
+        if (!string)
             return string;
-        }
-        return addSlowCase(*stringTableProvider.atomicStringTable(), *string);
+        return add(*stringTableProvider.atomicStringTable(), *string);
     }
+
+#if !ASSERT_DISABLED
+    WTF_EXPORT_STRING_API static bool isInAtomicStringTable(StringImpl*);
+#endif
 
 private:
     // The explicit constructors with AtomicString::ConstructFromLiteral must be used for literals.
     AtomicString(ASCIILiteral);
 
     String m_string;
-    
-    WTF_EXPORT_STRING_API static PassRefPtr<StringImpl> addSlowCase(StringImpl&);
-    WTF_EXPORT_STRING_API static PassRefPtr<StringImpl> addSlowCase(AtomicStringTable&, StringImpl&);
+
+    ALWAYS_INLINE static Ref<StringImpl> add(StringImpl& string)
+    {
+        if (string.isAtomic()) {
+            ASSERT_WITH_MESSAGE(!string.length() || isInAtomicStringTable(&string), "The atomic string comes from an other thread!");
+            return string;
+        }
+        return addSlowCase(string);
+    }
+
+    ALWAYS_INLINE static Ref<StringImpl> add(AtomicStringTable& stringTable, StringImpl& string)
+    {
+        if (string.isAtomic()) {
+            ASSERT_WITH_MESSAGE(!string.length() || isInAtomicStringTable(&string), "The atomic string comes from an other thread!");
+            return string;
+        }
+        return addSlowCase(stringTable, string);
+    }
+
+    WTF_EXPORT_STRING_API static Ref<StringImpl> addSlowCase(StringImpl&);
+    WTF_EXPORT_STRING_API static Ref<StringImpl> addSlowCase(AtomicStringTable&, StringImpl&);
 
     WTF_EXPORT_STRING_API static AtomicStringImpl* findSlowCase(StringImpl&);
     WTF_EXPORT_STRING_API static AtomicString fromUTF8Internal(const char*, const char*);
 
-#if !ASSERT_DISABLED
-    WTF_EXPORT_STRING_API static bool isInAtomicStringTable(StringImpl*);
-#endif
+    WTF_EXPORT_STRING_API static AtomicStringImpl* findInternal(const LChar*, unsigned length);
+    WTF_EXPORT_STRING_API static AtomicStringImpl* findInternal(const UChar*, unsigned length);
 };
 
 inline bool operator==(const AtomicString& a, const AtomicString& b) { return a.impl() == b.impl(); }
@@ -246,6 +285,10 @@ inline bool equalIgnoringCase(const AtomicString& a, const String& b) { return e
 inline bool equalIgnoringCase(const LChar* a, const AtomicString& b) { return equalIgnoringCase(a, b.impl()); }
 inline bool equalIgnoringCase(const char* a, const AtomicString& b) { return equalIgnoringCase(reinterpret_cast<const LChar*>(a), b.impl()); }
 inline bool equalIgnoringCase(const String& a, const AtomicString& b) { return equalIgnoringCase(a.impl(), b.impl()); }
+
+inline bool equalIgnoringASCIICase(const AtomicString& a, const AtomicString& b) { return equalIgnoringASCIICase(a.impl(), b.impl()); }
+inline bool equalIgnoringASCIICase(const AtomicString& a, const String& b) { return equalIgnoringASCIICase(a.impl(), b.impl()); }
+inline bool equalIgnoringASCIICase(const String& a, const AtomicString& b) { return equalIgnoringASCIICase(a.impl(), b.impl()); }
 
 // Define external global variables for the commonly used atomic strings.
 // These are only usable from the main thread.

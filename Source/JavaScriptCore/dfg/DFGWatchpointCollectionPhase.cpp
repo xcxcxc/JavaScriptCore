@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -92,14 +92,6 @@ private:
             
             if (m_node->arrayMode().type() == Array::String)
                 handleStringGetByVal();
-
-            if (JSArrayBufferView* view = m_graph.tryGetFoldableViewForChild1(m_node))
-                addLazily(view);
-            break;
-            
-        case PutByVal:
-            if (JSArrayBufferView* view = m_graph.tryGetFoldableViewForChild1(m_node))
-                addLazily(view);
             break;
             
         case StringCharAt:
@@ -113,24 +105,8 @@ private:
                 addLazily(globalObject()->havingABadTimeWatchpoint());
             break;
             
-        case AllocationProfileWatchpoint:
-            addLazily(jsCast<JSFunction*>(m_node->cellOperand()->value())->allocationProfileWatchpointSet());
-            break;
-            
-        case VariableWatchpoint:
-            addLazily(m_node->variableWatchpointSet());
-            break;
-            
         case VarInjectionWatchpoint:
             addLazily(globalObject()->varInjectionWatchpoint());
-            break;
-            
-        case FunctionReentryWatchpoint:
-            addLazily(m_node->symbolTable()->m_functionEnteredOnce);
-            break;
-            
-        case TypedArrayWatchpoint:
-            addLazily(m_node->typedArray());
             break;
             
         default:
@@ -161,10 +137,6 @@ private:
     void addLazily(InlineWatchpointSet& set)
     {
         m_graph.watchpoints().addLazily(set);
-    }
-    void addLazily(JSArrayBufferView* view)
-    {
-        m_graph.watchpoints().addLazily(view);
     }
     
     JSGlobalObject* globalObject()

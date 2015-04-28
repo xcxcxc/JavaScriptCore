@@ -47,6 +47,7 @@
 #import "ColorMac.h"
 #import "ContextMenuController.h"
 #import "Font.h"
+#import "FontCascade.h"
 #import "Frame.h"
 #import "FrameLoaderClient.h"
 #import "FrameSelection.h"
@@ -63,7 +64,6 @@
 #import "RenderView.h"
 #import "RenderWidget.h"
 #import "ScrollView.h"
-#import "SimpleFontData.h"
 #import "TextCheckerClient.h"
 #import "TextCheckingHelper.h"
 #import "VisibleUnits.h"
@@ -147,7 +147,7 @@ static NSArray *convertMathPairsToNSArray(const AccessibilityObject::Accessibili
 
 // This should be the "visible" text that's actually on the screen if possible.
 // If there's alternative text, that can override the title.
-- (NSString *)accessibilityTitle
+- (NSString *)baseAccessibilityTitle
 {
     // Static text objects should not have a title. Its content is communicated in its AXValue.
     if (m_object->roleValue() == StaticTextRole)
@@ -180,7 +180,7 @@ static NSArray *convertMathPairsToNSArray(const AccessibilityObject::Accessibili
     return [NSString string];
 }
 
-- (NSString *)accessibilityDescription
+- (NSString *)baseAccessibilityDescription
 {
     // Static text objects should not have a description. Its content is communicated in its AXValue.
     // One exception is the media control labels that have a value and a description. Those are set programatically.
@@ -212,7 +212,7 @@ static NSArray *convertMathPairsToNSArray(const AccessibilityObject::Accessibili
     return [NSString string];
 }
 
-- (NSString *)accessibilityHelpText
+- (NSString *)baseAccessibilityHelpText
 {
     Vector<AccessibilityText> textOrder;
     m_object->accessibilityText(textOrder);
@@ -383,13 +383,69 @@ static BOOL accessibilityShouldRepostNotifications;
 + (void)accessibilitySetShouldRepostNotifications:(BOOL)repost
 {
     accessibilityShouldRepostNotifications = repost;
+#if PLATFORM(MAC)
+    AXObjectCache::setShouldRepostNotificationsForTests(repost);
+#endif
 }
 
 - (void)accessibilityPostedNotification:(NSString *)notificationName
 {
+    if (accessibilityShouldRepostNotifications)
+        [self accessibilityPostedNotification:notificationName userInfo:nil];
+}
+
+static NSArray *arrayRemovingNonJSONTypes(NSArray *array)
+{
+    ASSERT([array isKindOfClass:[NSArray class]]);
+    NSMutableArray *mutableArray = [array mutableCopy];
+    for (NSUInteger i = 0; i < [mutableArray count];) {
+        id value = [mutableArray objectAtIndex:i];
+        if ([value isKindOfClass:[NSDictionary class]])
+            [mutableArray replaceObjectAtIndex:i withObject:dictionaryRemovingNonJSONTypes(value)];
+        else if ([value isKindOfClass:[NSArray class]])
+            [mutableArray replaceObjectAtIndex:i withObject:arrayRemovingNonJSONTypes(value)];
+        else if (!([value isKindOfClass:[NSString class]] || [value isKindOfClass:[NSNumber class]])) {
+            [mutableArray removeObjectAtIndex:i];
+            continue;
+        }
+        i++;
+    }
+    return [mutableArray autorelease];
+}
+
+static NSDictionary *dictionaryRemovingNonJSONTypes(NSDictionary *dictionary)
+{
+    ASSERT([dictionary isKindOfClass:[NSDictionary class]]);
+    NSMutableDictionary *mutableDictionary = [dictionary mutableCopy];
+    for (NSString *key in dictionary) {
+        id value = [dictionary objectForKey:key];
+        if ([value isKindOfClass:[NSDictionary class]])
+            [mutableDictionary setObject:dictionaryRemovingNonJSONTypes(value) forKey:key];
+        else if ([value isKindOfClass:[NSArray class]])
+            [mutableDictionary setObject:arrayRemovingNonJSONTypes(value) forKey:key];
+        else if (!([value isKindOfClass:[NSString class]] || [value isKindOfClass:[NSNumber class]]))
+            [mutableDictionary removeObjectForKey:key];
+    }
+    return [mutableDictionary autorelease];
+}
+
+- (void)accessibilityPostedNotification:(NSString *)notificationName userInfo:(NSDictionary *)userInfo
+{
     if (accessibilityShouldRepostNotifications) {
-        NSDictionary* userInfo = [NSDictionary dictionaryWithObjectsAndKeys:notificationName, @"notificationName", nil];
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"AXDRTNotification" object:self userInfo:userInfo];
+        ASSERT(notificationName);
+        NSDictionary *info = nil;
+        if (userInfo) {
+            NSData *userInfoData = [NSJSONSerialization dataWithJSONObject:dictionaryRemovingNonJSONTypes(userInfo) options:(NSJSONWritingOptions)0 error:nil];
+            if (userInfoData) {
+                NSString *userInfoString = [[NSString alloc] initWithData:userInfoData encoding:NSUTF8StringEncoding];
+                if (userInfoString)
+                    info = [NSDictionary dictionaryWithObjectsAndKeys:notificationName, @"notificationName", userInfoString, @"userInfo", nil];
+                [userInfoString release];
+            }
+        }
+        if (!info)
+            info = [NSDictionary dictionaryWithObjectsAndKeys:notificationName, @"notificationName", nil];
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"AXDRTNotification" object:self userInfo:info];
     }
 }
 

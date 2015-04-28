@@ -41,9 +41,9 @@ class RenderObject;
 
 class SVGRenderStyle : public RefCounted<SVGRenderStyle> {    
 public:
-    static PassRef<SVGRenderStyle> createDefaultStyle();
-    static PassRef<SVGRenderStyle> create() { return adoptRef(*new SVGRenderStyle); }
-    PassRef<SVGRenderStyle> copy() const;
+    static Ref<SVGRenderStyle> createDefaultStyle();
+    static Ref<SVGRenderStyle> create() { return adoptRef(*new SVGRenderStyle); }
+    Ref<SVGRenderStyle> copy() const;
     ~SVGRenderStyle();
 
     bool inheritedNotEqual(const SVGRenderStyle*) const;
@@ -379,7 +379,7 @@ public:
     String markerEndResource() const { return inheritedResources->markerEnd; }
     EMaskType maskType() const { return (EMaskType) svg_noninherited_flags.f.maskType; }
     PaintOrder paintOrder() const { return (PaintOrder) svg_inherited_flags.paintOrder; }
-    Vector<PaintType> paintTypesForPaintOrder() const;
+    Vector<PaintType, 3> paintTypesForPaintOrder() const;
 
     const SVGPaint::SVGPaintType& visitedLinkFillPaintType() const { return fill->visitedLinkPaintType; }
     const Color& visitedLinkFillPaintColor() const { return fill->visitedLinkPaintColor; }

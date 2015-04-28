@@ -61,6 +61,7 @@ IDBDatabase::IDBDatabase(ScriptExecutionContext* context, PassRefPtr<IDBDatabase
     : ActiveDOMObject(context)
     , m_backend(backend)
     , m_closePending(false)
+    , m_isClosed(false)
     , m_contextStopped(false)
     , m_databaseCallbacks(callbacks)
 {
@@ -70,7 +71,26 @@ IDBDatabase::IDBDatabase(ScriptExecutionContext* context, PassRefPtr<IDBDatabase
 
 IDBDatabase::~IDBDatabase()
 {
-    close();
+    // This does what IDBDatabase::close does, but without any ref/deref of the
+    // database since it is already in the process of being deleted. The logic here
+    // is also simpler since we know there are no transactions (since they ref the
+    // database when they are alive).
+
+    ASSERT(m_transactions.isEmpty());
+
+    if (!m_closePending) {
+        m_closePending = true;
+        m_backend->close(m_databaseCallbacks);
+    }
+
+    if (auto* context = scriptExecutionContext()) {
+        // Remove any pending versionchange events scheduled to fire on this
+        // connection. They would have been scheduled by the backend when another
+        // connection called setVersion, but the frontend connection is being
+        // closed before they could fire.
+        for (auto& event : m_enqueuedEvents)
+            context->eventQueue().cancelEvent(*event);
+    }
 }
 
 int64_t IDBDatabase::nextTransactionId()
@@ -283,6 +303,10 @@ void IDBDatabase::closeConnection()
     ASSERT(m_closePending);
     ASSERT(m_transactions.isEmpty());
 
+    // Closing may result in deallocating the last transaction, which could result in deleting
+    // this IDBDatabase. We need the deallocation to happen after we are through.
+    Ref<IDBDatabase> protect(*this);
+
     m_backend->close(m_databaseCallbacks);
 
     if (m_contextStopped || !scriptExecutionContext())
@@ -297,6 +321,8 @@ void IDBDatabase::closeConnection()
         bool removed = eventQueue.cancelEvent(*m_enqueuedEvents[i]);
         ASSERT_UNUSED(removed, removed);
     }
+
+    m_isClosed = true;
 }
 
 void IDBDatabase::onVersionChange(uint64_t oldVersion, uint64_t newVersion, IndexedDB::VersionNullness newVersionNullness)
@@ -314,6 +340,7 @@ void IDBDatabase::onVersionChange(uint64_t oldVersion, uint64_t newVersion, Inde
 void IDBDatabase::enqueueEvent(PassRefPtr<Event> event)
 {
     ASSERT(!m_contextStopped);
+    ASSERT(!m_isClosed);
     ASSERT(scriptExecutionContext());
     event->setTarget(this);
     scriptExecutionContext()->eventQueue().enqueueEvent(event.get());
@@ -355,6 +382,16 @@ void IDBDatabase::stop()
     close();
 
     m_contextStopped = true;
+}
+
+const char* IDBDatabase::activeDOMObjectName() const
+{
+    return "IDBDatabase";
+}
+
+bool IDBDatabase::canSuspendForPageCache() const
+{
+    return m_isClosed;
 }
 
 } // namespace WebCore

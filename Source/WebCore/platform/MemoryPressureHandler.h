@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2011 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2014 Raspberry Pi Foundation. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,11 +28,15 @@
 #define MemoryPressureHandler_h
 
 #include <atomic>
-#include <time.h>
+#include <ctime>
+#include <functional>
 #include <wtf/FastMalloc.h>
+#include <wtf/Forward.h>
 
 #if PLATFORM(IOS)
 #include <wtf/ThreadingPrimitives.h>
+#elif OS(LINUX)
+#include "Timer.h"
 #endif
 
 namespace WebCore {
@@ -44,12 +49,13 @@ enum MemoryPressureReason {
 };
 #endif
 
-typedef void (*LowMemoryHandler)(bool critical);
+typedef std::function<void(bool critical)> LowMemoryHandler;
 
 class MemoryPressureHandler {
     WTF_MAKE_FAST_ALLOCATED;
+    friend class WTF::NeverDestroyed<MemoryPressureHandler>;
 public:
-    friend MemoryPressureHandler& memoryPressureHandler();
+    WEBCORE_EXPORT static MemoryPressureHandler& singleton();
 
     WEBCORE_EXPORT void install();
 
@@ -69,6 +75,8 @@ public:
     WEBCORE_EXPORT void clearMemoryPressure();
     WEBCORE_EXPORT bool shouldWaitForMemoryClearMessage();
     void respondToMemoryPressureIfNeeded();
+#elif OS(LINUX)
+    static void waitForMemoryPressureEvent(void*);
 #endif
 
     class ReliefLogger {
@@ -96,24 +104,24 @@ public:
         const char* m_logString;
         size_t m_initialMemory;
 
-        static bool s_loggingEnabled;
+        WEBCORE_EXPORT static bool s_loggingEnabled;
     };
 
-    WEBCORE_EXPORT static void releaseMemory(bool critical);
+    WEBCORE_EXPORT void releaseMemory(bool critical);
 
 private:
-    static void releaseNoncriticalMemory();
-    static void releaseCriticalMemory();
+    void releaseNoncriticalMemory();
+    void releaseCriticalMemory();
 
     void uninstall();
 
     void holdOff(unsigned);
 
     MemoryPressureHandler();
-    ~MemoryPressureHandler();
+    ~MemoryPressureHandler() = delete;
 
     void respondToMemoryPressure(bool critical);
-    static void platformReleaseMemory(bool critical);
+    void platformReleaseMemory(bool critical);
 
     bool m_installed;
     time_t m_lastRespondTime;
@@ -127,11 +135,15 @@ private:
     void (^m_releaseMemoryBlock)();
     CFRunLoopObserverRef m_observer;
     Mutex m_observerMutex;
+#elif OS(LINUX)
+    int m_eventFD;
+    int m_pressureLevelFD;
+    WTF::ThreadIdentifier m_threadID;
+    Timer m_holdOffTimer;
+    void holdOffTimerFired();
+    void logErrorAndCloseFDs(const char* error);
 #endif
 };
- 
-// Function to obtain the global memory pressure object.
-WEBCORE_EXPORT MemoryPressureHandler& memoryPressureHandler();
 
 } // namespace WebCore
 

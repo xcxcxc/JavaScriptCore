@@ -49,16 +49,11 @@ class PageClientImpl : public PageClient
 #endif
 {
 public:
-    static std::unique_ptr<PageClientImpl> create(GtkWidget* viewWidget)
-    {
-        return std::unique_ptr<PageClientImpl>(new PageClientImpl(viewWidget));
-    }
+    explicit PageClientImpl(GtkWidget*);
 
     GtkWidget* viewWidget() { return m_viewWidget; }
 
 private:
-    explicit PageClientImpl(GtkWidget*);
-
     // PageClient
     virtual std::unique_ptr<DrawingAreaProxy> createDrawingAreaProxy() override;
     virtual void setViewNeedsDisplay(const WebCore::IntRect&) override;
@@ -93,16 +88,20 @@ private:
 #if ENABLE(INPUT_TYPE_COLOR)
     virtual PassRefPtr<WebColorPicker> createColorPicker(WebPageProxy*, const WebCore::Color& intialColor, const WebCore::IntRect&) override;
 #endif
-    virtual void setFindIndicator(PassRefPtr<FindIndicator>, bool fadeOut, bool animate) override;
+    virtual void setTextIndicator(PassRefPtr<WebCore::TextIndicator>, bool fadeOut) override;
+    virtual void setTextIndicatorAnimationProgress(float) override;
     virtual void getEditorCommandsForKeyEvent(const NativeWebKeyboardEvent&, const AtomicString&, Vector<WTF::String>&) override;
     virtual void updateTextInputState() override;
+#if ENABLE(DRAG_SUPPORT)
     virtual void startDrag(const WebCore::DragData&, PassRefPtr<ShareableBitmap> dragImage) override;
+#endif
 
     virtual void enterAcceleratedCompositingMode(const LayerTreeContext&) override;
     virtual void exitAcceleratedCompositingMode() override;
     virtual void updateAcceleratedCompositingMode(const LayerTreeContext&) override;
 
     virtual void handleDownloadRequest(DownloadProxy*) override;
+    virtual void didChangeContentSize(const WebCore::IntSize&) override { }
     virtual void didCommitLoadForMainFrame(const String& mimeType, bool useCustomContentProvider) override;
 
     // Auxiliary Client Creation
@@ -132,6 +131,8 @@ private:
     virtual void didSameDocumentNavigationForMainFrame(SameDocumentNavigationType) override;
 
     virtual void doneWithTouchEvent(const NativeWebTouchEvent&, bool wasEventHandled) override;
+
+    virtual void didChangeBackgroundColor() override;
 
     // Members of PageClientImpl class
     GtkWidget* m_viewWidget;

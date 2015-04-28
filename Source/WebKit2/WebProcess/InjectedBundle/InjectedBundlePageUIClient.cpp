@@ -26,10 +26,13 @@
 #include "config.h"
 #include "InjectedBundlePageUIClient.h"
 
+#include "APISecurityOrigin.h"
 #include "InjectedBundleHitTestResult.h"
+#include "InjectedBundleNodeHandle.h"
 #include "WKAPICast.h"
 #include "WKBundleAPICast.h"
-#include "WebSecurityOrigin.h"
+#include "WebFrame.h"
+#include "WebPage.h"
 #include <wtf/text/WTFString.h>
 
 using namespace WebCore;
@@ -146,7 +149,7 @@ API::InjectedBundle::PageUIClient::UIElementVisibility InjectedBundlePageUIClien
     return toUIElementVisibility(m_client.toolbarsAreVisible(toAPI(page), m_client.base.clientInfo));
 }
 
-bool InjectedBundlePageUIClient::didReachApplicationCacheOriginQuota(WebPage* page, WebSecurityOrigin* origin, int64_t totalBytesNeeded)
+bool InjectedBundlePageUIClient::didReachApplicationCacheOriginQuota(WebPage* page, API::SecurityOrigin* origin, int64_t totalBytesNeeded)
 {
     if (!m_client.didReachApplicationCacheOriginQuota)
         return false;
@@ -155,7 +158,7 @@ bool InjectedBundlePageUIClient::didReachApplicationCacheOriginQuota(WebPage* pa
     return true;
 }
 
-uint64_t InjectedBundlePageUIClient::didExceedDatabaseQuota(WebPage* page, WebSecurityOrigin* origin, const String& databaseName, const String& databaseDisplayName, uint64_t currentQuotaBytes, uint64_t currentOriginUsageBytes, uint64_t currentDatabaseUsageBytes, uint64_t expectedUsageBytes)
+uint64_t InjectedBundlePageUIClient::didExceedDatabaseQuota(WebPage* page, API::SecurityOrigin* origin, const String& databaseName, const String& databaseDisplayName, uint64_t currentQuotaBytes, uint64_t currentOriginUsageBytes, uint64_t currentDatabaseUsageBytes, uint64_t expectedUsageBytes)
 {
     if (!m_client.didExceedDatabaseQuota)
         return 0;
@@ -228,6 +231,16 @@ void InjectedBundlePageUIClient::didCancelTrackingPotentialLongMousePress(WebPag
 
     WKTypeRef userDataToPass = nullptr;
     m_client.didCancelTrackingPotentialLongMousePress(toAPI(page), &userDataToPass, m_client.base.clientInfo);
+    userData = adoptRef(toImpl(userDataToPass));
+}
+
+void InjectedBundlePageUIClient::didClickAutoFillButton(WebPage& page, InjectedBundleNodeHandle& nodeHandle, RefPtr<API::Object>& userData)
+{
+    if (!m_client.didClickAutoFillButton)
+        return;
+
+    WKTypeRef userDataToPass = nullptr;
+    m_client.didClickAutoFillButton(toAPI(&page), toAPI(&nodeHandle), &userDataToPass, m_client.base.clientInfo);
     userData = adoptRef(toImpl(userDataToPass));
 }
 

@@ -33,6 +33,7 @@
 #include "ContextMenuClient.h"
 #include "DeviceMotionClient.h"
 #include "DeviceOrientationClient.h"
+#include "DiagnosticLoggingClient.h"
 #include "DragClient.h"
 #include "EditorClient.h"
 #include "TextCheckerClient.h"
@@ -43,6 +44,7 @@
 #include "Page.h"
 #include "ProgressTrackerClient.h"
 #include "ResourceError.h"
+#include "VisitedLinkStore.h"
 #include <wtf/text/StringView.h>
 
 /*
@@ -153,19 +155,13 @@ public:
 
     virtual void print(Frame*) override { }
 
-#if ENABLE(SQL_DATABASE)
     virtual void exceededDatabaseQuota(Frame*, const String&, DatabaseDetails) override { }
-#endif
 
     virtual void reachedMaxAppCacheSize(int64_t) override { }
     virtual void reachedApplicationCacheOriginQuota(SecurityOrigin*, int64_t) override { }
 
 #if ENABLE(INPUT_TYPE_COLOR)
-    virtual PassOwnPtr<ColorChooser> createColorChooser(ColorChooserClient*, const Color&) override;
-#endif
-
-#if ENABLE(DATE_AND_TIME_INPUT_TYPES) && !PLATFORM(IOS)
-    virtual PassRefPtr<DateTimeChooser> openDateTimeChooser(DateTimeChooserClient*, const DateTimeChooserParameters&) override;
+    virtual std::unique_ptr<ColorChooser> createColorChooser(ColorChooserClient*, const Color&) override;
 #endif
 
     virtual void runOpenPanel(Frame*, PassRefPtr<FileChooser>) override;
@@ -182,6 +178,7 @@ public:
     virtual void scrollRectIntoView(const IntRect&) const override { }
 
     virtual void attachRootGraphicsLayer(Frame*, GraphicsLayer*) override { }
+    virtual void attachViewOverlayGraphicsLayer(Frame*, GraphicsLayer*) override { }
     virtual void setNeedsOneShotDrawingSynchronization() override { }
     virtual void scheduleCompositingLayerFlush() override { }
 
@@ -226,7 +223,7 @@ public:
     virtual void needTouchEvents(bool) override { }
 #endif
     
-    virtual void numWheelEventHandlersChanged(unsigned) override { }
+    virtual void wheelEventHandlersChanged(bool) override { }
     
     virtual bool isEmptyChromeClient() const override { return true; }
 
@@ -449,6 +446,8 @@ public:
     virtual void didBeginEditing() override { }
     virtual void respondToChangedContents() override { }
     virtual void respondToChangedSelection(Frame*) override { }
+    virtual void didChangeSelectionAndUpdateLayout() override { }
+    virtual void discardedComposition(Frame*) override { }
     virtual void didEndEditing() override { }
     virtual void willWriteSelectionToPasteboard(Range*) override { }
     virtual void didWriteSelectionToPasteboard() override { }
@@ -520,10 +519,6 @@ public:
     virtual void toggleAutomaticSpellingCorrection() override { }
 #endif
 
-#if ENABLE(DELETION_UI)
-    virtual bool shouldShowDeleteInterface(HTMLElement*) override { return false; }
-#endif
-
 #if PLATFORM(GTK)
     virtual bool shouldShowUnicodeMenu() override { return false; }
 #endif
@@ -550,7 +545,7 @@ public:
     virtual void contextMenuDestroyed() override { }
 
 #if USE(CROSS_PLATFORM_CONTEXT_MENUS)
-    virtual PassOwnPtr<ContextMenu> customizeMenu(PassOwnPtr<ContextMenu>) override;
+    virtual std::unique_ptr<ContextMenu> customizeMenu(std::unique_ptr<ContextMenu>) override;
 #else
     virtual PlatformMenuDescription getCustomMenuFromDefaultItems(ContextMenu*) override { return 0; }
 #endif
@@ -562,6 +557,8 @@ public:
     virtual bool isSpeaking() override { return false; }
     virtual void speak(const String&) override { }
     virtual void stopSpeaking() override { }
+
+    virtual ContextMenuItem shareMenuItem(const HitTestResult&) override { return ContextMenuItem(); }
 
 #if PLATFORM(COCOA)
     virtual void searchWithSpotlight() override { }
@@ -596,7 +593,7 @@ public:
 
     virtual void inspectorDestroyed() override { }
     
-    virtual InspectorFrontendChannel* openInspectorFrontend(InspectorController*) override { return 0; }
+    virtual Inspector::FrontendChannel* openInspectorFrontend(InspectorController*) override { return 0; }
     virtual void closeInspectorFrontend() override { }
     virtual void bringFrontendToFront() override { }
 
@@ -633,7 +630,15 @@ class EmptyProgressTrackerClient : public ProgressTrackerClient {
     virtual void progressFinished(Frame&) override { }
 };
 
-void fillWithEmptyClients(Page::PageClients&);
+class EmptyDiagnosticLoggingClient final : public DiagnosticLoggingClient {
+    virtual void logDiagnosticMessage(const String&, const String&, ShouldSample) override { }
+    virtual void logDiagnosticMessageWithResult(const String&, const String&, DiagnosticLoggingResultType, ShouldSample) override { }
+    virtual void logDiagnosticMessageWithValue(const String&, const String&, const String&, ShouldSample) override { }
+
+    virtual void mainFrameDestroyed() override { }
+};
+
+void fillWithEmptyClients(PageConfiguration&);
 
 }
 

@@ -38,23 +38,21 @@ class SVGFEImageElement final : public SVGFilterPrimitiveStandardAttributes,
                                 public SVGExternalResourcesRequired,
                                 public CachedImageClient {
 public:
-    static PassRefPtr<SVGFEImageElement> create(const QualifiedName&, Document&);
+    static Ref<SVGFEImageElement> create(const QualifiedName&, Document&);
 
     virtual ~SVGFEImageElement();
-
-protected:
-    virtual void didNotifySubtreeInsertions(ContainerNode*) override;
 
 private:
     SVGFEImageElement(const QualifiedName&, Document&);
 
-    bool isSupportedAttribute(const QualifiedName&);
+    virtual void didNotifySubtreeInsertions(ContainerNode*) override;
+
     virtual void parseAttribute(const QualifiedName&, const AtomicString&) override;
     virtual void svgAttributeChanged(const QualifiedName&) override;
     virtual void notifyFinished(CachedResource*) override;
 
     virtual void addSubresourceAttributeURLs(ListHashSet<URL>&) const override;
-    virtual PassRefPtr<FilterEffect> build(SVGFilterBuilder*, Filter*) override;
+    virtual RefPtr<FilterEffect> build(SVGFilterBuilder*, Filter&) override;
 
     void clearResourceReferences();
     void requestImageResource();

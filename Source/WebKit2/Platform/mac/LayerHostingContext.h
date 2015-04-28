@@ -32,14 +32,18 @@
 #include <wtf/RetainPtr.h>
 
 OBJC_CLASS CALayer;
-typedef struct __WKCAContextRef *WKCAContextRef;
+OBJC_CLASS CAContext;
+
+namespace WebCore {
+class MachSendRight;
+}
 
 namespace WebKit {
 
 class LayerHostingContext {
     WTF_MAKE_NONCOPYABLE(LayerHostingContext);
 public:
-    static std::unique_ptr<LayerHostingContext> createForPort(mach_port_t serverPort);
+    static std::unique_ptr<LayerHostingContext> createForPort(const WebCore::MachSendRight& serverPort);
 #if HAVE(OUT_OF_PROCESS_LAYER_HOSTING)
     static std::unique_ptr<LayerHostingContext> createForExternalHostingProcess();
 #endif
@@ -58,9 +62,13 @@ public:
     void setColorSpace(CGColorSpaceRef);
     CGColorSpaceRef colorSpace() const;
 
+#if PLATFORM(IOS) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 101000
+    void setFencePort(mach_port_t);
+#endif
+
 private:
     LayerHostingMode m_layerHostingMode;
-    RetainPtr<WKCAContextRef> m_context;
+    RetainPtr<CAContext> m_context;
 };
 
 } // namespace WebKit

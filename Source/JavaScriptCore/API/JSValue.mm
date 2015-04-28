@@ -41,8 +41,8 @@
 #import <wtf/HashMap.h>
 #import <wtf/HashSet.h>
 #import <wtf/ObjcRuntimeExtras.h>
+#import <wtf/SpinLock.h>
 #import <wtf/Vector.h>
-#import <wtf/TCSpinLock.h>
 #import <wtf/text/WTFString.h>
 #import <wtf/text/StringHash.h>
 
@@ -354,6 +354,16 @@ NSString * const JSPropertyDescriptorSetKey = @"set";
 - (BOOL)isObject
 {
     return JSValueIsObject([_context JSGlobalContextRef], m_value);
+}
+
+- (BOOL)isArray
+{
+    return JSValueIsArray([_context JSGlobalContextRef], m_value);
+}
+
+- (BOOL)isDate
+{
+    return JSValueIsDate([_context JSGlobalContextRef], m_value);
 }
 
 - (BOOL)isEqualToObject:(id)value
@@ -1102,7 +1112,7 @@ static StructHandlers* createStructHandlerMap()
 
 static StructTagHandler* handerForStructTag(const char* encodedType)
 {
-    static SpinLock handerForStructTagLock = SPINLOCK_INITIALIZER;
+    static StaticSpinLock handerForStructTagLock;
     SpinLockHolder lockHolder(&handerForStructTagLock);
 
     static StructHandlers* structHandlers = createStructHandlerMap();

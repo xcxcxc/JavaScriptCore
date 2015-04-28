@@ -24,7 +24,8 @@
  */
 
 WebInspector.NavigationBar = function(element, navigationItems, role, label) {
-    WebInspector.Object.call(this);
+    // FIXME: Convert this to a WebInspector.Object subclass, and call super().
+    // WebInspector.Object.call(this);
 
     this._element = element || document.createElement("div");
     this._element.classList.add(this.constructor.StyleClassName || WebInspector.NavigationBar.StyleClassName);
@@ -54,7 +55,8 @@ WebInspector.NavigationBar = function(element, navigationItems, role, label) {
     document.head.appendChild(this._styleElement);
 };
 
-WebInspector.Object.addConstructorFunctions(WebInspector.NavigationBar);
+// FIXME: Move to a WebInspector.Object subclass and we can remove this.
+WebInspector.Object.deprecatedAddConstructorFunctions(WebInspector.NavigationBar);
 
 WebInspector.NavigationBar.StyleClassName = "navigation-bar";
 WebInspector.NavigationBar.CollapsedStyleClassName = "collapsed";
@@ -107,7 +109,7 @@ WebInspector.NavigationBar.prototype = {
         return navigationItem;
     },
 
-    removeNavigationItem: function(navigationItemOrIdentifierOrIndex, index)
+    removeNavigationItem: function(navigationItemOrIdentifierOrIndex)
     {
         var navigationItem = this._findNavigationItem(navigationItemOrIdentifierOrIndex);
         if (!navigationItem)
@@ -254,7 +256,7 @@ WebInspector.NavigationBar.prototype = {
         var navigationItem = null;
 
         if (navigationItemOrIdentifierOrIndex instanceof WebInspector.NavigationItem) {
-            if (this._navigationItems.contains(navigationItemOrIdentifierOrIndex))
+            if (this._navigationItems.includes(navigationItemOrIdentifierOrIndex))
                 navigationItem = navigationItemOrIdentifierOrIndex;
         } else if (typeof navigationItemOrIdentifierOrIndex === "number") {
             navigationItem = this._navigationItems[navigationItemOrIdentifierOrIndex];

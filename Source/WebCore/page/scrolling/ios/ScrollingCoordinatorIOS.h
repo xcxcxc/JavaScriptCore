@@ -48,15 +48,15 @@ public:
     virtual void commitTreeStateIfNeeded() override;
 
     // Handle the wheel event on the scrolling thread. Returns whether the event was handled or not.
-    virtual bool handleWheelEvent(FrameView*, const PlatformWheelEvent&) override { return false; }
+    virtual bool handleWheelEvent(FrameView&, const PlatformWheelEvent&) override { return false; }
 
 private:
     virtual void scheduleTreeStateCommit() override;
 
-    void scrollingStateTreeCommitterTimerFired(Timer<ScrollingCoordinatorIOS>*);
+    void scrollingStateTreeCommitterTimerFired();
     void commitTreeState();
 
-    Timer<ScrollingCoordinatorIOS> m_scrollingStateTreeCommitterTimer;
+    Timer m_scrollingStateTreeCommitterTimer;
 };
 
 } // namespace WebCore

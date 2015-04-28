@@ -28,6 +28,7 @@
 #include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
 #include <wtf/text/AtomicStringHash.h>
+#include <wtf/text/TextPosition.h>
 
 namespace WebCore {
 
@@ -35,21 +36,20 @@ class CSSStyleSheet;
 class CachedCSSStyleSheet;
 class Document;
 class Node;
-class SecurityOrigin;
 class StyleRuleBase;
 class StyleRuleImport;
 
 class StyleSheetContents : public RefCounted<StyleSheetContents> {
 public:
-    static PassRef<StyleSheetContents> create(const CSSParserContext& context = CSSParserContext(CSSStrictMode))
+    static Ref<StyleSheetContents> create(const CSSParserContext& context = CSSParserContext(CSSStrictMode))
     {
         return adoptRef(*new StyleSheetContents(0, String(), context));
     }
-    static PassRef<StyleSheetContents> create(const String& originalURL, const CSSParserContext& context)
+    static Ref<StyleSheetContents> create(const String& originalURL, const CSSParserContext& context)
     {
         return adoptRef(*new StyleSheetContents(0, originalURL, context));
     }
-    static PassRef<StyleSheetContents> create(StyleRuleImport* ownerRule, const String& originalURL, const CSSParserContext& context)
+    static Ref<StyleSheetContents> create(StyleRuleImport* ownerRule, const String& originalURL, const CSSParserContext& context)
     {
         return adoptRef(*new StyleSheetContents(ownerRule, originalURL, context));
     }
@@ -60,9 +60,9 @@ public:
 
     const AtomicString& determineNamespace(const AtomicString& prefix);
 
-    void parseAuthorStyleSheet(const CachedCSSStyleSheet*, const SecurityOrigin*);
+    void parseAuthorStyleSheet(const CachedCSSStyleSheet*);
     WEBCORE_EXPORT bool parseString(const String&);
-    bool parseStringAtLine(const String&, int startLineNumber, bool);
+    bool parseStringAtPosition(const String&, const TextPosition&, bool createdByParser);
 
     bool isCacheable() const;
 
@@ -91,7 +91,8 @@ public:
     void parserAddNamespace(const AtomicString& prefix, const AtomicString& uri);
     void parserAppendRule(PassRefPtr<StyleRuleBase>);
     void parserSetEncodingFromCharsetRule(const String& encoding); 
-    void parserSetUsesRemUnits(bool b) { m_usesRemUnits = b; }
+    void parserSetUsesRemUnits() { m_usesRemUnits = true; }
+    void parserSetUsesStyleBasedEditability() { m_usesStyleBasedEditability = true; }
 
     void clearRules();
 
@@ -117,13 +118,14 @@ public:
     StyleRuleBase* ruleAt(unsigned index) const;
 
     bool usesRemUnits() const { return m_usesRemUnits; }
+    bool usesStyleBasedEditability() const { return m_usesStyleBasedEditability; }
 
     unsigned estimatedSizeInBytes() const;
     
     bool wrapperInsertRule(PassRefPtr<StyleRuleBase>, unsigned index);
     void wrapperDeleteRule(unsigned index);
 
-    PassRef<StyleSheetContents> copy() const { return adoptRef(*new StyleSheetContents(*this)); }
+    Ref<StyleSheetContents> copy() const { return adoptRef(*new StyleSheetContents(*this)); }
 
     void registerClient(CSSStyleSheet*);
     void unregisterClient(CSSStyleSheet*);
@@ -159,6 +161,7 @@ private:
     bool m_hasSyntacticallyValidCSSHeader : 1;
     bool m_didLoadErrorOccur : 1;
     bool m_usesRemUnits : 1;
+    bool m_usesStyleBasedEditability : 1;
     bool m_isMutable : 1;
     bool m_isInMemoryCache : 1;
     

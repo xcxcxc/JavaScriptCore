@@ -32,6 +32,7 @@
 #include "WebGLProgram.h"
 #include "WebGLRenderbuffer.h"
 #include "WebGLTexture.h"
+#include "WebGLVertexArrayObject.h"
 #include "WebGLVertexArrayObjectOES.h"
 #include <runtime/Float32Array.h>
 #include <runtime/Int32Array.h>
@@ -48,7 +49,7 @@ namespace WebCore {
 // similar variants. For reference counted types, increments and
 // decrements the reference count of the target object.
 
-class WebGLGetInfo {
+class WebGLGetInfo final {
 public:
     enum Type {
         kTypeBool,
@@ -58,6 +59,7 @@ public:
         kTypeNull,
         kTypeString,
         kTypeUnsignedInt,
+        kTypeInt64,
         kTypeWebGLBuffer,
         kTypeWebGLFloatArray,
         kTypeWebGLFramebuffer,
@@ -69,6 +71,7 @@ public:
         kTypeWebGLUnsignedByteArray,
         kTypeWebGLUnsignedIntArray,
         kTypeWebGLVertexArrayObjectOES,
+        kTypeWebGLVertexArrayObject,
     };
 
     explicit WebGLGetInfo(bool value);
@@ -79,6 +82,7 @@ public:
     WebGLGetInfo();
     explicit WebGLGetInfo(const String& value);
     explicit WebGLGetInfo(unsigned int value);
+    explicit WebGLGetInfo(long long value);
     explicit WebGLGetInfo(PassRefPtr<WebGLBuffer> value);
     explicit WebGLGetInfo(PassRefPtr<Float32Array> value);
     explicit WebGLGetInfo(PassRefPtr<WebGLFramebuffer> value);
@@ -91,8 +95,9 @@ public:
     explicit WebGLGetInfo(PassRefPtr<Uint8Array> value);
     explicit WebGLGetInfo(PassRefPtr<Uint32Array> value);
     explicit WebGLGetInfo(PassRefPtr<WebGLVertexArrayObjectOES> value);
+    explicit WebGLGetInfo(PassRefPtr<WebGLVertexArrayObject> value);
 
-    virtual ~WebGLGetInfo();
+    ~WebGLGetInfo();
 
     Type getType() const;
 
@@ -102,6 +107,7 @@ public:
     int getInt() const;
     const String& getString() const;
     unsigned int getUnsignedInt() const;
+    long long getInt64() const;
     PassRefPtr<WebGLBuffer> getWebGLBuffer() const;
     PassRefPtr<Float32Array> getWebGLFloatArray() const;
     PassRefPtr<WebGLFramebuffer> getWebGLFramebuffer() const;
@@ -114,6 +120,7 @@ public:
     PassRefPtr<Uint8Array> getWebGLUnsignedByteArray() const;
     PassRefPtr<Uint32Array> getWebGLUnsignedIntArray() const;
     PassRefPtr<WebGLVertexArrayObjectOES> getWebGLVertexArrayObjectOES() const;
+    PassRefPtr<WebGLVertexArrayObject> getWebGLVertexArrayObject() const;
 
 private:
     Type m_type;
@@ -123,6 +130,7 @@ private:
     int m_int;
     String m_string;
     unsigned int m_unsignedInt;
+    long long m_int64;
     RefPtr<WebGLBuffer> m_webglBuffer;
     RefPtr<Float32Array> m_webglFloatArray;
     RefPtr<WebGLFramebuffer> m_webglFramebuffer;
@@ -134,7 +142,8 @@ private:
     RefPtr<WebGLTexture> m_webglTexture;
     RefPtr<Uint8Array> m_webglUnsignedByteArray;
     RefPtr<Uint32Array> m_webglUnsignedIntArray;
-    RefPtr<WebGLVertexArrayObjectOES> m_webglVertexArrayObject;
+    RefPtr<WebGLVertexArrayObjectOES> m_webglVertexArrayObjectOES;
+    RefPtr<WebGLVertexArrayObject> m_webglVertexArrayObject;
 };
 
 } // namespace WebCore

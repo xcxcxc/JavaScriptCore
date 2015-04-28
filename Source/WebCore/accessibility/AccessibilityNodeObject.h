@@ -61,19 +61,14 @@ enum MouseButtonListenerResultFilter {
 };
 
 class AccessibilityNodeObject : public AccessibilityObject {
-protected:
-    explicit AccessibilityNodeObject(Node*);
 public:
-    static PassRefPtr<AccessibilityNodeObject> create(Node*);
+    static Ref<AccessibilityNodeObject> create(Node*);
     virtual ~AccessibilityNodeObject();
 
     virtual void init() override;
-    
-    virtual bool isAccessibilityNodeObject() const override { return true; }
 
     virtual bool canvasHasFallbackContent() const override;
 
-    virtual bool isAnchor() const override;
     virtual bool isControl() const override;
     virtual bool isFieldset() const override;
     virtual bool isGroup() const override;
@@ -93,6 +88,7 @@ public:
     virtual bool isNativeImage() const override;
     virtual bool isNativeTextControl() const override;
     virtual bool isPasswordField() const override;
+    virtual AccessibilityObject* passwordFieldOrContainingPasswordField() override;
     virtual bool isProgressIndicator() const override;
     virtual bool isSearchField() const override;
     virtual bool isSlider() const override;
@@ -159,6 +155,8 @@ public:
     virtual LayoutRect elementRect() const override;
 
 protected:
+    explicit AccessibilityNodeObject(Node*);
+
     AccessibilityRole m_ariaRole;
     bool m_childrenDirty;
     mutable AccessibilityRole m_roleForMSAA;
@@ -194,8 +192,7 @@ protected:
     AccessibilityObject* menuButtonForMenu() const;
 
 private:
-    Node* m_node;
-
+    virtual bool isAccessibilityNodeObject() const override final { return true; }
     virtual void accessibilityText(Vector<AccessibilityText>&) override;
     virtual void titleElementText(Vector<AccessibilityText>&) const;
     void alternativeText(Vector<AccessibilityText>&) const;
@@ -205,10 +202,12 @@ private:
     void ariaLabeledByText(Vector<AccessibilityText>&) const;
     virtual bool computeAccessibilityIsIgnored() const override;
     bool usesAltTagForTextComputation() const;
+
+    Node* m_node;
 };
 
-ACCESSIBILITY_OBJECT_TYPE_CASTS(AccessibilityNodeObject, isAccessibilityNodeObject())
-
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_ACCESSIBILITY(AccessibilityNodeObject, isAccessibilityNodeObject())
 
 #endif // AccessibilityNodeObject_h

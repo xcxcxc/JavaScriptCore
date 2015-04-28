@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -53,16 +53,25 @@ public:
         if (m_graph.m_form == SSA) {
             for (BasicBlock* block : m_graph.blocksInPreOrder())
                 fixupBlock(block);
+            
+            // This is like cleanVariables, but has a much simpler approach to GetLocal.
+            for (unsigned i = m_graph.m_arguments.size(); i--;) {
+                Node* node = m_graph.m_arguments[i];
+                if (!node)
+                    continue;
+                if (node->op() != Phantom && node->op() != Check && node->shouldGenerate())
+                    continue;
+                m_graph.m_arguments[i] = nullptr;
+            }
         } else {
             RELEASE_ASSERT(m_graph.m_form == ThreadedCPS);
             
             for (BlockIndex blockIndex = 0; blockIndex < m_graph.numBlocks(); ++blockIndex)
                 fixupBlock(m_graph.block(blockIndex));
-            
             cleanVariables(m_graph.m_arguments);
         }
         
-        // Just do a basic HardPhantom/Phantom/Check clean-up.
+        // Just do a basic Phantom/Check clean-up.
         for (BlockIndex blockIndex = m_graph.numBlocks(); blockIndex--;) {
             BasicBlock* block = m_graph.block(blockIndex);
             if (!block)
@@ -73,7 +82,6 @@ public:
                 Node* node = block->at(sourceIndex++);
                 switch (node->op()) {
                 case Check:
-                case HardPhantom:
                 case Phantom:
                     if (node->children.isEmpty())
                         continue;
@@ -134,23 +142,11 @@ private:
                 continue;
                 
             switch (node->op()) {
-            case MovHint: {
-                // Check if the child is dead. MovHint's child would only be a Phantom or
-                // Check if we had just killed it.
-                if (node->child1()->op() == Phantom || node->child1()->op() == Check) {
-                    node->setOpAndDefaultFlags(ZombieHint);
-                    node->child1() = Edge();
-                    break;
-                }
-                break;
-            }
-                
-            case ZombieHint: {
-                // Currently we assume that DCE runs only once.
+            case MovHint:
+            case ZombieHint:
+                // These are not killable. (They once were.)
                 RELEASE_ASSERT_NOT_REACHED();
-                break;
-            }
-            
+                
             default: {
                 if (node->flags() & NodeHasVarArgs) {
                     for (unsigned childIdx = node->firstChild(); childIdx < node->firstChild() + node->numChildren(); childIdx++) {
@@ -196,37 +192,7 @@ private:
             if (node->op() == GetLocal) {
                 node = node->child1().node();
                 
-                // FIXME: In the case that the variable is captured, we really want to be able
-                // to replace the variable-at-tail with the last use of the variable in the same
-                // way that CPS rethreading would do. The child of the GetLocal isn't necessarily
-                // the same as what CPS rethreading would do. For example, we may have:
-                //
-                // a: SetLocal(...) // live
-                // b: GetLocal(@a) // live
-                // c: GetLocal(@a) // dead
-                //
-                // When killing @c, the code below will set the variable-at-tail to @a, while CPS
-                // rethreading would have set @b. This is a benign bug, since all clients of CPS
-                // only use the variable-at-tail of captured variables to get the
-                // VariableAccessData and observe that it is in fact captured. But, this feels
-                // like it could cause bugs in the future.
-                //
-                // It's tempting to just dethread and then invoke CPS rethreading, but CPS
-                // rethreading fails to preserve exact ref-counts. So we would need a fixpoint.
-                // It's probably the case that this fixpoint will be guaranteed to converge after
-                // the second iteration (i.e. the second run of DCE will not kill anything and so
-                // will not need to dethread), but for now the safest approach is probably just to
-                // allow for this tiny bit of sloppiness.
-                //
-                // Another possible solution would be to simply say that DCE dethreads but then
-                // we never rethread before going to the backend. That feels intuitively right
-                // because it's unlikely that any of the phases after DCE in the backend rely on
-                // ThreadedCPS.
-                //
-                // https://bugs.webkit.org/show_bug.cgi?id=130115
-                ASSERT(
-                    node->op() == Phi || node->op() == SetArgument
-                    || node->variableAccessData()->isCaptured());
+                ASSERT(node->op() == Phi || node->op() == SetArgument);
                 
                 if (node->shouldGenerate()) {
                     variables[i] = node;

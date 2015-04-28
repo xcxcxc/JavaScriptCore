@@ -29,7 +29,6 @@
 
 #include <runtime/ArrayBuffer.h>
 #include <wtf/Forward.h>
-#include <wtf/OwnPtr.h>
 #include <wtf/RefCounted.h>
 #include <wtf/ThreadSafeRefCounted.h>
 #include <wtf/Vector.h>
@@ -118,7 +117,7 @@ public:
     //      }
     WEBCORE_EXPORT unsigned getSomeData(const char*& data, unsigned position = 0) const;
 
-    void tryReplaceContentsWithPlatformBuffer(SharedBuffer*);
+    void tryReplaceContentsWithPlatformBuffer(SharedBuffer&);
     WEBCORE_EXPORT bool hasPlatformData() const;
 
     struct DataBuffer : public ThreadSafeRefCounted<DataBuffer> {
@@ -158,6 +157,7 @@ private:
 #else
     mutable Vector<char*> m_segments;
 #endif
+
 #if USE(CF)
     explicit SharedBuffer(CFDataRef);
     RetainPtr<CFDataRef> m_cfData;

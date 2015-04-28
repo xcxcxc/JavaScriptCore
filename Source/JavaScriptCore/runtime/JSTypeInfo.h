@@ -43,12 +43,12 @@ static const unsigned ImplementsDefaultHasInstance = 1 << 3;
 static const unsigned IsEnvironmentRecord = 1 << 4;
 static const unsigned OverridesGetOwnPropertySlot = 1 << 5;
 static const unsigned InterceptsGetOwnPropertySlotByIndexEvenWhenLengthIsNotZero = 1 << 6;
+static const unsigned StructureIsImmortal = 1 << 7;
 
 static const unsigned OverridesGetPropertyNames = 1 << 8;
 static const unsigned ProhibitsPropertyCaching = 1 << 9;
 static const unsigned HasImpureGetOwnPropertySlot = 1 << 10;
 static const unsigned NewImpurePropertyFiresWatchpoints = 1 << 11;
-static const unsigned StructureIsImmortal = 1 << 12;
 
 class TypeInfo {
 public:
@@ -77,7 +77,6 @@ public:
     static bool isObject(JSType type) { return type >= ObjectType; }
     bool isFinalObject() const { return type() == FinalObjectType; }
     bool isNumberObject() const { return type() == NumberObjectType; }
-    bool isName() const { return type() == NameInstanceType; }
 
     unsigned flags() const { return (static_cast<unsigned>(m_flags2) << 8) | static_cast<unsigned>(m_flags); }
     bool masqueradesAsUndefined() const { return isSetOnFlags1(MasqueradesAsUndefined); }
@@ -92,7 +91,7 @@ public:
     bool prohibitsPropertyCaching() const { return isSetOnFlags2(ProhibitsPropertyCaching); }
     bool hasImpureGetOwnPropertySlot() const { return isSetOnFlags2(HasImpureGetOwnPropertySlot); }
     bool newImpurePropertyFiresWatchpoints() const { return isSetOnFlags2(NewImpurePropertyFiresWatchpoints); }
-    bool structureIsImmortal() const { return isSetOnFlags2(StructureIsImmortal); }
+    bool structureIsImmortal() const { return isSetOnFlags1(StructureIsImmortal); }
 
     static ptrdiff_t flagsOffset()
     {

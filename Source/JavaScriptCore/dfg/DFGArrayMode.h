@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012, 2013, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -65,7 +65,9 @@ enum Type {
     ArrayStorage,
     SlowPutArrayStorage,
     
-    Arguments,
+    DirectArguments,
+    ScopedArguments,
+    
     Int8Array,
     Int16Array,
     Int32Array,
@@ -294,7 +296,8 @@ public:
         case Array::Unprofiled:
         case Array::ForceExit:
         case Array::Generic:
-        case Array::Arguments:
+        case Array::DirectArguments:
+        case Array::ScopedArguments:
             return false;
         default:
             return true;
@@ -320,11 +323,9 @@ public:
     {
         switch (type()) {
         case Array::String:
+        case Array::DirectArguments:
+        case Array::ScopedArguments:
             return ArrayMode(Array::Generic);
-#if USE(JSVALUE32_64)
-        case Array::Arguments:
-            return ArrayMode(Array::Generic);
-#endif
         default:
             return *this;
         }
@@ -406,7 +407,7 @@ public:
         case Array::ArrayStorage:
             return arrayModesWithIndexingShape(ArrayStorageShape);
         case Array::SlowPutArrayStorage:
-            return arrayModesWithIndexingShape(SlowPutArrayStorageShape);
+            return arrayModesWithIndexingShapes(SlowPutArrayStorageShape, ArrayStorageShape);
         default:
             return asArrayModes(NonArray);
         }
@@ -462,6 +463,13 @@ private:
         }
     }
     
+    ArrayModes arrayModesWithIndexingShapes(IndexingType shape1, IndexingType shape2) const
+    {
+        ArrayModes arrayMode1 = arrayModesWithIndexingShape(shape1);
+        ArrayModes arrayMode2 = arrayModesWithIndexingShape(shape2);
+        return arrayMode1 | arrayMode2;
+    }
+
     bool alreadyChecked(Graph&, Node*, AbstractValue&, IndexingType shape) const;
     
     union {

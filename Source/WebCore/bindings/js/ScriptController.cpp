@@ -35,15 +35,15 @@
 #include "JSDocument.h"
 #include "JSMainThreadExecState.h"
 #include "MainFrame.h"
+#include "MemoryPressureHandler.h"
 #include "NP_jsobject.h"
 #include "Page.h"
 #include "PageConsoleClient.h"
 #include "PageGroup.h"
-#include "PluginView.h"
+#include "PluginViewBase.h"
 #include "ScriptSourceCode.h"
 #include "ScriptableDocumentParser.h"
 #include "Settings.h"
-#include "StorageNamespace.h"
 #include "UserGestureIndicator.h"
 #include "WebCoreJSClientData.h"
 #include "npruntime_impl.h"
@@ -52,6 +52,7 @@
 #include <debugger/Debugger.h>
 #include <heap/StrongInlines.h>
 #include <inspector/ScriptCallStack.h>
+#include <profiler/Profile.h>
 #include <runtime/InitializeThreading.h>
 #include <runtime/JSLock.h>
 #include <wtf/Threading.h>
@@ -60,6 +61,18 @@
 using namespace JSC;
 
 namespace WebCore {
+
+static void collectGarbageAfterWindowShellDestruction()
+{
+    // Make sure to GC Extra Soon(tm) during memory pressure conditions
+    // to soften high peaks of memory usage during navigation.
+    if (MemoryPressureHandler::singleton().isUnderMemoryPressure()) {
+        // NOTE: We do the collection on next runloop to ensure that there's no pointer
+        //       to the window object on the stack.
+        gcController().garbageCollectOnNextRunLoop();
+    } else
+        gcController().garbageCollectSoon();
+}
 
 void ScriptController::initializeThreading()
 {
@@ -99,7 +112,7 @@ ScriptController::~ScriptController()
             iter->value->window()->setConsoleClient(nullptr);
             destroyWindowShell(*iter->key);
         }
-        gcController().garbageCollectSoon();
+        collectGarbageAfterWindowShellDestruction();
     }
 }
 
@@ -145,13 +158,13 @@ Deprecated::ScriptValue ScriptController::evaluateInWorld(const ScriptSourceCode
 
     Ref<Frame> protect(m_frame);
 
-    InspectorInstrumentationCookie cookie = InspectorInstrumentation::willEvaluateScript(&m_frame, sourceURL, sourceCode.startLine());
+    InspectorInstrumentationCookie cookie = InspectorInstrumentation::willEvaluateScript(m_frame, sourceURL, sourceCode.startLine());
 
     JSValue evaluationException;
 
     JSValue returnValue = JSMainThreadExecState::evaluate(exec, jsSourceCode, shell, &evaluationException);
 
-    InspectorInstrumentation::didEvaluateScript(cookie, &m_frame);
+    InspectorInstrumentation::didEvaluateScript(cookie, m_frame);
 
     if (evaluationException) {
         reportException(exec, evaluationException, sourceCode.cachedScript());
@@ -228,7 +241,7 @@ void ScriptController::clearWindowShell(DOMWindow* newDOMWindow, bool goingIntoP
     // It's likely that resetting our windows created a lot of garbage, unless
     // it went in a back/forward cache.
     if (!goingIntoPageCache)
-        gcController().garbageCollectSoon();
+        collectGarbageAfterWindowShellDestruction();
 }
 
 JSDOMWindowShell* ScriptController::initScript(DOMWrapperWorld& world)
@@ -241,8 +254,13 @@ JSDOMWindowShell* ScriptController::initScript(DOMWrapperWorld& world)
 
     windowShell->window()->updateDocument();
 
-    if (m_frame.document())
-        windowShell->window()->setEvalEnabled(m_frame.document()->contentSecurityPolicy()->allowEval(0, ContentSecurityPolicy::SuppressReport), m_frame.document()->contentSecurityPolicy()->evalDisabledErrorMessage());
+    if (m_frame.document()) {
+        bool shouldBypassMainWorldContentSecurityPolicy = !world.isNormal();
+        if (shouldBypassMainWorldContentSecurityPolicy)
+            windowShell->window()->setEvalEnabled(true);
+        else
+            windowShell->window()->setEvalEnabled(m_frame.document()->contentSecurityPolicy()->allowEval(0, ContentSecurityPolicy::SuppressReport), m_frame.document()->contentSecurityPolicy()->evalDisabledErrorMessage());
+    }
 
     if (Page* page = m_frame.page()) {
         attachDebugger(windowShell, page->debugger());
@@ -257,6 +275,11 @@ JSDOMWindowShell* ScriptController::initScript(DOMWrapperWorld& world)
 
 TextPosition ScriptController::eventHandlerPosition() const
 {
+    // FIXME: If we are not currently parsing, we should use our current location
+    // in JavaScript, to cover cases like "element.setAttribute('click', ...)".
+
+    // FIXME: This location maps to the end of the HTML tag, and not to the
+    // exact column number belonging to the event handler attribute.
     ScriptableDocumentParser* parser = m_frame.document()->scriptableDocumentParser();
     if (parser)
         return parser->textPosition();
@@ -360,7 +383,6 @@ PassRefPtr<Bindings::RootObject> ScriptController::createRootObject(void* native
     return rootObject.release();
 }
 
-#if ENABLE(INSPECTOR)
 void ScriptController::collectIsolatedContexts(Vector<std::pair<JSC::ExecState*, SecurityOrigin*>>& result)
 {
     for (ShellMap::iterator iter = m_windowShells.begin(); iter != m_windowShells.end(); ++iter) {
@@ -369,7 +391,6 @@ void ScriptController::collectIsolatedContexts(Vector<std::pair<JSC::ExecState*,
         result.append(std::pair<JSC::ExecState*, SecurityOrigin*>(exec, origin));
     }
 }
-#endif
 
 #if ENABLE(NETSCAPE_PLUGIN_API)
 
@@ -409,10 +430,10 @@ NPObject* ScriptController::createScriptObjectForPluginElement(HTMLPlugInElement
 #if !PLATFORM(COCOA)
 PassRefPtr<JSC::Bindings::Instance> ScriptController::createScriptInstanceForWidget(Widget* widget)
 {
-    if (!widget->isPluginView())
-        return 0;
+    if (!is<PluginViewBase>(*widget))
+        return nullptr;
 
-    return toPluginView(widget)->bindingInstance();
+    return downcast<PluginViewBase>(*widget).bindingInstance();
 }
 #endif
 

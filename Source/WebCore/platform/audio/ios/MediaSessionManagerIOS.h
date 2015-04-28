@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,23 +45,25 @@ class MediaSessionManageriOS : public MediaSessionManager {
 public:
     virtual ~MediaSessionManageriOS();
 
+    void externalOutputDeviceAvailableDidChange();
+    virtual bool hasWirelessTargetsAvailable() override;
+
 private:
     friend class MediaSessionManager;
 
-    virtual void sessionWillBeginPlayback(MediaSession&) override;
+    MediaSessionManageriOS();
+
+    virtual bool sessionWillBeginPlayback(MediaSession&) override;
     virtual void sessionWillEndPlayback(MediaSession&) override;
     
     void updateNowPlayingInfo();
     
     virtual void resetRestrictions() override;
 
-#if ENABLE(IOS_AIRPLAY)
-    virtual bool hasWirelessTargetsAvailable() override;
-    virtual void startMonitoringAirPlayRoutes() override;
-    virtual void stopMonitoringAirPlayRoutes() override;
-#endif
+    virtual void configureWireLessTargetMonitoring() override;
 
-    MediaSessionManageriOS();
+    virtual bool sessionCanLoadMedia(const MediaSession&) const override;
+    
     RetainPtr<WebMediaSessionHelper> m_objcObserver;
 };
 

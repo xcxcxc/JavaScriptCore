@@ -28,13 +28,14 @@
 #define Settings_h
 
 #include "EditingBehaviorTypes.h"
-#include "FontRenderingMode.h"
 #include "IntSize.h"
 #include "URL.h"
 #include "SecurityOrigin.h"
 #include "SettingsMacros.h"
+#include "TextFlags.h"
 #include "Timer.h"
 #include <chrono>
+#include <runtime/RuntimeFlags.h>
 #include <unicode/uscript.h>
 #include <wtf/HashMap.h>
 #include <wtf/RefCounted.h>
@@ -60,11 +61,20 @@ enum TextDirectionSubmenuInclusionBehavior {
     TextDirectionSubmenuAlwaysIncluded
 };
 
+enum DebugOverlayRegionFlags {
+    NonFastScrollableRegion = 1 << 0,
+    WheelEventHandlerRegion = 1 << 1,
+};
+
+typedef unsigned DebugOverlayRegions;
+
 class Settings : public RefCounted<Settings> {
     WTF_MAKE_NONCOPYABLE(Settings); WTF_MAKE_FAST_ALLOCATED;
 public:
     static PassRefPtr<Settings> create(Page*);
     ~Settings();
+
+    void pageDestroyed() { m_page = nullptr; }
 
     WEBCORE_EXPORT void setStandardFontFamily(const AtomicString&, UScriptCode = USCRIPT_COMMON);
     WEBCORE_EXPORT const AtomicString& standardFontFamily(UScriptCode = USCRIPT_COMMON) const;
@@ -99,6 +109,9 @@ public:
     const IntSize& textAutosizingWindowSizeOverride() const { return m_textAutosizingWindowSizeOverride; }
 #endif
 
+    WEBCORE_EXPORT void setAntialiasedFontDilationEnabled(bool);
+    bool antialiasedFontDilationEnabled() const { return m_antialiasedFontDilationEnabled; }
+
     // Only set by Layout Tests.
     WEBCORE_EXPORT void setMediaTypeOverride(const String&);
     const String& mediaTypeOverride() const { return m_mediaTypeOverride; }
@@ -115,9 +128,6 @@ public:
     WEBCORE_EXPORT void setScriptEnabled(bool);
 
     SETTINGS_GETTERS_AND_SETTERS
-
-    WEBCORE_EXPORT void setScreenFontSubstitutionEnabled(bool);
-    bool screenFontSubstitutionEnabled() const { return m_screenFontSubstitutionEnabled; }
 
     WEBCORE_EXPORT void setJavaEnabled(bool);
     bool isJavaEnabled() const { return m_isJavaEnabled; }
@@ -156,19 +166,11 @@ public:
     WEBCORE_EXPORT void setNeedsAdobeFrameReloadingQuirk(bool);
     bool needsAcrobatFrameReloadingQuirk() const { return m_needsAdobeFrameReloadingQuirk; }
 
-    WEBCORE_EXPORT static void setDefaultMinDOMTimerInterval(double); // Interval specified in seconds.
-    WEBCORE_EXPORT static double defaultMinDOMTimerInterval();
-        
-    static void setHiddenPageDOMTimerAlignmentInterval(double); // Interval specified in seconds.
-    static double hiddenPageDOMTimerAlignmentInterval();
+    WEBCORE_EXPORT void setMinimumDOMTimerInterval(double); // Initialized to DOMTimer::defaultMinimumInterval().
+    double minimumDOMTimerInterval() const { return m_minimumDOMTimerInterval; }
 
-    WEBCORE_EXPORT void setMinDOMTimerInterval(double); // Per-page; initialized to default value.
-    WEBCORE_EXPORT double minDOMTimerInterval();
-
-    static void setDefaultDOMTimerAlignmentInterval(double);
-    WEBCORE_EXPORT static double defaultDOMTimerAlignmentInterval();
-
-    double domTimerAlignmentInterval() const;
+    void setDOMTimerAlignmentInterval(double);
+    double domTimerAlignmentInterval() const { return m_domTimerAlignmentInterval; }
 
     WEBCORE_EXPORT void setLayoutInterval(std::chrono::milliseconds);
     std::chrono::milliseconds layoutInterval() const { return m_layoutInterval; }
@@ -203,15 +205,11 @@ public:
 #if PLATFORM(COCOA)
     WEBCORE_EXPORT static void setQTKitEnabled(bool flag);
     static bool isQTKitEnabled() { return gQTKitEnabled; }
+#else
+    static bool isQTKitEnabled() { return false; }
 #endif
 
     static const unsigned defaultMaximumHTMLParserDOMTreeDepth = 512;
-
-#if USE(SAFARI_THEME)
-    // Windows debugging pref (global) for switching between the Aqua look and a native windows look.
-    static void setShouldPaintNativeControls(bool);
-    static bool shouldPaintNativeControls() { return gShouldPaintNativeControls; }
-#endif
 
     WEBCORE_EXPORT static void setMockScrollbarsEnabled(bool flag);
     WEBCORE_EXPORT static bool mockScrollbarsEnabled();
@@ -255,7 +253,9 @@ public:
     WEBCORE_EXPORT static void setNetworkInterfaceName(const String&);
     static const String& networkInterfaceName();
 
+#if HAVE(AVKIT)
     static void setAVKitEnabled(bool flag) { gAVKitEnabled = flag; }
+#endif
     static bool avKitEnabled() { return gAVKitEnabled; }
 
     static void setShouldOptOutOfNetworkStateObservation(bool flag) { gShouldOptOutOfNetworkStateObservation = flag; }
@@ -265,11 +265,15 @@ public:
     static bool shouldManageAudioSessionCategory() { return gManageAudioSession; }
 #endif
 
+#if ENABLE(ENCRYPTED_MEDIA_V2)
+    void setMediaKeysStorageDirectory(const String& directory) { m_mediaKeysStorageDirectory = directory; }
+    const String& mediaKeysStorageDirectory() const { return m_mediaKeysStorageDirectory; }
+#endif
+
 private:
     explicit Settings(Page*);
 
     void initializeDefaultFontFamilies();
-    static bool shouldEnableScreenFontSubstitutionByDefault();
 
     Page* m_page;
 
@@ -278,6 +282,9 @@ private:
     const std::unique_ptr<FontGenericFamilies> m_fontGenericFamilies;
     SecurityOrigin::StorageBlockingPolicy m_storageBlockingPolicy;
     std::chrono::milliseconds m_layoutInterval;
+    double m_minimumDOMTimerInterval;
+    double m_domTimerAlignmentInterval;
+
 #if ENABLE(TEXT_AUTOSIZING)
     float m_textAutosizingFontScaleFactor;
     IntSize m_textAutosizingWindowSizeOverride;
@@ -286,7 +293,6 @@ private:
 
     SETTINGS_MEMBER_VARIABLES
 
-    bool m_screenFontSubstitutionEnabled : 1;
     bool m_isJavaEnabled : 1;
     bool m_isJavaEnabledForLocalFiles : 1;
     bool m_loadsImagesAutomatically : 1;
@@ -296,6 +302,7 @@ private:
     bool m_needsAdobeFrameReloadingQuirk : 1;
     bool m_usesPageCache : 1;
     unsigned m_fontRenderingMode : 1;
+    bool m_antialiasedFontDilationEnabled : 1;
     bool m_showTiledScrollingIndicator : 1;
     bool m_backgroundShouldExtendBeyondPage : 1;
     bool m_dnsPrefetchingEnabled : 1;
@@ -307,17 +314,14 @@ private:
 
     double m_timeWithoutMouseMovementBeforeHidingControls;
 
-    Timer<Settings> m_setImageLoadingSettingsTimer;
-    void imageLoadingSettingsTimerFired(Timer<Settings>*);
+    Timer m_setImageLoadingSettingsTimer;
+    void imageLoadingSettingsTimerFired();
 
 #if ENABLE(HIDDEN_PAGE_DOM_TIMER_THROTTLING)
     bool m_hiddenPageDOMTimerThrottlingEnabled : 1;
 #endif
     bool m_hiddenPageCSSAnimationSuspensionEnabled : 1;
     bool m_fontFallbackPrefersPictographs : 1;
-
-    static double gDefaultMinDOMTimerInterval;
-    static double gDefaultDOMTimerAlignmentInterval;
 
 #if USE(AVFOUNDATION)
     WEBCORE_EXPORT static bool gAVFoundationEnabled;
@@ -330,9 +334,6 @@ private:
     static bool gMockScrollbarsEnabled;
     static bool gUsesOverlayScrollbars;
 
-#if USE(SAFARI_THEME)
-    static bool gShouldPaintNativeControls;
-#endif
 #if PLATFORM(WIN)
     static bool gShouldUseHighResolutionTimers;
 #endif
@@ -344,7 +345,9 @@ private:
     WEBCORE_EXPORT static bool gManageAudioSession;
 #endif
 
-    static double gHiddenPageDOMTimerAlignmentInterval;
+#if ENABLE(ENCRYPTED_MEDIA_V2)
+    String m_mediaKeysStorageDirectory;
+#endif
 
     static bool gLowPowerVideoAudioBufferSizeEnabled;
 };

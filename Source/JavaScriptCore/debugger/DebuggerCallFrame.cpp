@@ -143,15 +143,16 @@ DebuggerScope* DebuggerCallFrame::scope()
 
     if (!m_scope) {
         VM& vm = m_callFrame->vm();
+        JSScope* scope;
         CodeBlock* codeBlock = m_callFrame->codeBlock();
-        if (codeBlock && codeBlock->needsActivation() && !m_callFrame->hasActivation()) {
-            ASSERT(!m_callFrame->scope()->isWithScope());
-            JSLexicalEnvironment* lexicalEnvironment = JSLexicalEnvironment::create(vm, m_callFrame, codeBlock);
-            m_callFrame->setActivation(lexicalEnvironment);
-            m_callFrame->setScope(lexicalEnvironment);
-        }
+        if (codeBlock && codeBlock->scopeRegister().isValid())
+            scope = m_callFrame->scope(codeBlock->scopeRegister().offset());
+        else if (JSCallee* callee = jsDynamicCast<JSCallee*>(m_callFrame->callee()))
+            scope = callee->scope();
+        else
+            scope = m_callFrame->lexicalGlobalObject();
 
-        m_scope.set(vm, DebuggerScope::create(vm, m_callFrame->scope()));
+        m_scope.set(vm, DebuggerScope::create(vm, scope));
     }
     return m_scope.get();
 }
@@ -189,7 +190,9 @@ JSValue DebuggerCallFrame::evaluate(const String& script, JSValue& exception)
     
     DebuggerEvalEnabler evalEnabler(callFrame);
     VM& vm = callFrame->vm();
-    EvalExecutable* eval = EvalExecutable::create(callFrame, makeSource(script), callFrame->codeBlock()->isStrictMode());
+    auto& codeBlock = *callFrame->codeBlock();
+    ThisTDZMode thisTDZMode = codeBlock.unlinkedCodeBlock()->constructorKind() == ConstructorKind::Derived ? ThisTDZMode::AlwaysCheck : ThisTDZMode::CheckIfNeeded;
+    EvalExecutable* eval = EvalExecutable::create(callFrame, makeSource(script), codeBlock.isStrictMode(), thisTDZMode);
     if (vm.exception()) {
         exception = vm.exception();
         vm.clearException();
@@ -208,14 +211,13 @@ JSValue DebuggerCallFrame::evaluate(const String& script, JSValue& exception)
 
 void DebuggerCallFrame::invalidate()
 {
-    m_callFrame = nullptr;
-    if (m_scope) {
-        m_scope->invalidateChain();
-        m_scope.clear();
-    }
-    RefPtr<DebuggerCallFrame> frame = m_caller.release();
+    RefPtr<DebuggerCallFrame> frame = this;
     while (frame) {
         frame->m_callFrame = nullptr;
+        if (frame->m_scope) {
+            frame->m_scope->invalidateChain();
+            frame->m_scope.clear();
+        }
         frame = frame->m_caller.release();
     }
 }

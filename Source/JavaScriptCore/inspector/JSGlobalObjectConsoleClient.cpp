@@ -26,22 +26,21 @@
 #include "config.h"
 #include "JSGlobalObjectConsoleClient.h"
 
-#if ENABLE(INSPECTOR)
-
+#include "ConsoleMessage.h"
 #include "InspectorConsoleAgent.h"
 #include "ScriptArguments.h"
 #include "ScriptCallStack.h"
 #include "ScriptCallStackFactory.h"
 
-#if USE(CF)
-#include <CoreFoundation/CoreFoundation.h>
-#endif
-
 using namespace JSC;
 
 namespace Inspector {
 
+#if !LOG_DISABLED
+static bool sLogToSystemConsole = true;
+#else
 static bool sLogToSystemConsole = false;
+#endif
 
 bool JSGlobalObjectConsoleClient::logToSystemConsole()
 {
@@ -53,41 +52,23 @@ void JSGlobalObjectConsoleClient::setLogToSystemConsole(bool shouldLog)
     sLogToSystemConsole = shouldLog;
 }
 
-void JSGlobalObjectConsoleClient::initializeLogToSystemConsole()
-{
-#if !LOG_DISABLED
-    sLogToSystemConsole = true;
-#elif USE(CF)
-    Boolean keyExistsAndHasValidFormat = false;
-    Boolean preference = CFPreferencesGetAppBooleanValue(CFSTR("JavaScriptCoreOutputConsoleMessagesToSystemConsole"), kCFPreferencesCurrentApplication, &keyExistsAndHasValidFormat);
-    if (keyExistsAndHasValidFormat)
-        sLogToSystemConsole = preference;
-#endif
-}
-
 JSGlobalObjectConsoleClient::JSGlobalObjectConsoleClient(InspectorConsoleAgent* consoleAgent)
     : ConsoleClient()
     , m_consoleAgent(consoleAgent)
 {
-    static std::once_flag initializeLogging;
-    std::call_once(initializeLogging, []{
-        JSGlobalObjectConsoleClient::initializeLogToSystemConsole();
-    });
 }
 
-void JSGlobalObjectConsoleClient::messageWithTypeAndLevel(MessageType type, MessageLevel level, JSC::ExecState* exec, PassRefPtr<ScriptArguments> prpArguments)
+void JSGlobalObjectConsoleClient::messageWithTypeAndLevel(MessageType type, MessageLevel level, JSC::ExecState* exec, RefPtr<ScriptArguments>&& arguments)
 {
-    RefPtr<ScriptArguments> arguments = prpArguments;
-
     if (JSGlobalObjectConsoleClient::logToSystemConsole())
-        ConsoleClient::printConsoleMessageWithArguments(MessageSource::ConsoleAPI, type, level, exec, arguments);
+        ConsoleClient::printConsoleMessageWithArguments(MessageSource::ConsoleAPI, type, level, exec, arguments.copyRef());
 
     String message;
     arguments->getFirstArgumentAsString(message);
-    m_consoleAgent->addMessageToConsole(MessageSource::ConsoleAPI, type, level, message, exec, arguments.release());
+    m_consoleAgent->addMessageToConsole(std::make_unique<ConsoleMessage>(MessageSource::ConsoleAPI, type, level, message, WTF::move(arguments), exec));
 }
 
-void JSGlobalObjectConsoleClient::count(ExecState* exec, PassRefPtr<ScriptArguments> arguments)
+void JSGlobalObjectConsoleClient::count(ExecState* exec, RefPtr<ScriptArguments>&& arguments)
 {
     m_consoleAgent->count(exec, arguments);
 }
@@ -110,10 +91,10 @@ void JSGlobalObjectConsoleClient::time(ExecState*, const String& title)
 void JSGlobalObjectConsoleClient::timeEnd(ExecState* exec, const String& title)
 {
     RefPtr<ScriptCallStack> callStack(createScriptCallStackForConsole(exec, 1));
-    m_consoleAgent->stopTiming(title, callStack.release());
+    m_consoleAgent->stopTiming(title, WTF::move(callStack));
 }
 
-void JSGlobalObjectConsoleClient::timeStamp(ExecState*, PassRefPtr<ScriptArguments>)
+void JSGlobalObjectConsoleClient::timeStamp(ExecState*, RefPtr<ScriptArguments>&&)
 {
     // FIXME: JSContext inspection needs a timeline.
     warnUnimplemented(ASCIILiteral("console.timeStamp"));
@@ -122,9 +103,7 @@ void JSGlobalObjectConsoleClient::timeStamp(ExecState*, PassRefPtr<ScriptArgumen
 void JSGlobalObjectConsoleClient::warnUnimplemented(const String& method)
 {
     String message = method + " is currently ignored in JavaScript context inspection.";
-    m_consoleAgent->addMessageToConsole(MessageSource::ConsoleAPI, MessageType::Log, MessageLevel::Warning, message, nullptr, nullptr);
+    m_consoleAgent->addMessageToConsole(std::make_unique<ConsoleMessage>(MessageSource::ConsoleAPI, MessageType::Log, MessageLevel::Warning, message, nullptr, nullptr));
 }
 
 } // namespace Inspector
-
-#endif

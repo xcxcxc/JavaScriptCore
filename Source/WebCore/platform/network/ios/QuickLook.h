@@ -31,7 +31,6 @@
 #import "QuickLookHandleClient.h"
 #import "ResourceRequest.h"
 #import <objc/objc-runtime.h>
-#import <wtf/PassOwnPtr.h>
 #import <wtf/RefPtr.h>
 
 OBJC_CLASS NSData;
@@ -41,6 +40,7 @@ OBJC_CLASS NSSet;
 OBJC_CLASS NSString;
 OBJC_CLASS NSURL;
 OBJC_CLASS NSURLConnection;
+OBJC_CLASS NSURLRequest;
 OBJC_CLASS NSURLResponse;
 OBJC_CLASS QLPreviewConverter;
 
@@ -54,13 +54,14 @@ namespace WebCore {
 class QuickLookHandleClient;
 class ResourceHandle;
 class ResourceLoader;
+class ResourceResponse;
 class SynchronousResourceHandleCFURLConnectionDelegate;
 
 Class QLPreviewConverterClass();
 NSString *QLTypeCopyBestMimeTypeForFileNameAndMimeType(NSString *fileName, NSString *mimeType);
 NSString *QLTypeCopyBestMimeTypeForURLAndMimeType(NSURL *, NSString *mimeType);
 
-NSSet *QLPreviewGetSupportedMIMETypesSet();
+WEBCORE_EXPORT NSSet *QLPreviewGetSupportedMIMETypesSet();
 
 // Used for setting the permissions on the saved QL content
 NSDictionary *QLFileAttributes();
@@ -71,7 +72,7 @@ WEBCORE_EXPORT NSString *qlPreviewConverterFileNameForURL(NSURL *);
 WEBCORE_EXPORT NSString *qlPreviewConverterUTIForURL(NSURL *);
 WEBCORE_EXPORT void removeQLPreviewConverterForURL(NSURL *);
 
-WEBCORE_EXPORT PassOwnPtr<ResourceRequest> registerQLPreviewConverterIfNeeded(NSURL *, NSString *mimeType, NSData *);
+WEBCORE_EXPORT RetainPtr<NSURLRequest> registerQLPreviewConverterIfNeeded(NSURL *, NSString *mimeType, NSData *);
 
 const URL safeQLURLForDocumentURLAndResourceURL(const URL& documentURL, const String& resourceURL);
 
@@ -82,15 +83,19 @@ WEBCORE_EXPORT NSString *createTemporaryFileForQuickLook(NSString *fileName);
 class QuickLookHandle {
     WTF_MAKE_NONCOPYABLE(QuickLookHandle);
 public:
+    WEBCORE_EXPORT static bool shouldCreateForMIMEType(const String&);
+
     static std::unique_ptr<QuickLookHandle> create(ResourceHandle*, NSURLConnection *, NSURLResponse *, id delegate);
 #if USE(CFNETWORK)
     static std::unique_ptr<QuickLookHandle> create(ResourceHandle*, SynchronousResourceHandleCFURLConnectionDelegate*, CFURLResponseRef);
 #endif
-    WEBCORE_EXPORT static std::unique_ptr<QuickLookHandle> create(ResourceLoader*, NSURLResponse *);
+    // FIXME: Use of ResourceLoader here is a platform violation.
+    WEBCORE_EXPORT static std::unique_ptr<QuickLookHandle> create(ResourceLoader&, const ResourceResponse&);
+
     WEBCORE_EXPORT ~QuickLookHandle();
 
     WEBCORE_EXPORT bool didReceiveDataArray(CFArrayRef);
-    bool didReceiveData(CFDataRef);
+    WEBCORE_EXPORT bool didReceiveData(CFDataRef);
     WEBCORE_EXPORT bool didFinishLoading();
     WEBCORE_EXPORT void didFail();
 

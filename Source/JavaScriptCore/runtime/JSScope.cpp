@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012, 2013, 2014 Apple Inc. All Rights Reserved.
+ * Copyright (C) 2012-2015 Apple Inc. All Rights Reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -62,7 +62,7 @@ static inline bool abstractAccess(ExecState* exec, JSScope* scope, const Identif
         }
 
         if (!entry.isNull()) {
-            op = ResolveOp(makeType(ClosureVar, needsVarInjectionChecks), depth, 0, lexicalEnvironment, entry.watchpointSet(), entry.getIndex());
+            op = ResolveOp(makeType(ClosureVar, needsVarInjectionChecks), depth, 0, lexicalEnvironment, entry.watchpointSet(), entry.scopeOffset().offset());
             return true;
         }
 
@@ -82,7 +82,7 @@ static inline bool abstractAccess(ExecState* exec, JSScope* scope, const Identif
 
             op = ResolveOp(
                 makeType(GlobalVar, needsVarInjectionChecks), depth, 0, 0, entry.watchpointSet(),
-                reinterpret_cast<uintptr_t>(globalObject->registerAt(entry.getIndex()).slot()));
+                reinterpret_cast<uintptr_t>(globalObject->variableAt(entry.scopeOffset()).slot()));
             return true;
         }
 
@@ -133,18 +133,40 @@ int JSScope::depth()
     return depth;
 }
 
+// When an exception occurs, the result of isUnscopable becomes false.
+static inline bool isUnscopable(ExecState* exec, JSScope* scope, JSObject* object, const Identifier& ident)
+{
+    if (scope->type() != WithScopeType)
+        return false;
+
+    JSValue unscopables = object->get(exec, exec->propertyNames().unscopablesSymbol);
+    if (exec->hadException())
+        return false;
+    if (!unscopables.isObject())
+        return false;
+    JSValue blocked = jsCast<JSObject*>(unscopables)->get(exec, ident);
+    if (exec->hadException())
+        return false;
+
+    return blocked.toBoolean(exec);
+}
+
 JSValue JSScope::resolve(ExecState* exec, JSScope* scope, const Identifier& ident)
 {
     ScopeChainIterator end = scope->end();
     ScopeChainIterator it = scope->begin();
     while (1) {
+        JSScope* scope = it.scope();
         JSObject* object = it.get();
 
         if (++it == end) // Global scope.
             return object;
 
-        if (object->hasProperty(exec, ident))
-            return object;
+        if (object->hasProperty(exec, ident)) {
+            if (!isUnscopable(exec, scope, object, ident))
+                return object;
+            ASSERT_WITH_MESSAGE(!exec->hadException(), "When an exception occurs, the result of isUnscopable becomes false");
+        }
     }
 }
 
@@ -180,12 +202,12 @@ const char* resolveTypeName(ResolveType type)
         "GlobalProperty",
         "GlobalVar",
         "ClosureVar",
+        "LocalClosureVar",
         "GlobalPropertyWithVarInjectionChecks",
         "GlobalVarWithVarInjectionChecks",
         "ClosureVarWithVarInjectionChecks",
         "Dynamic"
     };
-    ASSERT(type < sizeof(names) / sizeof(names[0]));
     return names[type];
 }
 

@@ -86,6 +86,10 @@ public:
 
     void setIgnoreTLSErrors(Ewk_TLS_Error_Policy TLSErrorPolicy) const;
 
+    const String& extensionsPath() const { return m_extensionsPath; }
+
+    void allowSpecificHTTPSCertificateForHost(const String& pem, const String& host) const;
+
 #if ENABLE(NETSCAPE_PLUGIN_API)
     void setAdditionalPluginPath(const String&);
 #endif
@@ -95,12 +99,12 @@ public:
     JSGlobalContextRef jsGlobalContext();
 
     static void didReceiveMessageFromInjectedBundle(WKContextRef, WKStringRef messageName, WKTypeRef messageBody, const void* clientInfo);
-    static void didReceiveSynchronousMessageFromInjectedBundle(WKContextRef, WKStringRef messageName, WKTypeRef messageBody, WKTypeRef* returnData, const void* clientInfo);
-    void setMessageFromInjectedBundleCallback(Ewk_Context_Message_From_Injected_Bundle_Cb, void*);
-    void processReceivedMessageFromInjectedBundle(WKStringRef messageName, WKTypeRef messageBody, WKTypeRef* returnData);
+    static WKTypeRef getInjectedBundleInitializationUserData(WKContextRef, const void* clientInfo);
+    void setMessageFromExtensionCallback(Ewk_Context_Message_From_Extension_Cb, void*);
+    void processReceivedMessageFromInjectedBundle(WKStringRef messageName, WKTypeRef messageBody);
 
 private:
-    explicit EwkContext(WKContextRef);
+    explicit EwkContext(WKContextRef, const String& extensionsPath = String());
 
     void ensureFaviconDatabase();
 
@@ -121,10 +125,12 @@ private:
 
     JSGlobalContextRef m_jsGlobalContext;
 
+    String m_extensionsPath;
+
     struct {
-        Ewk_Context_Message_From_Injected_Bundle_Cb callback;
+        Ewk_Context_Message_From_Extension_Cb callback;
         void* userData;
-    } m_callbackForMessageFromInjectedBundle;
+    } m_callbackForMessageFromExtension;
 };
 
 #endif // ewk_context_private_h

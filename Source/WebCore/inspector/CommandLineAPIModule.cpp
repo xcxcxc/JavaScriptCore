@@ -26,9 +26,8 @@
 #include "config.h"
 #include "CommandLineAPIModule.h"
 
-#if ENABLE(INSPECTOR)
-
 #include "CommandLineAPIModuleSource.h"
+#include "DOMWrapperWorld.h"
 #include "JSCommandLineAPIHost.h"
 #include "WebInjectedScriptManager.h"
 #include <inspector/InjectedScript.h>
@@ -64,5 +63,3 @@ JSC::JSValue CommandLineAPIModule::host(InjectedScriptManager* injectedScriptMan
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(INSPECTOR)

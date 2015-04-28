@@ -26,6 +26,7 @@
 // This all-in-one cpp file cuts down on template bloat to allow us to build our Windows release build.
 
 #include "ActiveDOMObject.cpp"
+#include "AnimationEvent.cpp"
 #include "Attr.cpp"
 #include "BeforeTextInsertedEvent.cpp"
 #include "BeforeUnloadEvent.cpp"
@@ -80,7 +81,6 @@
 #include "ExceptionBase.cpp"
 #include "ExceptionCodePlaceholder.cpp"
 #include "FocusEvent.cpp"
-#include "IconURL.cpp"
 #include "IdTargetObserver.cpp"
 #include "IdTargetObserverRegistry.cpp"
 #include "InlineStyleSheetOwner.cpp"
@@ -103,7 +103,6 @@
 #include "NodeFilterCondition.cpp"
 #include "NodeIterator.cpp"
 #include "NodeRenderingTraversal.cpp"
-#include "Notation.cpp"
 #include "OverflowEvent.cpp"
 #include "PageTransitionEvent.cpp"
 #include "PendingScript.cpp"
@@ -122,6 +121,7 @@
 #include "ScriptRunner.cpp"
 #include "ScriptableDocumentParser.cpp"
 #include "SecurityContext.cpp"
+#include "SecurityOriginPolicy.cpp"
 #include "SelectorQuery.cpp"
 #include "ShadowRoot.cpp"
 #include "SpaceSplitString.cpp"

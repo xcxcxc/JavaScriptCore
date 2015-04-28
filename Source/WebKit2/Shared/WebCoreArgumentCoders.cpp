@@ -49,6 +49,7 @@
 #include <WebCore/IDBKeyRangeData.h>
 #include <WebCore/Image.h>
 #include <WebCore/Length.h>
+#include <WebCore/Path.h>
 #include <WebCore/PluginData.h>
 #include <WebCore/ProtectionSpace.h>
 #include <WebCore/Region.h>
@@ -59,6 +60,7 @@
 #include <WebCore/ScrollingCoordinator.h>
 #include <WebCore/SessionID.h>
 #include <WebCore/TextCheckerClient.h>
+#include <WebCore/TextIndicator.h>
 #include <WebCore/TimingFunction.h>
 #include <WebCore/TransformationMatrix.h>
 #include <WebCore/URL.h>
@@ -81,6 +83,10 @@
 #include <WebCore/SharedBuffer.h>
 #endif // PLATFORM(IOS)
 
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+#import <WebCore/MediaPlaybackTargetContext.h>
+#endif
+
 using namespace WebCore;
 using namespace WebKit;
 
@@ -98,12 +104,83 @@ bool ArgumentCoder<AffineTransform>::decode(ArgumentDecoder& decoder, AffineTran
 
 void ArgumentCoder<TransformationMatrix>::encode(ArgumentEncoder& encoder, const TransformationMatrix& transformationMatrix)
 {
-    SimpleArgumentCoder<TransformationMatrix>::encode(encoder, transformationMatrix);
+    encoder << transformationMatrix.m11();
+    encoder << transformationMatrix.m12();
+    encoder << transformationMatrix.m13();
+    encoder << transformationMatrix.m14();
+
+    encoder << transformationMatrix.m21();
+    encoder << transformationMatrix.m22();
+    encoder << transformationMatrix.m23();
+    encoder << transformationMatrix.m24();
+
+    encoder << transformationMatrix.m31();
+    encoder << transformationMatrix.m32();
+    encoder << transformationMatrix.m33();
+    encoder << transformationMatrix.m34();
+
+    encoder << transformationMatrix.m41();
+    encoder << transformationMatrix.m42();
+    encoder << transformationMatrix.m43();
+    encoder << transformationMatrix.m44();
 }
 
 bool ArgumentCoder<TransformationMatrix>::decode(ArgumentDecoder& decoder, TransformationMatrix& transformationMatrix)
 {
-    return SimpleArgumentCoder<TransformationMatrix>::decode(decoder, transformationMatrix);
+    double m11;
+    if (!decoder.decode(m11))
+        return false;
+    double m12;
+    if (!decoder.decode(m12))
+        return false;
+    double m13;
+    if (!decoder.decode(m13))
+        return false;
+    double m14;
+    if (!decoder.decode(m14))
+        return false;
+
+    double m21;
+    if (!decoder.decode(m21))
+        return false;
+    double m22;
+    if (!decoder.decode(m22))
+        return false;
+    double m23;
+    if (!decoder.decode(m23))
+        return false;
+    double m24;
+    if (!decoder.decode(m24))
+        return false;
+
+    double m31;
+    if (!decoder.decode(m31))
+        return false;
+    double m32;
+    if (!decoder.decode(m32))
+        return false;
+    double m33;
+    if (!decoder.decode(m33))
+        return false;
+    double m34;
+    if (!decoder.decode(m34))
+        return false;
+
+    double m41;
+    if (!decoder.decode(m41))
+        return false;
+    double m42;
+    if (!decoder.decode(m42))
+        return false;
+    double m43;
+    if (!decoder.decode(m43))
+        return false;
+    double m44;
+    if (!decoder.decode(m44))
+        return false;
+
+    transformationMatrix.setMatrix(m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34, m41, m42, m43, m44);
+    return true;
 }
 
 void ArgumentCoder<LinearTimingFunction>::encode(ArgumentEncoder& encoder, const LinearTimingFunction& timingFunction)
@@ -227,6 +304,16 @@ bool ArgumentCoder<FloatSize>::decode(ArgumentDecoder& decoder, FloatSize& float
 }
 
 
+void ArgumentCoder<FloatRoundedRect>::encode(ArgumentEncoder& encoder, const FloatRoundedRect& roundedRect)
+{
+    SimpleArgumentCoder<FloatRoundedRect>::encode(encoder, roundedRect);
+}
+
+bool ArgumentCoder<FloatRoundedRect>::decode(ArgumentDecoder& decoder, FloatRoundedRect& roundedRect)
+{
+    return SimpleArgumentCoder<FloatRoundedRect>::decode(decoder, roundedRect);
+}
+
 #if PLATFORM(IOS)
 void ArgumentCoder<FloatQuad>::encode(ArgumentEncoder& encoder, const FloatQuad& floatQuad)
 {
@@ -280,6 +367,115 @@ void ArgumentCoder<IntSize>::encode(ArgumentEncoder& encoder, const IntSize& int
 bool ArgumentCoder<IntSize>::decode(ArgumentDecoder& decoder, IntSize& intSize)
 {
     return SimpleArgumentCoder<IntSize>::decode(decoder, intSize);
+}
+
+static void pathPointCountApplierFunction(void* info, const PathElement*)
+{
+    uint64_t* pointCount = static_cast<uint64_t*>(info);
+    ++*pointCount;
+}
+
+static void pathEncodeApplierFunction(void* info, const PathElement* element)
+{
+    ArgumentEncoder& encoder = *static_cast<ArgumentEncoder*>(info);
+
+    encoder.encodeEnum(element->type);
+
+    switch (element->type) {
+    case PathElementMoveToPoint: // The points member will contain 1 value.
+        encoder << element->points[0];
+        break;
+    case PathElementAddLineToPoint: // The points member will contain 1 value.
+        encoder << element->points[0];
+        break;
+    case PathElementAddQuadCurveToPoint: // The points member will contain 2 values.
+        encoder << element->points[0];
+        encoder << element->points[1];
+        break;
+    case PathElementAddCurveToPoint: // The points member will contain 3 values.
+        encoder << element->points[0];
+        encoder << element->points[1];
+        encoder << element->points[2];
+        break;
+    case PathElementCloseSubpath: // The points member will contain no values.
+        break;
+    }
+}
+
+void ArgumentCoder<Path>::encode(ArgumentEncoder& encoder, const Path& path)
+{
+    uint64_t numPoints = 0;
+    path.apply(&numPoints, pathPointCountApplierFunction);
+
+    encoder << numPoints;
+
+    path.apply(&encoder, pathEncodeApplierFunction);
+}
+
+bool ArgumentCoder<Path>::decode(ArgumentDecoder& decoder, Path& path)
+{
+    uint64_t numPoints;
+    if (!decoder.decode(numPoints))
+        return false;
+    
+    path.clear();
+
+    for (uint64_t i = 0; i < numPoints; ++i) {
+    
+        PathElementType elementType;
+        if (!decoder.decodeEnum(elementType))
+            return false;
+        
+        switch (elementType) {
+        case PathElementMoveToPoint: { // The points member will contain 1 value.
+            FloatPoint point;
+            if (!decoder.decode(point))
+                return false;
+            path.moveTo(point);
+            break;
+        }
+        case PathElementAddLineToPoint: { // The points member will contain 1 value.
+            FloatPoint point;
+            if (!decoder.decode(point))
+                return false;
+            path.addLineTo(point);
+            break;
+        }
+        case PathElementAddQuadCurveToPoint: { // The points member will contain 2 values.
+            FloatPoint controlPoint;
+            if (!decoder.decode(controlPoint))
+                return false;
+
+            FloatPoint endPoint;
+            if (!decoder.decode(endPoint))
+                return false;
+
+            path.addQuadCurveTo(controlPoint, endPoint);
+            break;
+        }
+        case PathElementAddCurveToPoint: { // The points member will contain 3 values.
+            FloatPoint controlPoint1;
+            if (!decoder.decode(controlPoint1))
+                return false;
+
+            FloatPoint controlPoint2;
+            if (!decoder.decode(controlPoint2))
+                return false;
+
+            FloatPoint endPoint;
+            if (!decoder.decode(endPoint))
+                return false;
+
+            path.addBezierCurveTo(controlPoint1, controlPoint2, endPoint);
+            break;
+        }
+        case PathElementCloseSubpath: // The points member will contain no values.
+            path.closeSubpath();
+            break;
+        }
+    }
+
+    return true;
 }
 
 template<> struct ArgumentCoder<Region::Span> {
@@ -374,9 +570,18 @@ bool ArgumentCoder<MimeClassInfo>::decode(ArgumentDecoder& decoder, MimeClassInf
 
 void ArgumentCoder<PluginInfo>::encode(ArgumentEncoder& encoder, const PluginInfo& pluginInfo)
 {
-    encoder << pluginInfo.name << pluginInfo.file << pluginInfo.desc << pluginInfo.mimes << pluginInfo.isApplicationPlugin;
+    encoder << pluginInfo.name;
+    encoder << pluginInfo.file;
+    encoder << pluginInfo.desc;
+    encoder << pluginInfo.mimes;
+    encoder << pluginInfo.isApplicationPlugin;
+    encoder.encodeEnum(pluginInfo.clientLoadPolicy);
+#if PLATFORM(MAC)
+    encoder << pluginInfo.bundleIdentifier;
+    encoder << pluginInfo.versionString;
+#endif
 }
-    
+
 bool ArgumentCoder<PluginInfo>::decode(ArgumentDecoder& decoder, PluginInfo& pluginInfo)
 {
     if (!decoder.decode(pluginInfo.name))
@@ -389,41 +594,18 @@ bool ArgumentCoder<PluginInfo>::decode(ArgumentDecoder& decoder, PluginInfo& plu
         return false;
     if (!decoder.decode(pluginInfo.isApplicationPlugin))
         return false;
-
-    return true;
-}
-
-
-void ArgumentCoder<HTTPHeaderMap>::encode(ArgumentEncoder& encoder, const HTTPHeaderMap& headerMap)
-{
-    encoder << static_cast<uint64_t>(headerMap.size());
-    for (auto& keyValuePair : headerMap) {
-        encoder << keyValuePair.key;
-        encoder << keyValuePair.value;
-    }
-}
-
-bool ArgumentCoder<HTTPHeaderMap>::decode(ArgumentDecoder& decoder, HTTPHeaderMap& headerMap)
-{
-    uint64_t size;
-    if (!decoder.decode(size))
+    PluginLoadClientPolicy clientLoadPolicy;
+    if (!decoder.decodeEnum(clientLoadPolicy))
         return false;
-
-    for (size_t i = 0; i < size; ++i) {
-        String name;
-        if (!decoder.decode(name))
-            return false;
-
-        String value;
-        if (!decoder.decode(value))
-            return false;
-
-        headerMap.set(name, value);
-    }
+#if PLATFORM(MAC)
+    if (!decoder.decode(pluginInfo.bundleIdentifier))
+        return false;
+    if (!decoder.decode(pluginInfo.versionString))
+        return false;
+#endif
 
     return true;
 }
-
 
 void ArgumentCoder<AuthenticationChallenge>::encode(ArgumentEncoder& encoder, const AuthenticationChallenge& challenge)
 {
@@ -584,6 +766,9 @@ void ArgumentCoder<Cursor>::encode(ArgumentEncoder& encoder, const Cursor& curso
     encoder << true;
     encodeImage(encoder, cursor.image());
     encoder << cursor.hotSpot();
+#if ENABLE(MOUSE_CURSOR_SCALE)
+    encoder << cursor.imageScaleFactor();
+#endif
 }
 
 bool ArgumentCoder<Cursor>::decode(ArgumentDecoder& decoder, Cursor& cursor)
@@ -625,7 +810,15 @@ bool ArgumentCoder<Cursor>::decode(ArgumentDecoder& decoder, Cursor& cursor)
     if (!image->rect().contains(hotSpot))
         return false;
 
+#if ENABLE(MOUSE_CURSOR_SCALE)
+    float scale;
+    if (!decoder.decode(scale))
+        return false;
+
+    cursor = Cursor(image.get(), hotSpot, scale);
+#else
     cursor = Cursor(image.get(), hotSpot);
+#endif
     return true;
 }
 #endif
@@ -636,9 +829,7 @@ void ArgumentCoder<ResourceRequest>::encode(ArgumentEncoder& encoder, const Reso
     encoder << resourceRequest.cachePartition();
 #endif
 
-#if ENABLE(INSPECTOR)
     encoder << resourceRequest.hiddenFromInspector();
-#endif
 
     if (resourceRequest.encodingRequiresPlatformData()) {
         encoder << true;
@@ -658,12 +849,10 @@ bool ArgumentCoder<ResourceRequest>::decode(ArgumentDecoder& decoder, ResourceRe
     resourceRequest.setCachePartition(cachePartition);
 #endif
 
-#if ENABLE(INSPECTOR)
     bool isHiddenFromInspector;
     if (!decoder.decode(isHiddenFromInspector))
         return false;
     resourceRequest.setHiddenFromInspector(isHiddenFromInspector);
-#endif
 
     bool hasPlatformData;
     if (!decoder.decode(hasPlatformData))
@@ -907,8 +1096,6 @@ bool ArgumentCoder<Cookie>::decode(ArgumentDecoder& decoder, Cookie& cookie)
     return true;
 }
 
-
-#if ENABLE(SQL_DATABASE)
 void ArgumentCoder<DatabaseDetails>::encode(ArgumentEncoder& encoder, const DatabaseDetails& details)
 {
     encoder << details.name();
@@ -948,8 +1135,6 @@ bool ArgumentCoder<DatabaseDetails>::decode(ArgumentDecoder& decoder, DatabaseDe
     details = DatabaseDetails(name, displayName, expectedUsage, currentUsage, creationTime, modificationTime);
     return true;
 }
-
-#endif
 
 #if PLATFORM(IOS)
 
@@ -994,9 +1179,9 @@ static void encodeSharedBuffer(ArgumentEncoder& encoder, SharedBuffer* buffer)
     SharedMemory::Handle handle;
     encoder << (buffer ? static_cast<uint64_t>(buffer->size()): 0);
     if (buffer) {
-        RefPtr<SharedMemory> sharedMemoryBuffer = SharedMemory::create(buffer->size());
+        RefPtr<SharedMemory> sharedMemoryBuffer = SharedMemory::allocate(buffer->size());
         memcpy(sharedMemoryBuffer->data(), buffer->data(), buffer->size());
-        sharedMemoryBuffer->createHandle(handle, SharedMemory::ReadOnly);
+        sharedMemoryBuffer->createHandle(handle, SharedMemory::Protection::ReadOnly);
         encoder << handle;
     }
 }
@@ -1012,7 +1197,7 @@ static bool decodeSharedBuffer(ArgumentDecoder& decoder, RefPtr<SharedBuffer>& b
         if (!decoder.decode(handle))
             return false;
 
-        RefPtr<SharedMemory> sharedMemoryBuffer = SharedMemory::create(handle, SharedMemory::ReadOnly);
+        RefPtr<SharedMemory> sharedMemoryBuffer = SharedMemory::map(handle, SharedMemory::Protection::ReadOnly);
         buffer = SharedBuffer::create(static_cast<unsigned char*>(sharedMemoryBuffer->data()), bufferSize);
     }
 
@@ -1257,7 +1442,7 @@ bool ArgumentCoder<UserStyleSheet>::decode(ArgumentDecoder& decoder, UserStyleSh
     if (!decoder.decodeEnum(level))
         return false;
 
-    userStyleSheet = UserStyleSheet(source, url, whitelist, blacklist, injectedFrames, level);
+    userStyleSheet = UserStyleSheet(source, url, WTF::move(whitelist), WTF::move(blacklist), injectedFrames, level);
     return true;
 }
 
@@ -1297,7 +1482,7 @@ bool ArgumentCoder<UserScript>::decode(ArgumentDecoder& decoder, UserScript& use
     if (!decoder.decodeEnum(injectedFrames))
         return false;
 
-    userScript = UserScript(source, url, whitelist, blacklist, injectionTime, injectedFrames);
+    userScript = UserScript(source, url, WTF::move(whitelist), WTF::move(blacklist), injectionTime, injectedFrames);
     return true;
 }
 
@@ -1467,26 +1652,26 @@ void ArgumentCoder<FilterOperation>::encode(ArgumentEncoder& encoder, const Filt
     case FilterOperation::SEPIA:
     case FilterOperation::SATURATE:
     case FilterOperation::HUE_ROTATE:
-        encoder << toBasicColorMatrixFilterOperation(filter).amount();
+        encoder << downcast<BasicColorMatrixFilterOperation>(filter).amount();
         break;
     case FilterOperation::INVERT:
     case FilterOperation::OPACITY:
     case FilterOperation::BRIGHTNESS:
     case FilterOperation::CONTRAST:
-        encoder << toBasicComponentTransferFilterOperation(filter).amount();
+        encoder << downcast<BasicComponentTransferFilterOperation>(filter).amount();
         break;
     case FilterOperation::BLUR:
-        encoder << toBlurFilterOperation(filter).stdDeviation();
+        encoder << downcast<BlurFilterOperation>(filter).stdDeviation();
         break;
     case FilterOperation::DROP_SHADOW: {
-        const auto& dropShadowFilter = toDropShadowFilterOperation(filter);
+        const auto& dropShadowFilter = downcast<DropShadowFilterOperation>(filter);
         encoder << dropShadowFilter.location();
         encoder << dropShadowFilter.stdDeviation();
         encoder << dropShadowFilter.color();
         break;
     }
     case FilterOperation::DEFAULT:
-        encoder.encodeEnum(toDefaultFilterOperation(filter).representedType());
+        encoder.encodeEnum(downcast<DefaultFilterOperation>(filter).representedType());
         break;
     case FilterOperation::PASSTHROUGH:
         break;
@@ -1910,5 +2095,82 @@ bool ArgumentCoder<BlobPart>::decode(ArgumentDecoder& decoder, BlobPart& blobPar
 
     return true;
 }
+
+void ArgumentCoder<TextIndicatorData>::encode(ArgumentEncoder& encoder, const TextIndicatorData& textIndicatorData)
+{
+    encoder << textIndicatorData.selectionRectInRootViewCoordinates;
+    encoder << textIndicatorData.textBoundingRectInRootViewCoordinates;
+    encoder << textIndicatorData.textRectsInBoundingRectCoordinates;
+    encoder << textIndicatorData.contentImageScaleFactor;
+    encoder.encodeEnum(textIndicatorData.presentationTransition);
+
+    bool hasImage = textIndicatorData.contentImage;
+    encoder << hasImage;
+    if (hasImage)
+        encodeImage(encoder, textIndicatorData.contentImage.get());
+
+    bool hasImageWithHighlight = textIndicatorData.contentImageWithHighlight;
+    encoder << hasImageWithHighlight;
+    if (hasImageWithHighlight)
+        encodeImage(encoder, textIndicatorData.contentImageWithHighlight.get());
+}
+
+bool ArgumentCoder<TextIndicatorData>::decode(ArgumentDecoder& decoder, TextIndicatorData& textIndicatorData)
+{
+    if (!decoder.decode(textIndicatorData.selectionRectInRootViewCoordinates))
+        return false;
+
+    if (!decoder.decode(textIndicatorData.textBoundingRectInRootViewCoordinates))
+        return false;
+
+    if (!decoder.decode(textIndicatorData.textRectsInBoundingRectCoordinates))
+        return false;
+
+    if (!decoder.decode(textIndicatorData.contentImageScaleFactor))
+        return false;
+
+    if (!decoder.decodeEnum(textIndicatorData.presentationTransition))
+        return false;
+
+    bool hasImage;
+    if (!decoder.decode(hasImage))
+        return false;
+    if (hasImage && !decodeImage(decoder, textIndicatorData.contentImage))
+        return false;
+
+    bool hasImageWithHighlight;
+    if (!decoder.decode(hasImageWithHighlight))
+        return false;
+    if (hasImageWithHighlight && !decodeImage(decoder, textIndicatorData.contentImageWithHighlight))
+        return false;
+
+    return true;
+}
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+void ArgumentCoder<MediaPlaybackTargetContext>::encode(ArgumentEncoder& encoder, const MediaPlaybackTargetContext& target)
+{
+    int32_t targetType = target.type;
+    encoder << targetType;
+
+    if (!target.encodingRequiresPlatformData())
+        return;
+
+    encodePlatformData(encoder, target);
+}
+
+bool ArgumentCoder<MediaPlaybackTargetContext>::decode(ArgumentDecoder& decoder, MediaPlaybackTargetContext& target)
+{
+    int32_t targetType;
+    if (!decoder.decode(targetType))
+        return false;
+
+    target.type = static_cast<MediaPlaybackTargetContext::ContextType>(targetType);
+    if (!target.encodingRequiresPlatformData())
+        return false;
+
+    return decodePlatformData(decoder, target);
+}
+#endif
 
 } // namespace IPC

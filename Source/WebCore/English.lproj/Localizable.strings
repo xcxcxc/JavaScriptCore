@@ -49,6 +49,9 @@
 /* Visible name of the web process. The argument is the application name. */
 "%@ Web Content" = "%@ Web Content";
 
+/* Visible name of Web Inspector's web process. The argument is the application name. */
+"%@ Web Inspector" = "%@ Web Inspector";
+
 /* Name of application's single WebCrypto master key in Keychain */
 "%@ WebCrypto Master Key" = "%@ WebCrypto Master Key";
 
@@ -88,8 +91,14 @@
 /* WKErrorJavaScriptExceptionOccurred description */
 "A JavaScript exception occurred" = "A JavaScript exception occurred";
 
+/* action menu item */
+"Add to Photos (action menu item)" = "Add to Photos";
+
 /* Title for Add to Reading List action button */
 "Add to Reading List" = "Add to Reading List";
+
+/* action menu item */
+"Add to Reading List (action menu item)" = "Add to Reading List";
 
 /* Undo action name */
 "Align Left (Undo action name)" = "Align Left";
@@ -120,9 +129,6 @@
 
 /* menu item title for phone number */
 "Call Using iPhone:" = "Call Using iPhone:";
-
-/* menu item for making a telephone call to a telephone number */
-"Call “%@” Using iPhone" = "Call “%@” Using iPhone";
 
 /* File Upload alert sheet button string to cancel */
 "Cancel (file upload action sheet)" = "Cancel";
@@ -167,7 +173,7 @@
 "Clear Recent Searches" = "Clear Recent Searches";
 
 /* Message to display in browser window when in webkit full screen mode. */
-"Click to exit full screen mode" = "Click to exit full screen mode";
+"Click to Exit Full Screen" = "Click to Exit Full Screen";
 
 /* Subtitle of the label to show on a snapshotted plug-in */
 "Click to restart" = "Click to restart";
@@ -180,6 +186,15 @@
 
 /* Copy context menu item */
 "Copy" = "Copy";
+
+/* image action menu item */
+"Copy (image action menu item)" = "Copy";
+
+/* text action menu item */
+"Copy (text action menu item)" = "Copy";
+
+/* video action menu item */
+"Copy (video action menu item)" = "Copy";
 
 /* Title for Copy Link or Image action button */
 "Copy ActionSheet Link" = "Copy";
@@ -211,13 +226,13 @@
 /* Default writing direction context menu item */
 "Default" = "Default";
 
-/* Undo action name (Used only by PLATFORM(IOS) code) */
+/* Undo action name */
 "Delete (Undo action name)" = "Delete";
 
 /* text to display in <details> tag when it has no <summary> child */
 "Details" = "Details";
 
-/* Undo action name (Used only by PLATFORM(IOS) code) */
+/* Undo action name */
 "Dictation (Undo action name)" = "Dictation";
 
 /* Download Audio To Disk context menu item */
@@ -316,6 +331,9 @@
 /* Media controller status message when the media is loading */
 "Loading..." = "Loading...";
 
+/* 'Website' name displayed when local documents have stored local data */
+"Local documents on your computer" = "Local documents on your computer";
+
 /* Look Up in Dictionary context menu item */
 "Look Up in Dictionary" = "Look Up in Dictionary";
 
@@ -358,8 +376,14 @@
 /* WebKitErrorCannotUseRestrictedPort description */
 "Not allowed to use restricted network port" = "Not allowed to use restricted network port";
 
+/* OK button label in PDF password failure alert */
+"OK (PDF password failure alert)" = "OK";
+
 /* Menu item label for the track that represents disabling closed captions */
 "Off" = "Off";
+
+/* action menu item */
+"Open (action menu item)" = "Open";
 
 /* Title for Open Link action button */
 "Open ActionSheet Link" = "Open";
@@ -402,6 +426,9 @@
 
 /* Undo action name */
 "Paste (Undo action name)" = "Paste";
+
+/* action menu item */
+"Paste (action menu item)" = "Paste";
 
 /* Undo action name */
 "Paste Font (Undo action name)" = "Paste Font";
@@ -453,6 +480,12 @@
 
 /* Title for Save Image action button */
 "Save Image" = "Save Image";
+
+/* image action menu item */
+"Save to Downloads (image action menu item)" = "Save to Downloads";
+
+/* video action menu item */
+"Save to Downloads (video action menu item)" = "Save to Downloads";
 
 /* Search in Spotlight context menu item */
 "Search in Spotlight" = "Search in Spotlight";
@@ -559,6 +592,9 @@
 /* Menu section heading for subtitles */
 "Subtitles" = "Subtitles";
 
+/* action menu item */
+"Suggestions (action menu item)" = "Suggestions";
+
 /* Undo action name */
 "Superscript (Undo action name)" = "Superscript";
 
@@ -585,6 +621,9 @@
 
 /* WebKitErrorGeolocationLocationUnknown description */
 "The current location cannot be found." = "The current location cannot be found.";
+
+/* PDF password failure alert message */
+"The document could not be opened with that password." = "The document could not be opened with that password.";
 
 /* WebKitErrorCannotFindPlugin description */
 "The plug-in can’t be found" = "The plug-in can’t be found";
@@ -625,7 +664,7 @@
 /* Undo action name */
 "Turn Off Ligatures (Undo action name)" = "Turn Off Ligatures";
 
-/* We don't care if we find this string, but searching for it will load the plist and save the results. */
+/* Undo action name */
 "Typing (Undo action name)" = "Typing";
 
 /* Underline context menu item */
@@ -633,6 +672,9 @@
 
 /* Undo action name */
 "Underline (Undo action name)" = "Underline";
+
+/* Menu item label for an audio track that has no other name */
+"Unknown (audio track)" = "Unknown";
 
 /* Unknown filesize FTP directory listing item */
 "Unknown (filesize)" = "Unknown";

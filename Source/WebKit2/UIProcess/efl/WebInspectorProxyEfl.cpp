@@ -26,8 +26,6 @@
 #include "config.h"
 #include "WebInspectorProxy.h"
 
-#if ENABLE(INSPECTOR)
-
 #include "EwkView.h"
 #include "WebProcessProxy.h"
 #include "ewk_context_private.h"
@@ -91,7 +89,7 @@ void WebInspectorProxy::createInspectorWindow()
 
 WebPageProxy* WebInspectorProxy::platformCreateInspectorPage()
 {
-    ASSERT(m_page);
+    ASSERT(m_inspectedPage);
 
 #ifdef HAVE_ECORE_X
     const char* engine = "opengl_x11";
@@ -104,17 +102,19 @@ WebPageProxy* WebInspectorProxy::platformCreateInspectorPage()
     if (!m_inspectorWindow)
         return 0;
 
-    WKContextRef wkContext = toAPI(&page()->process().context());
-    WKPageGroupRef wkPageGroup = toAPI(inspectorPageGroup());
+    WKContextRef wkContext = toAPI(&inspectorProcessPool());
+    WKRetainPtr<WKStringRef> wkGroupIdentifier = adoptWK(WKStringCreateWithUTF8CString(inspectorPageGroupIdentifier().utf8().data()));
+    WKPageGroupRef wkPageGroup = WKPageGroupCreateWithIdentifier(wkGroupIdentifier.get());
 
     m_inspectorView = EWKViewCreate(wkContext, wkPageGroup, ecore_evas_get(m_inspectorWindow), /* smart */ 0);
     WKViewRef wkView = EWKViewGetWKView(m_inspectorView);
 
-    WKRetainPtr<WKStringRef> wkTheme = adoptWK(WKStringCreateWithUTF8CString(TEST_THEME_DIR "/default.edj"));
+    WKRetainPtr<WKStringRef> wkTheme = adoptWK(WKStringCreateWithUTF8CString(DEFAULT_THEME_DIR "/default.edj"));
     WKViewSetThemePath(wkView, wkTheme.get());
 
     WKPreferencesRef wkPreferences = WKPageGroupGetPreferences(wkPageGroup);
     WKPreferencesSetFileAccessFromFileURLsAllowed(wkPreferences, true);
+    WKPreferencesSetJavaScriptRuntimeFlags(wkPreferences, 0);
 
     return toImpl(WKViewGetPage(wkView));
 }
@@ -140,6 +140,10 @@ void WebInspectorProxy::platformDidClose()
         ecore_evas_free(m_inspectorWindow);
         m_inspectorWindow = 0;
     }
+}
+
+void WebInspectorProxy::platformInvalidate()
+{
 }
 
 void WebInspectorProxy::platformHide()
@@ -204,7 +208,8 @@ unsigned WebInspectorProxy::platformInspectedWindowWidth()
 
 void WebInspectorProxy::platformAttach()
 {
-    notImplemented();
+    // FIXME: EFL port doesn't support to attach inspector view to browser window yet. For now new inspector window is shown instead.
+    createInspectorWindow();
 }
 
 void WebInspectorProxy::platformDetach()
@@ -243,5 +248,3 @@ void WebInspectorProxy::platformAttachAvailabilityChanged(bool)
 }
 
 } // namespace WebKit
-
-#endif // ENABLE(INSPECTOR)

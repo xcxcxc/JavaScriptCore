@@ -42,6 +42,7 @@
 #include <stdlib.h>
 #include <wtf/ASCIICType.h>
 #include <wtf/Assertions.h>
+#include <wtf/HexNumber.h>
 #include <wtf/MathExtras.h>
 #include <wtf/StringExtras.h>
 #include <wtf/text/StringBuilder.h>
@@ -65,9 +66,8 @@ static JSValue encode(ExecState* exec, const char* doNotEscape)
         if (c && strchr(doNotEscape, c))
             builder.append(static_cast<LChar>(c));
         else {
-            char tmp[4];
-            snprintf(tmp, sizeof(tmp), "%%%02X", static_cast<unsigned char>(c));
-            builder.append(tmp);
+            builder.append(static_cast<LChar>('%'));
+            appendByteAsHex(c, builder);
         }
     }
     return builder.build(exec);
@@ -343,7 +343,51 @@ static bool isInfinity(const CharType* data, const CharType* end)
         && data[7] == 'y';
 }
 
-// See ecma-262 9.3.1
+// See ecma-262 6th 11.8.3
+template <typename CharType>
+static double jsBinaryIntegerLiteral(const CharType*& data, const CharType* end)
+{
+    // Binary number.
+    data += 2;
+    const CharType* firstDigitPosition = data;
+    double number = 0;
+    while (true) {
+        number = number * 2 + (*data - '0');
+        ++data;
+        if (data == end)
+            break;
+        if (!isASCIIBinaryDigit(*data))
+            break;
+    }
+    if (number >= mantissaOverflowLowerBound)
+        number = parseIntOverflow(firstDigitPosition, data - firstDigitPosition, 2);
+
+    return number;
+}
+
+// See ecma-262 6th 11.8.3
+template <typename CharType>
+static double jsOctalIntegerLiteral(const CharType*& data, const CharType* end)
+{
+    // Octal number.
+    data += 2;
+    const CharType* firstDigitPosition = data;
+    double number = 0;
+    while (true) {
+        number = number * 8 + (*data - '0');
+        ++data;
+        if (data == end)
+            break;
+        if (!isASCIIOctalDigit(*data))
+            break;
+    }
+    if (number >= mantissaOverflowLowerBound)
+        number = parseIntOverflow(firstDigitPosition, data - firstDigitPosition, 8);
+    
+    return number;
+}
+
+// See ecma-262 6th 11.8.3
 template <typename CharType>
 static double jsHexIntegerLiteral(const CharType*& data, const CharType* end)
 {
@@ -365,7 +409,7 @@ static double jsHexIntegerLiteral(const CharType*& data, const CharType* end)
     return number;
 }
 
-// See ecma-262 9.3.1
+// See ecma-262 6th 11.8.3
 template <typename CharType>
 static double jsStrDecimalLiteral(const CharType*& data, const CharType* end)
 {
@@ -422,9 +466,16 @@ static double toDouble(const CharType* characters, unsigned size)
         return 0.0;
     
     double number;
-    if (characters[0] == '0' && characters + 2 < endCharacters && (characters[1] | 0x20) == 'x' && isASCIIHexDigit(characters[2]))
-        number = jsHexIntegerLiteral(characters, endCharacters);
-    else
+    if (characters[0] == '0' && characters + 2 < endCharacters) {
+        if ((characters[1] | 0x20) == 'x' && isASCIIHexDigit(characters[2]))
+            number = jsHexIntegerLiteral(characters, endCharacters);
+        else if ((characters[1] | 0x20) == 'o' && isASCIIOctalDigit(characters[2]))
+            number = jsOctalIntegerLiteral(characters, endCharacters);
+        else if ((characters[1] | 0x20) == 'b' && isASCIIBinaryDigit(characters[2]))
+            number = jsBinaryIntegerLiteral(characters, endCharacters);
+        else
+            number = jsStrDecimalLiteral(characters, endCharacters);
+    } else
         number = jsStrDecimalLiteral(characters, endCharacters);
     
     // Allow trailing white space.
@@ -438,7 +489,7 @@ static double toDouble(const CharType* characters, unsigned size)
     return number;
 }
 
-// See ecma-262 9.3.1
+// See ecma-262 6th 11.8.3
 double jsToNumber(const String& s)
 {
     unsigned size = s.length();
@@ -520,7 +571,7 @@ EncodedJSValue JSC_HOST_CALL globalFuncEval(ExecState* exec)
     }
 
     JSGlobalObject* calleeGlobalObject = exec->callee()->globalObject();
-    EvalExecutable* eval = EvalExecutable::create(exec, makeSource(s), false);
+    EvalExecutable* eval = EvalExecutable::create(exec, makeSource(s), false, ThisTDZMode::CheckIfNeeded);
     if (!eval)
         return JSValue::encode(jsUndefined());
 
@@ -625,9 +676,8 @@ EncodedJSValue JSC_HOST_CALL globalFuncEscape(ExecState* exec)
             if (u && strchr(do_not_escape, static_cast<char>(u)))
                 builder.append(*c);
             else {
-                char tmp[4];
-                snprintf(tmp, sizeof(tmp), "%%%02X", u);
-                builder.append(tmp);
+                builder.append(static_cast<LChar>('%'));
+                appendByteAsHex(static_cast<LChar>(u), builder);
             }
         }
 
@@ -638,15 +688,15 @@ EncodedJSValue JSC_HOST_CALL globalFuncEscape(ExecState* exec)
     for (unsigned k = 0; k < str.length(); k++, c++) {
         int u = c[0];
         if (u > 255) {
-            char tmp[7];
-            snprintf(tmp, sizeof(tmp), "%%u%04X", u);
-            builder.append(tmp);
+            builder.append(static_cast<LChar>('%'));
+            builder.append(static_cast<LChar>('u'));
+            appendByteAsHex(u >> 8, builder);
+            appendByteAsHex(u & 0xFF, builder);
         } else if (u != 0 && strchr(do_not_escape, static_cast<char>(u)))
             builder.append(*c);
         else {
-            char tmp[4];
-            snprintf(tmp, sizeof(tmp), "%%%02X", u);
-            builder.append(tmp);
+            builder.append(static_cast<LChar>('%'));
+            appendByteAsHex(u, builder);
         }
     }
 
@@ -709,6 +759,16 @@ EncodedJSValue JSC_HOST_CALL globalFuncThrowTypeError(ExecState* exec)
     return throwVMTypeError(exec);
 }
 
+EncodedJSValue JSC_HOST_CALL globalPrivateFuncAbs(ExecState* exec)
+{
+    return JSValue::encode(jsNumber(fabs(exec->argument(0).toNumber(exec))));
+}
+
+EncodedJSValue JSC_HOST_CALL globalPrivateFuncFloor(ExecState* exec)
+{
+    return JSValue::encode(jsNumber(floor(exec->argument(0).toNumber(exec))));
+}
+
 class GlobalFuncProtoGetterFunctor {
 public:
     GlobalFuncProtoGetterFunctor(JSObject* thisObject)
@@ -741,6 +801,9 @@ private:
 
 EncodedJSValue JSC_HOST_CALL globalFuncProtoGetter(ExecState* exec)
 {
+    if (exec->thisValue().isUndefinedOrNull()) 
+        return throwVMError(exec, createTypeError(exec, "Can't convert undefined or null to object"));
+
     JSObject* thisObject = jsDynamicCast<JSObject*>(exec->thisValue().toThis(exec, NotStrictMode));
 
     if (!thisObject)
@@ -781,6 +844,9 @@ private:
 
 EncodedJSValue JSC_HOST_CALL globalFuncProtoSetter(ExecState* exec)
 {
+    if (exec->thisValue().isUndefinedOrNull()) 
+        return throwVMError(exec, createTypeError(exec, "Can't convert undefined or null to object"));
+
     JSValue value = exec->argument(0);
 
     JSObject* thisObject = jsDynamicCast<JSObject*>(exec->thisValue().toThis(exec, NotStrictMode));

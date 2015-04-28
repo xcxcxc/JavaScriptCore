@@ -67,6 +67,9 @@ class WebBackForwardList;
 class WebFrame;
 class WebInspector;
 class WebInspectorClient;
+#if USE(TEXTURE_MAPPER_GL)
+class AcceleratedCompositingContext;
+#endif
 
 WebView* kit(WebCore::Page*);
 WebCore::Page* core(IWebView*);
@@ -941,8 +944,8 @@ public:
     WebCore::GraphicsDeviceAdapter* graphicsDeviceAdapter() const;
 #endif
 
-    void enterVideoFullscreenForVideoElement(WebCore::HTMLVideoElement*);
-    void exitVideoFullscreen();
+    void enterVideoFullscreenForVideoElement(WebCore::HTMLVideoElement&);
+    void exitVideoFullscreenForVideoElement(WebCore::HTMLVideoElement&);
 
     void setLastCursor(HCURSOR cursor) { m_lastSetCursor = cursor; }
 
@@ -1016,9 +1019,14 @@ private:
     bool m_shouldInvertColors;
     void setShouldInvertColors(bool);
 
+    HRESULT STDMETHODCALLTYPE setLoadResourcesSerially(BOOL);
+    HRESULT STDMETHODCALLTYPE scaleWebView(double scale, POINT origin);
+
 protected:
     static bool registerWebViewWindowClass();
     static LRESULT CALLBACK WebViewWndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+    void updateWindowIfNeeded(HWND hWnd, UINT message);
 
     HIMC getIMMContext();
     void releaseIMMContext(HIMC);
@@ -1061,10 +1069,8 @@ protected:
     HWND m_viewWindow;
     WebFrame* m_mainFrame;
     WebCore::Page* m_page;
-#if ENABLE(INSPECTOR)
     WebInspectorClient* m_inspectorClient;
-#endif // ENABLE(INSPECTOR)
-    
+
     RefPtr<WebCore::SharedGDIObject<HBITMAP>> m_backingStoreBitmap;
     SIZE m_backingStoreSize;
     RefPtr<WebCore::SharedGDIObject<HRGN>> m_backingStoreDirtyRegion;
@@ -1081,9 +1087,7 @@ protected:
     COMPtr<IWebDownloadDelegate> m_downloadDelegate;
     COMPtr<IWebHistoryDelegate> m_historyDelegate;
     COMPtr<WebPreferences> m_preferences;
-#if ENABLE(INSPECTOR)
     COMPtr<WebInspector> m_webInspector;
-#endif // ENABLE(INSPECTOR)
     COMPtr<IWebGeolocationProvider> m_geolocationProvider;
 
     bool m_userAgentOverridden;
@@ -1136,8 +1140,10 @@ protected:
     void setAcceleratedCompositing(bool);
 #if USE(CA)
     RefPtr<WebCore::CACFLayerTreeHost> m_layerTreeHost;
-#endif
     std::unique_ptr<WebCore::GraphicsLayer> m_backingLayer;
+#elif USE(TEXTURE_MAPPER_GL)
+    std::unique_ptr<AcceleratedCompositingContext> m_acceleratedCompositingContext;
+#endif
     bool m_isAcceleratedCompositing;
 
     bool m_nextDisplayIsSynchronous;

@@ -57,14 +57,19 @@ enum class FrameLoadType {
     ReloadFromOrigin,
 };
 
-    enum NavigationType {
-        NavigationTypeLinkClicked,
-        NavigationTypeFormSubmitted,
-        NavigationTypeBackForward,
-        NavigationTypeReload,
-        NavigationTypeFormResubmitted,
-        NavigationTypeOther
-    };
+enum class NewFrameOpenerPolicy {
+    Suppress,
+    Allow
+};
+
+enum class NavigationType {
+    LinkClicked,
+    FormSubmitted,
+    BackForward,
+    Reload,
+    FormResubmitted,
+    Other
+};
 
     enum ClearProvisionalItemPolicy {
         ShouldClearProvisionalItem,

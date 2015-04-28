@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,19 +28,26 @@
 
 #if WK_API_ENABLED
 
+#import "APIPageConfiguration.h"
 #import "WKPreferences.h"
 #import "WKProcessPool.h"
 #import "WKUserContentController.h"
 #import "WKWebViewContentProviderRegistry.h"
 #import "WeakObjCPtr.h"
 #import "_WKVisitedLinkProvider.h"
-#import "_WKWebsiteDataStore.h"
+#import "_WKWebsiteDataStoreInternal.h"
 #import <wtf/RetainPtr.h>
+
+#if PLATFORM(IOS)
+#import "UIKitSPI.h"
+#endif
 
 template<typename T> class LazyInitialized {
 public:
+    typedef typename WTF::GetPtrHelper<T>::PtrType PtrType;
+
     template<typename F>
-    T* get(F&& f)
+    PtrType get(F&& f)
     {
         if (!m_isInitialized) {
             m_value = f();
@@ -50,33 +57,43 @@ public:
         return m_value.get();
     }
 
-    void set(T* t)
+    void set(PtrType t)
     {
         m_value = t;
         m_isInitialized = true;
     }
 
-    T* peek()
+    void set(T&& t)
+    {
+        m_value = WTF::move(t);
+        m_isInitialized = true;
+    }
+
+    PtrType peek()
     {
         return m_value.get();
     }
 
 private:
     bool m_isInitialized = false;
-    RetainPtr<T> m_value;
+    T m_value;
 };
 
 @implementation WKWebViewConfiguration {
-    LazyInitialized<WKProcessPool> _processPool;
-    LazyInitialized<WKPreferences> _preferences;
-    LazyInitialized<WKUserContentController> _userContentController;
-    LazyInitialized<_WKVisitedLinkProvider> _visitedLinkProvider;
-    LazyInitialized<_WKWebsiteDataStore> _websiteDataStore;
+    LazyInitialized<RetainPtr<WKProcessPool>> _processPool;
+    LazyInitialized<RetainPtr<WKPreferences>> _preferences;
+    LazyInitialized<RetainPtr<WKUserContentController>> _userContentController;
+    LazyInitialized<RetainPtr<_WKVisitedLinkProvider>> _visitedLinkProvider;
+    LazyInitialized<RetainPtr<WKWebsiteDataStore>> _websiteDataStore;
     WebKit::WeakObjCPtr<WKWebView> _relatedWebView;
     WebKit::WeakObjCPtr<WKWebView> _alternateWebViewForNavigationGestures;
+    BOOL _treatsSHA1SignedCertificatesAsInsecure;
     RetainPtr<NSString> _groupIdentifier;
+    LazyInitialized<RetainPtr<NSString>> _applicationNameForUserAgent;
+
 #if PLATFORM(IOS)
-    LazyInitialized<WKWebViewContentProviderRegistry> _contentProviderRegistry;
+    LazyInitialized<RetainPtr<WKWebViewContentProviderRegistry>> _contentProviderRegistry;
+    BOOL _allowsAlternateFullscreen;
 #endif
 }
 
@@ -88,6 +105,7 @@ private:
 #if PLATFORM(IOS)
     _mediaPlaybackRequiresUserAction = YES;
     _mediaPlaybackAllowsAirPlay = YES;
+    _allowsAlternateFullscreen = YES;
 #endif
     
     return self;
@@ -100,22 +118,26 @@ private:
 
 - (id)copyWithZone:(NSZone *)zone
 {
-    WKWebViewConfiguration *configuration = [[[self class] allocWithZone:zone] init];
+    WKWebViewConfiguration *configuration = [(WKWebViewConfiguration *)[[self class] allocWithZone:zone] init];
 
     configuration.processPool = self.processPool;
     configuration.preferences = self.preferences;
     configuration.userContentController = self.userContentController;
+    configuration.websiteDataStore = self.websiteDataStore;
     configuration._visitedLinkProvider = self._visitedLinkProvider;
-    configuration._websiteDataStore = self._websiteDataStore;
     configuration._relatedWebView = _relatedWebView.get().get();
     configuration._alternateWebViewForNavigationGestures = _alternateWebViewForNavigationGestures.get().get();
+    configuration->_treatsSHA1SignedCertificatesAsInsecure = _treatsSHA1SignedCertificatesAsInsecure;
 #if PLATFORM(IOS)
     configuration._contentProviderRegistry = self._contentProviderRegistry;
 #endif
 
     configuration->_suppressesIncrementalRendering = self->_suppressesIncrementalRendering;
+    configuration.applicationNameForUserAgent = self.applicationNameForUserAgent;
+
 #if PLATFORM(IOS)
     configuration->_allowsInlineMediaPlayback = self->_allowsInlineMediaPlayback;
+    configuration->_allowsAlternateFullscreen = self->_allowsAlternateFullscreen;
     configuration->_mediaPlaybackRequiresUserAction = self->_mediaPlaybackRequiresUserAction;
     configuration->_mediaPlaybackAllowsAirPlay = self->_mediaPlaybackAllowsAirPlay;
     configuration->_selectionGranularity = self->_selectionGranularity;
@@ -154,6 +176,35 @@ private:
     _userContentController.set(userContentController);
 }
 
+- (WKWebsiteDataStore *)websiteDataStore
+{
+    return _websiteDataStore.get([] { return [WKWebsiteDataStore defaultDataStore]; });
+}
+
+- (void)setWebsiteDataStore:(WKWebsiteDataStore *)websiteDataStore
+{
+    _websiteDataStore.set(websiteDataStore);
+}
+
+static NSString *defaultApplicationNameForUserAgent()
+{
+#if PLATFORM(IOS)
+    return [@"Mobile/" stringByAppendingString:[UIDevice currentDevice].buildVersion];
+#else
+    return nil;
+#endif
+}
+
+- (NSString *)applicationNameForUserAgent
+{
+    return _applicationNameForUserAgent.get([] { return defaultApplicationNameForUserAgent(); });
+}
+
+- (void)setApplicationNameForUserAgent:(NSString *)applicationNameForUserAgent
+{
+    _applicationNameForUserAgent.set(adoptNS([applicationNameForUserAgent copy]));
+}
+
 - (_WKVisitedLinkProvider *)_visitedLinkProvider
 {
     return _visitedLinkProvider.get([] { return adoptNS([[_WKVisitedLinkProvider alloc] init]); });
@@ -164,15 +215,20 @@ private:
     _visitedLinkProvider.set(visitedLinkProvider);
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+
 - (_WKWebsiteDataStore *)_websiteDataStore
 {
-    return _websiteDataStore.get([] { return [_WKWebsiteDataStore defaultDataStore]; });
+    return self.websiteDataStore ? adoptNS([[_WKWebsiteDataStore alloc] initWithDataStore:self.websiteDataStore]).autorelease() : nullptr;
 }
 
 - (void)_setWebsiteDataStore:(_WKWebsiteDataStore *)websiteDataStore
 {
-    _websiteDataStore.set(websiteDataStore);
+    self.websiteDataStore = websiteDataStore ? websiteDataStore->_dataStore.get() : nullptr;
 }
+
+#pragma clang diagnostic pop
 
 #if PLATFORM(IOS)
 - (WKWebViewContentProviderRegistry *)_contentProviderRegistry
@@ -197,11 +253,11 @@ private:
     if (!self.userContentController)
         [NSException raise:NSInvalidArgumentException format:@"configuration.userContentController is nil"];
 
+    if (!self.websiteDataStore)
+        [NSException raise:NSInvalidArgumentException format:@"configuration.websiteDataStore is nil"];
+
     if (!self._visitedLinkProvider)
         [NSException raise:NSInvalidArgumentException format:@"configuration._visitedLinkProvider is nil"];
-
-    if (!self._websiteDataStore)
-        [NSException raise:NSInvalidArgumentException format:@"configuration._websiteDataStore is nil"];
 
 #if PLATFORM(IOS)
     if (!self._contentProviderRegistry)
@@ -242,6 +298,28 @@ private:
 {
     _groupIdentifier = groupIdentifier;
 }
+
+- (BOOL)_treatsSHA1SignedCertificatesAsInsecure
+{
+    return _treatsSHA1SignedCertificatesAsInsecure;
+}
+
+- (void)_setTreatsSHA1SignedCertificatesAsInsecure:(BOOL)insecure
+{
+    _treatsSHA1SignedCertificatesAsInsecure = insecure;
+}
+
+#if PLATFORM(IOS)
+- (BOOL)_allowsAlternateFullscreen
+{
+    return _allowsAlternateFullscreen;
+}
+
+- (void)_setAllowsAlternateFullscreen:(BOOL)allowed
+{
+    _allowsAlternateFullscreen = allowed;
+}
+#endif
 
 @end
 

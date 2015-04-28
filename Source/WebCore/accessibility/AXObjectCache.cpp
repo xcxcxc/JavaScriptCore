@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2009, 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2008, 2009, 2010, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -73,6 +73,7 @@
 #include "RenderMenuList.h"
 #include "RenderMeter.h"
 #include "RenderProgress.h"
+#include "RenderSVGRoot.h"
 #include "RenderSlider.h"
 #include "RenderTable.h"
 #include "RenderTableCell.h"
@@ -88,6 +89,9 @@
 namespace WebCore {
 
 using namespace HTMLNames;
+
+// Post value change notifications for password fields or elements contained in password fields at a 40hz interval to thwart analysis of typing cadence
+static double AccessibilityPasswordValueChangeNotificationInterval = 0.025;
 
 AccessibilityObjectInclusion AXComputedObjectAttributeCache::getIgnored(AXID id) const
 {
@@ -127,7 +131,8 @@ void AXObjectCache::setEnhancedUserInterfaceAccessibility(bool flag)
 
 AXObjectCache::AXObjectCache(Document& document)
     : m_document(document)
-    , m_notificationPostTimer(this, &AXObjectCache::notificationPostTimerFired)
+    , m_notificationPostTimer(*this, &AXObjectCache::notificationPostTimerFired)
+    , m_passwordNotificationPostTimer(*this, &AXObjectCache::passwordNotificationPostTimerFired)
 {
 }
 
@@ -158,10 +163,10 @@ AccessibilityObject* AXObjectCache::focusedImageMapUIElement(HTMLAreaElement* ar
         return nullptr;
     
     for (const auto& child : axRenderImage->children()) {
-        if (!child->isImageMapLink())
+        if (!is<AccessibilityImageMapLink>(*child))
             continue;
         
-        if (toAccessibilityImageMapLink(child.get())->areaElement() == areaElement)
+        if (downcast<AccessibilityImageMapLink>(*child).areaElement() == areaElement)
             return child.get();
     }    
     
@@ -176,8 +181,8 @@ AccessibilityObject* AXObjectCache::focusedUIElementForPage(const Page* page)
     // get the focused node in the page
     Document* focusedDocument = page->focusController().focusedOrMainFrame().document();
     Element* focusedElement = focusedDocument->focusedElement();
-    if (focusedElement && isHTMLAreaElement(focusedElement))
-        return focusedImageMapUIElement(toHTMLAreaElement(focusedElement));
+    if (is<HTMLAreaElement>(focusedElement))
+        return focusedImageMapUIElement(downcast<HTMLAreaElement>(focusedElement));
 
     AccessibilityObject* obj = focusedDocument->axObjectCache()->getOrCreate(focusedElement ? static_cast<Node*>(focusedElement) : focusedDocument);
     if (!obj)
@@ -253,10 +258,10 @@ AccessibilityObject* AXObjectCache::get(Node* node)
 // FIXME: This should take a const char*, but one caller passes nullAtom.
 bool nodeHasRole(Node* node, const String& role)
 {
-    if (!node || !node->isElementNode())
+    if (!node || !is<Element>(node))
         return false;
 
-    auto& roleValue = toElement(node)->fastGetAttribute(roleAttr);
+    auto& roleValue = downcast<Element>(*node).fastGetAttribute(roleAttr);
     if (role.isNull())
         return roleValue.isEmpty();
     if (roleValue.isEmpty())
@@ -265,7 +270,7 @@ bool nodeHasRole(Node* node, const String& role)
     return SpaceSplitString(roleValue, true).contains(role);
 }
 
-static PassRefPtr<AccessibilityObject> createFromRenderer(RenderObject* renderer)
+static Ref<AccessibilityObject> createFromRenderer(RenderObject* renderer)
 {
     // FIXME: How could renderer->node() ever not be an Element?
     Node* node = renderer->node();
@@ -290,46 +295,46 @@ static PassRefPtr<AccessibilityObject> createFromRenderer(RenderObject* renderer
         return AccessibilityMediaControl::create(renderer);
 #endif
 
-    if (renderer->isSVGRoot())
+    if (is<RenderSVGRoot>(*renderer))
         return AccessibilitySVGRoot::create(renderer);
     
     // Search field buttons
-    if (node && node->isElementNode() && toElement(node)->isSearchFieldCancelButtonElement())
+    if (is<Element>(node) && downcast<Element>(*node).isSearchFieldCancelButtonElement())
         return AccessibilitySearchFieldCancelButton::create(renderer);
     
-    if (renderer->isBoxModelObject()) {
-        RenderBoxModelObject* cssBox = toRenderBoxModelObject(renderer);
-        if (cssBox->isListBox())
-            return AccessibilityListBox::create(toRenderListBox(cssBox));
-        if (cssBox->isMenuList())
-            return AccessibilityMenuList::create(toRenderMenuList(cssBox));
+    if (is<RenderBoxModelObject>(*renderer)) {
+        RenderBoxModelObject& cssBox = downcast<RenderBoxModelObject>(*renderer);
+        if (is<RenderListBox>(cssBox))
+            return AccessibilityListBox::create(&downcast<RenderListBox>(cssBox));
+        if (is<RenderMenuList>(cssBox))
+            return AccessibilityMenuList::create(&downcast<RenderMenuList>(cssBox));
 
         // standard tables
-        if (cssBox->isTable())
-            return AccessibilityTable::create(toRenderTable(cssBox));
-        if (cssBox->isTableRow())
-            return AccessibilityTableRow::create(toRenderTableRow(cssBox));
-        if (cssBox->isTableCell())
-            return AccessibilityTableCell::create(toRenderTableCell(cssBox));
+        if (is<RenderTable>(cssBox))
+            return AccessibilityTable::create(&downcast<RenderTable>(cssBox));
+        if (is<RenderTableRow>(cssBox))
+            return AccessibilityTableRow::create(&downcast<RenderTableRow>(cssBox));
+        if (is<RenderTableCell>(cssBox))
+            return AccessibilityTableCell::create(&downcast<RenderTableCell>(cssBox));
 
         // progress bar
-        if (cssBox->isProgress())
-            return AccessibilityProgressIndicator::create(toRenderProgress(cssBox));
+        if (is<RenderProgress>(cssBox))
+            return AccessibilityProgressIndicator::create(&downcast<RenderProgress>(cssBox));
 
 #if ENABLE(METER_ELEMENT)
-        if (cssBox->isMeter())
-            return AccessibilityProgressIndicator::create(toRenderMeter(cssBox));
+        if (is<RenderMeter>(cssBox))
+            return AccessibilityProgressIndicator::create(&downcast<RenderMeter>(cssBox));
 #endif
 
         // input type=range
-        if (cssBox->isSlider())
-            return AccessibilitySlider::create(toRenderSlider(cssBox));
+        if (is<RenderSlider>(cssBox))
+            return AccessibilitySlider::create(&downcast<RenderSlider>(cssBox));
     }
 
     return AccessibilityRenderObject::create(renderer);
 }
 
-static PassRefPtr<AccessibilityObject> createFromNode(Node* node)
+static Ref<AccessibilityObject> createFromNode(Node* node)
 {
     return AccessibilityNodeObject::create(node);
 }
@@ -342,11 +347,11 @@ AccessibilityObject* AXObjectCache::getOrCreate(Widget* widget)
     if (AccessibilityObject* obj = get(widget))
         return obj;
     
-    RefPtr<AccessibilityObject> newObj = nullptr;
-    if (widget->isFrameView())
-        newObj = AccessibilityScrollView::create(toScrollView(widget));
-    else if (widget->isScrollbar())
-        newObj = AccessibilityScrollbar::create(toScrollbar(widget));
+    RefPtr<AccessibilityObject> newObj;
+    if (is<ScrollView>(*widget))
+        newObj = AccessibilityScrollView::create(downcast<ScrollView>(widget));
+    else if (is<Scrollbar>(*widget))
+        newObj = AccessibilityScrollbar::create(downcast<Scrollbar>(widget));
 
     // Will crash later if we have two objects for the same widget.
     ASSERT(!get(widget));
@@ -386,7 +391,7 @@ AccessibilityObject* AXObjectCache::getOrCreate(Node* node)
 
     bool insideMeterElement = false;
 #if ENABLE(METER_ELEMENT)
-    insideMeterElement = isHTMLMeterElement(node->parentElement());
+    insideMeterElement = is<HTMLMeterElement>(*node->parentElement());
 #endif
     
     if (!inCanvasSubtree && !isHidden && !insideMeterElement)
@@ -566,7 +571,7 @@ void AXObjectCache::remove(Widget* view)
 }
     
     
-#if !PLATFORM(WIN) || OS(WINCE)
+#if !PLATFORM(WIN)
 AXID AXObjectCache::platformGenerateAXID() const
 {
     static AXID lastUsedID = 0;
@@ -653,10 +658,10 @@ void AXObjectCache::handleMenuOpened(Node* node)
     
 void AXObjectCache::handleLiveRegionCreated(Node* node)
 {
-    if (!node || !node->renderer() || !node->isElementNode())
+    if (!is<Element>(node) || !node->renderer())
         return;
     
-    Element* element = toElement(node);
+    Element* element = downcast<Element>(node);
     String liveRegionStatus = element->fastGetAttribute(aria_liveAttr);
     if (liveRegionStatus.isEmpty()) {
         const AtomicString& ariaRole = element->fastGetAttribute(roleAttr);
@@ -699,12 +704,12 @@ void AXObjectCache::childrenChanged(AccessibilityObject* obj)
     obj->childrenChanged();
 }
     
-void AXObjectCache::notificationPostTimerFired(Timer<AXObjectCache>&)
+void AXObjectCache::notificationPostTimerFired()
 {
     Ref<Document> protectorForCacheOwner(m_document);
     m_notificationPostTimer.stop();
     
-    // In DRT, posting notifications has a tendency to immediately queue up other notifications, which can lead to unexpected behavior
+    // In tests, posting notifications has a tendency to immediately queue up other notifications, which can lead to unexpected behavior
     // when the notification list is cleared at the end. Instead copy this list at the start.
     auto notifications = WTF::move(m_notificationsToPost);
     
@@ -719,10 +724,8 @@ void AXObjectCache::notificationPostTimerFired(Timer<AXObjectCache>&)
 #ifndef NDEBUG
         // Make sure none of the render views are in the process of being layed out.
         // Notifications should only be sent after the renderer has finished
-        if (obj->isAccessibilityRenderObject()) {
-            AccessibilityRenderObject* renderObj = toAccessibilityRenderObject(obj);
-            RenderObject* renderer = renderObj->renderer();
-            if (renderer)
+        if (is<AccessibilityRenderObject>(*obj)) {
+            if (auto* renderer = downcast<AccessibilityRenderObject>(*obj).renderer())
                 ASSERT(!renderer->view().layoutState());
         }
 #endif
@@ -742,6 +745,20 @@ void AXObjectCache::notificationPostTimerFired(Timer<AXObjectCache>&)
         if (notification == AXChildrenChanged && obj->parentObjectIfExists() && obj->lastKnownIsIgnoredValue() != obj->accessibilityIsIgnored())
             childrenChanged(obj->parentObject());
     }
+}
+
+void AXObjectCache::passwordNotificationPostTimerFired()
+{
+#if PLATFORM(COCOA)
+    m_passwordNotificationPostTimer.stop();
+
+    // In tests, posting notifications has a tendency to immediately queue up other notifications, which can lead to unexpected behavior
+    // when the notification list is cleared at the end. Instead copy this list at the start.
+    auto notifications = WTF::move(m_passwordNotificationsToPost);
+
+    for (auto& notification : notifications)
+        postTextStateChangePlatformNotification(notification.get(), AXTextEditTypeInsert, " ", VisiblePosition());
+#endif
 }
     
 void AXObjectCache::postNotification(RenderObject* renderer, AXNotification notification, PostTarget postTarget, PostType postType)
@@ -820,7 +837,7 @@ void AXObjectCache::handleMenuItemSelected(Node* node)
     if (!nodeHasRole(node, "menuitem") && !nodeHasRole(node, "menuitemradio") && !nodeHasRole(node, "menuitemcheckbox"))
         return;
     
-    if (!toElement(node)->focused() && !equalIgnoringCase(toElement(node)->fastGetAttribute(aria_selectedAttr), "true"))
+    if (!downcast<Element>(*node).focused() && !equalIgnoringCase(downcast<Element>(*node).fastGetAttribute(aria_selectedAttr), "true"))
         return;
     
     postNotification(getOrCreate(node), &document(), AXMenuListItemSelected);
@@ -851,16 +868,218 @@ void AXObjectCache::selectedChildrenChanged(RenderObject* renderer)
     postNotification(renderer, AXSelectedChildrenChanged, TargetObservableParent);
 }
 
-void AXObjectCache::nodeTextChangeNotification(Node* node, AXTextChange textChange, unsigned offset, const String& text)
+#ifndef NDEBUG
+void AXObjectCache::showIntent(const AXTextStateChangeIntent &intent)
+{
+    switch (intent.type) {
+    case AXTextStateChangeTypeUnknown:
+        dataLog("Unknown");
+        break;
+    case AXTextStateChangeTypeEdit:
+        dataLog("Edit::");
+        break;
+    case AXTextStateChangeTypeSelectionMove:
+        dataLog("Move::");
+        break;
+    case AXTextStateChangeTypeSelectionExtend:
+        dataLog("Extend::");
+        break;
+    }
+    switch (intent.type) {
+    case AXTextStateChangeTypeUnknown:
+        break;
+    case AXTextStateChangeTypeEdit:
+        switch (intent.change) {
+        case AXTextEditTypeUnknown:
+            dataLog("Unknown");
+            break;
+        case AXTextEditTypeDelete:
+            dataLog("Delete");
+            break;
+        case AXTextEditTypeInsert:
+            dataLog("Insert");
+            break;
+        case AXTextEditTypeDictation:
+            dataLog("DictationInsert");
+            break;
+        case AXTextEditTypeTyping:
+            dataLog("TypingInsert");
+            break;
+        case AXTextEditTypeCut:
+            dataLog("Cut");
+            break;
+        case AXTextEditTypePaste:
+            dataLog("Paste");
+            break;
+        }
+        break;
+    case AXTextStateChangeTypeSelectionMove:
+    case AXTextStateChangeTypeSelectionExtend:
+        switch (intent.selection.direction) {
+        case AXTextSelectionDirectionUnknown:
+            dataLog("Unknown::");
+            break;
+        case AXTextSelectionDirectionBeginning:
+            dataLog("Beginning::");
+            break;
+        case AXTextSelectionDirectionEnd:
+            dataLog("End::");
+            break;
+        case AXTextSelectionDirectionPrevious:
+            dataLog("Previous::");
+            break;
+        case AXTextSelectionDirectionNext:
+            dataLog("Next::");
+            break;
+        case AXTextSelectionDirectionDiscontiguous:
+            dataLog("Discontiguous::");
+            break;
+        }
+        switch (intent.selection.direction) {
+        case AXTextSelectionDirectionUnknown:
+        case AXTextSelectionDirectionBeginning:
+        case AXTextSelectionDirectionEnd:
+        case AXTextSelectionDirectionPrevious:
+        case AXTextSelectionDirectionNext:
+            switch (intent.selection.granularity) {
+            case AXTextSelectionGranularityUnknown:
+                dataLog("Unknown");
+                break;
+            case AXTextSelectionGranularityCharacter:
+                dataLog("Character");
+                break;
+            case AXTextSelectionGranularityWord:
+                dataLog("Word");
+                break;
+            case AXTextSelectionGranularityLine:
+                dataLog("Line");
+                break;
+            case AXTextSelectionGranularitySentence:
+                dataLog("Sentence");
+                break;
+            case AXTextSelectionGranularityParagraph:
+                dataLog("Paragraph");
+                break;
+            case AXTextSelectionGranularityPage:
+                dataLog("Page");
+                break;
+            case AXTextSelectionGranularityDocument:
+                dataLog("Document");
+                break;
+            case AXTextSelectionGranularityAll:
+                dataLog("All");
+                break;
+            }
+            break;
+        case AXTextSelectionDirectionDiscontiguous:
+            break;
+        }
+        break;
+    }
+    if (intent.isSynchronizing)
+        dataLog("-Sync");
+    dataLog("\n");
+}
+#endif
+
+void AXObjectCache::setTextSelectionIntent(AXTextStateChangeIntent intent)
+{
+    m_textSelectionIntent = intent;
+}
+
+static bool isPasswordFieldOrContainedByPasswordField(AccessibilityObject* object)
+{
+    return object && (object->isPasswordField() || object->isContainedByPasswordField());
+}
+
+void AXObjectCache::postTextStateChangeNotification(Node* node, const AXTextStateChangeIntent& intent, const VisibleSelection& selection)
 {
     if (!node)
         return;
 
+#if PLATFORM(COCOA)
     stopCachingComputedObjectAttributes();
 
-    // Delegate on the right platform
-    AccessibilityObject* obj = getOrCreate(node);
-    nodeTextChangePlatformNotification(obj, textChange, offset, text);
+    AccessibilityObject* object = getOrCreate(node);
+    if (object) {
+        if (isPasswordFieldOrContainedByPasswordField(object))
+            return;
+        object = object->observableObject();
+    }
+
+    postTextStateChangePlatformNotification(object, (intent.type == AXTextStateChangeTypeUnknown) ? m_textSelectionIntent : intent, selection);
+#else
+    postNotification(node->renderer(), AXObjectCache::AXSelectedTextChanged, TargetObservableParent);
+    UNUSED_PARAM(intent);
+    UNUSED_PARAM(selection);
+#endif
+
+    setTextSelectionIntent(AXTextStateChangeIntent());
+}
+
+void AXObjectCache::postTextStateChangeNotification(Node* node, AXTextEditType type, const String& text, const VisiblePosition& position)
+{
+    if (!node)
+        return;
+    ASSERT(type != AXTextEditTypeUnknown);
+
+    stopCachingComputedObjectAttributes();
+
+    AccessibilityObject* object = getOrCreate(node);
+#if PLATFORM(COCOA)
+    if (object) {
+        if (enqueuePasswordValueChangeNotification(object))
+            return;
+        object = object->observableObject();
+    }
+
+    postTextStateChangePlatformNotification(object, type, text, position);
+#else
+    nodeTextChangePlatformNotification(object, textChangeForEditType(type), position.deepEquivalent().deprecatedEditingOffset(), text);
+#endif
+}
+
+void AXObjectCache::postTextReplacementNotification(Node* node, AXTextEditType deletionType, const String& deletedText, AXTextEditType insertionType, const String& insertedText, const VisiblePosition& position)
+{
+    if (!node)
+        return;
+    ASSERT(deletionType == AXTextEditTypeDelete);
+    ASSERT(insertionType == AXTextEditTypeInsert || insertionType == AXTextEditTypeTyping || insertionType == AXTextEditTypeDictation || insertionType == AXTextEditTypePaste);
+
+    stopCachingComputedObjectAttributes();
+
+    AccessibilityObject* object = getOrCreate(node);
+#if PLATFORM(COCOA)
+    if (object) {
+        if (enqueuePasswordValueChangeNotification(object))
+            return;
+        object = object->observableObject();
+    }
+
+    postTextReplacementPlatformNotification(object, deletionType, deletedText, insertionType, insertedText, position);
+#else
+    nodeTextChangePlatformNotification(object, textChangeForEditType(deletionType), position.deepEquivalent().deprecatedEditingOffset(), deletedText);
+    nodeTextChangePlatformNotification(object, textChangeForEditType(insertionType), position.deepEquivalent().deprecatedEditingOffset(), insertedText);
+#endif
+}
+
+bool AXObjectCache::enqueuePasswordValueChangeNotification(AccessibilityObject* object)
+{
+    if (!isPasswordFieldOrContainedByPasswordField(object))
+        return false;
+
+    AccessibilityObject* observableObject = object->observableObject();
+    if (!observableObject) {
+        ASSERT_NOT_REACHED();
+        // return true even though the enqueue didn't happen because this is a password field and caller shouldn't post a notification
+        return true;
+    }
+
+    m_passwordNotificationsToPost.add(observableObject);
+    if (!m_passwordNotificationPostTimer.isActive())
+        m_passwordNotificationPostTimer.startOneShot(AccessibilityPasswordValueChangeNotificationInterval);
+
+    return true;
 }
 
 void AXObjectCache::frameLoadingEventNotification(Frame* frame, AXLoadingEvent loadingEvent)
@@ -917,7 +1136,7 @@ void AXObjectCache::handleAttributeChanged(const QualifiedName& attrName, Elemen
         handleAriaRoleChanged(element);
     else if (attrName == altAttr || attrName == titleAttr)
         textChanged(element);
-    else if (attrName == forAttr && isHTMLLabelElement(element))
+    else if (attrName == forAttr && is<HTMLLabelElement>(*element))
         labelChanged(element);
 
     if (!attrName.localName().string().startsWith("aria-"))
@@ -947,8 +1166,8 @@ void AXObjectCache::handleAttributeChanged(const QualifiedName& attrName, Elemen
 
 void AXObjectCache::labelChanged(Element* element)
 {
-    ASSERT(isHTMLLabelElement(element));
-    HTMLElement* correspondingControl = toHTMLLabelElement(element)->control();
+    ASSERT(is<HTMLLabelElement>(*element));
+    HTMLElement* correspondingControl = downcast<HTMLLabelElement>(*element).control();
     textChanged(correspondingControl);
 }
 
@@ -1030,7 +1249,7 @@ void AXObjectCache::textMarkerDataForVisiblePosition(TextMarkerData& textMarkerD
 const Element* AXObjectCache::rootAXEditableElement(const Node* node)
 {
     const Element* result = node->rootEditableElement();
-    const Element* element = node->isElementNode() ? toElement(node) : node->parentElement();
+    const Element* element = is<Element>(*node) ? downcast<Element>(node) : node->parentElement();
 
     for (; element; element = element->parentElement()) {
         if (nodeIsTextControl(element))
@@ -1073,8 +1292,8 @@ bool isNodeAriaVisible(Node* node)
     // To determine if a node is ARIA visible, we need to check the parent hierarchy to see if anyone specifies
     // aria-hidden explicitly.
     for (Node* testNode = node; testNode; testNode = testNode->parentNode()) {
-        if (testNode->isElementNode()) {
-            const AtomicString& ariaHiddenValue = toElement(testNode)->fastGetAttribute(aria_hiddenAttr);
+        if (is<Element>(*testNode)) {
+            const AtomicString& ariaHiddenValue = downcast<Element>(*testNode).fastGetAttribute(aria_hiddenAttr);
             if (equalIgnoringCase(ariaHiddenValue, "false"))
                 return true;
             if (equalIgnoringCase(ariaHiddenValue, "true"))
@@ -1083,6 +1302,14 @@ bool isNodeAriaVisible(Node* node)
     }
     
     return false;
+}
+
+AccessibilityObject* AXObjectCache::rootWebArea()
+{
+    AccessibilityObject* rootObject = this->rootObject();
+    if (!rootObject || !rootObject->isAccessibilityScrollView())
+        return nullptr;
+    return downcast<AccessibilityScrollView>(*rootObject).webAreaObject();
 }
 
 AXAttributeCacheEnabler::AXAttributeCacheEnabler(AXObjectCache* cache)
@@ -1097,6 +1324,26 @@ AXAttributeCacheEnabler::~AXAttributeCacheEnabler()
     if (m_cache)
         m_cache->stopCachingComputedObjectAttributes();
 }
+
+#if !PLATFORM(COCOA)
+AXTextChange AXObjectCache::textChangeForEditType(AXTextEditType type)
+{
+    switch (type) {
+    case AXTextEditTypeCut:
+    case AXTextEditTypeDelete:
+        return AXTextDeleted;
+    case AXTextEditTypeInsert:
+    case AXTextEditTypeDictation:
+    case AXTextEditTypeTyping:
+    case AXTextEditTypePaste:
+        return AXTextInserted;
+    case AXTextEditTypeUnknown:
+        break;
+    }
+    ASSERT_NOT_REACHED();
+    return AXTextInserted;
+}
+#endif
     
 } // namespace WebCore
 

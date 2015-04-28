@@ -34,14 +34,19 @@
 
 namespace JSC {
 
-WeakBlock* WeakBlock::create(DeadBlock* block)
+WeakBlock* WeakBlock::create()
 {
-    Region* region = block->region();
-    return new (NotNull, block) WeakBlock(region);
+    return new (NotNull, fastMalloc(blockSize)) WeakBlock();
 }
 
-WeakBlock::WeakBlock(Region* region)
-    : HeapBlock<WeakBlock>(region)
+void WeakBlock::destroy(WeakBlock* block)
+{
+    block->~WeakBlock();
+    fastFree(block);
+}
+
+WeakBlock::WeakBlock()
+    : DoublyLinkedListNode<WeakBlock>()
 {
     for (size_t i = 0; i < weakImplCount(); ++i) {
         WeakImpl* weakImpl = &weakImpls()[i];
@@ -76,8 +81,11 @@ void WeakBlock::sweep()
             finalize(weakImpl);
         if (weakImpl->state() == WeakImpl::Deallocated)
             addToFreeList(&sweepResult.freeList, weakImpl);
-        else
+        else {
             sweepResult.blockIsFree = false;
+            if (weakImpl->state() == WeakImpl::Live)
+                sweepResult.blockIsLogicallyEmpty = false;
+        }
     }
 
     m_sweepResult = sweepResult;

@@ -40,20 +40,19 @@ public:
 
     static bool logToSystemConsole();
     static void setLogToSystemConsole(bool);
-    static void initializeLogToSystemConsole();
 
 protected:
-    virtual void messageWithTypeAndLevel(MessageType, MessageLevel, JSC::ExecState*, PassRefPtr<ScriptArguments>) override;
-    virtual void count(JSC::ExecState*, PassRefPtr<ScriptArguments>) override;
+    virtual void messageWithTypeAndLevel(MessageType, MessageLevel, JSC::ExecState*, RefPtr<ScriptArguments>&&) override;
+    virtual void count(JSC::ExecState*, RefPtr<ScriptArguments>&&) override;
     virtual void profile(JSC::ExecState*, const String& title) override;
     virtual void profileEnd(JSC::ExecState*, const String& title) override;
     virtual void time(JSC::ExecState*, const String& title) override;
     virtual void timeEnd(JSC::ExecState*, const String& title) override;
-    virtual void timeStamp(JSC::ExecState*, PassRefPtr<ScriptArguments>) override;
+    virtual void timeStamp(JSC::ExecState*, RefPtr<ScriptArguments>&&) override;
 
 private:
     void warnUnimplemented(const String& method);
-    void internalAddMessage(MessageType, MessageLevel, JSC::ExecState*, PassRefPtr<ScriptArguments>);
+    void internalAddMessage(MessageType, MessageLevel, JSC::ExecState*, RefPtr<ScriptArguments>&&);
 
     InspectorConsoleAgent* m_consoleAgent;
 };

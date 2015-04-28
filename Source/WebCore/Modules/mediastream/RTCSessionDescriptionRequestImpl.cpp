@@ -74,7 +74,7 @@ void RTCSessionDescriptionRequestImpl::requestSucceeded(PassRefPtr<RTCSessionDes
 void RTCSessionDescriptionRequestImpl::requestFailed(const String& error)
 {
     if (m_errorCallback)
-        m_errorCallback->handleEvent(DOMError::create(error).get());
+        m_errorCallback->handleEvent(DOMError::create(error).ptr());
 
     clear();
 }
@@ -82,6 +82,17 @@ void RTCSessionDescriptionRequestImpl::requestFailed(const String& error)
 void RTCSessionDescriptionRequestImpl::stop()
 {
     clear();
+}
+
+const char* RTCSessionDescriptionRequestImpl::activeDOMObjectName() const
+{
+    return "RTCSessionDescriptionRequestImpl";
+}
+
+bool RTCSessionDescriptionRequestImpl::canSuspendForPageCache() const
+{
+    // FIXME: We should try and do better here.
+    return false;
 }
 
 void RTCSessionDescriptionRequestImpl::clear()

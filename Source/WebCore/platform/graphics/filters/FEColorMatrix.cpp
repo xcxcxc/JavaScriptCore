@@ -32,16 +32,16 @@
 
 namespace WebCore {
 
-FEColorMatrix::FEColorMatrix(Filter* filter, ColorMatrixType type, const Vector<float>& values)
+FEColorMatrix::FEColorMatrix(Filter& filter, ColorMatrixType type, const Vector<float>& values)
     : FilterEffect(filter)
     , m_type(type)
     , m_values(values)
 {
 }
 
-PassRefPtr<FEColorMatrix> FEColorMatrix::create(Filter* filter, ColorMatrixType type, const Vector<float>& values)
+Ref<FEColorMatrix> FEColorMatrix::create(Filter& filter, ColorMatrixType type, const Vector<float>& values)
 {
-    return adoptRef(new FEColorMatrix(filter, type, values));
+    return adoptRef(*new FEColorMatrix(filter, type, values));
 }
 
 ColorMatrixType FEColorMatrix::type() const

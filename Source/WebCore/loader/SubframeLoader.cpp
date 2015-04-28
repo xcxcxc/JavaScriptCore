@@ -36,6 +36,7 @@
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "ContentSecurityPolicy.h"
+#include "DiagnosticLoggingClient.h"
 #include "DiagnosticLoggingKeys.h"
 #include "Frame.h"
 #include "FrameLoader.h"
@@ -46,6 +47,7 @@
 #include "HTMLNames.h"
 #include "HTMLObjectElement.h"
 #include "MIMETypeRegistry.h"
+#include "MainFrame.h"
 #include "Page.h"
 #include "PluginData.h"
 #include "PluginDocument.h"
@@ -165,8 +167,11 @@ static String findPluginMIMETypeFromURL(Page* page, const String& url)
 
     const PluginData& pluginData = page->pluginData();
 
-    for (size_t i = 0; i < pluginData.mimes().size(); ++i) {
-        const MimeClassInfo& mimeClassInfo = pluginData.mimes()[i];
+    Vector<MimeClassInfo> mimes;
+    Vector<size_t> mimePluginIndices;
+    pluginData.getWebVisibleMimesAndPluginIndices(mimes, mimePluginIndices);
+    for (size_t i = 0; i < mimes.size(); ++i) {
+        const MimeClassInfo& mimeClassInfo = mimes[i];
         for (size_t j = 0; j < mimeClassInfo.extensions.size(); ++j) {
             if (equalIgnoringCase(extension, mimeClassInfo.extensions[j]))
                 return mimeClassInfo.type;
@@ -178,7 +183,7 @@ static String findPluginMIMETypeFromURL(Page* page, const String& url)
 
 static void logPluginRequest(Page* page, const String& mimeType, const String& url, bool success)
 {
-    if (!page || !page->settings().diagnosticLoggingEnabled())
+    if (!page)
         return;
 
     String newMIMEType = mimeType;
@@ -189,17 +194,17 @@ static void logPluginRequest(Page* page, const String& mimeType, const String& u
             return;
     }
 
-    String pluginFile = page->pluginData().pluginFileForMimeType(newMIMEType);
+    String pluginFile = page->pluginData().pluginFileForWebVisibleMimeType(newMIMEType);
     String description = !pluginFile ? newMIMEType : pluginFile;
 
-    ChromeClient& chromeClient = page->chrome().client();
-    chromeClient.logDiagnosticMessage(success ? DiagnosticLoggingKeys::pluginLoadedKey() : DiagnosticLoggingKeys::pluginLoadingFailedKey(), description, DiagnosticLoggingKeys::noopKey());
+    DiagnosticLoggingClient& diagnosticLoggingClient = page->mainFrame().diagnosticLoggingClient();
+    diagnosticLoggingClient.logDiagnosticMessage(success ? DiagnosticLoggingKeys::pluginLoadedKey() : DiagnosticLoggingKeys::pluginLoadingFailedKey(), description, ShouldSample::No);
 
     if (!page->hasSeenAnyPlugin())
-        chromeClient.logDiagnosticMessage(DiagnosticLoggingKeys::pageContainsAtLeastOnePluginKey(), emptyString(), DiagnosticLoggingKeys::noopKey());
-    
+        diagnosticLoggingClient.logDiagnosticMessage(DiagnosticLoggingKeys::pageContainsAtLeastOnePluginKey(), emptyString(), ShouldSample::No);
+
     if (!page->hasSeenPlugin(description))
-        chromeClient.logDiagnosticMessage(DiagnosticLoggingKeys::pageContainsPluginKey(), description, DiagnosticLoggingKeys::noopKey());
+        diagnosticLoggingClient.logDiagnosticMessage(DiagnosticLoggingKeys::pageContainsPluginKey(), description, ShouldSample::No);
 
     page->sawPlugin(description);
 }
@@ -213,7 +218,7 @@ bool SubframeLoader::requestObject(HTMLPlugInImageElement& ownerElement, const S
     if (!url.isEmpty())
         completedURL = completeURL(url);
 
-    bool hasFallbackContent = isHTMLObjectElement(ownerElement) && toHTMLObjectElement(ownerElement).hasFallbackContent();
+    bool hasFallbackContent = is<HTMLObjectElement>(ownerElement) && downcast<HTMLObjectElement>(ownerElement).hasFallbackContent();
 
     bool useFallback;
     if (shouldUsePlugin(completedURL, mimeType, ownerElement.shouldPreferPlugInsForImages(), hasFallbackContent, useFallback)) {
@@ -297,8 +302,8 @@ Frame* SubframeLoader::loadSubframe(HTMLFrameOwnerElement& ownerElement, const U
     bool allowsScrolling = true;
     int marginWidth = -1;
     int marginHeight = -1;
-    if (ownerElement.hasTagName(frameTag) || ownerElement.hasTagName(iframeTag)) {
-        HTMLFrameElementBase& frameElementBase = toHTMLFrameElementBase(ownerElement);
+    if (is<HTMLFrameElementBase>(ownerElement)) {
+        HTMLFrameElementBase& frameElementBase = downcast<HTMLFrameElementBase>(ownerElement);
         allowsScrolling = frameElementBase.scrollingMode() != ScrollbarAlwaysOff;
         marginWidth = frameElementBase.marginWidth();
         marginHeight = frameElementBase.marginHeight();
@@ -328,10 +333,10 @@ Frame* SubframeLoader::loadSubframe(HTMLFrameOwnerElement& ownerElement, const U
     // FIXME: Can we remove this entirely? m_isComplete normally gets set to false when a load is committed.
     frame->loader().started();
    
-    RenderObject* renderer = ownerElement.renderer();
+    auto* renderer = ownerElement.renderer();
     FrameView* view = frame->view();
-    if (renderer && renderer->isWidget() && view)
-        toRenderWidget(renderer)->setWidget(view);
+    if (is<RenderWidget>(renderer) && view)
+        downcast<RenderWidget>(*renderer).setWidget(view);
     
     m_frame.loader().checkCallImplicitClose();
     
@@ -365,7 +370,7 @@ bool SubframeLoader::shouldUsePlugin(const URL& url, const String& mimeType, boo
     // Allow other plug-ins to win over QuickTime because if the user has installed a plug-in that
     // can handle TIFF (which QuickTime can also handle) they probably intended to override QT.
     if (m_frame.page() && (mimeType == "image/tiff" || mimeType == "image/tif" || mimeType == "image/x-tiff")) {
-        String pluginName = m_frame.page()->pluginData().pluginNameForMimeType(mimeType);
+        String pluginName = m_frame.page()->pluginData().pluginNameForWebVisibleMimeType(mimeType);
         if (!pluginName.isEmpty() && !pluginName.contains("QuickTime", false)) 
             return true;
     }
@@ -393,7 +398,7 @@ bool SubframeLoader::loadPlugin(HTMLPlugInImageElement& pluginElement, const URL
     pluginElement.subframeLoaderWillCreatePlugIn(url);
 
     IntSize contentSize = roundedIntSize(LayoutSize(renderer->contentWidth(), renderer->contentHeight()));
-    bool loadManually = document()->isPluginDocument() && !m_containsPlugins && toPluginDocument(document())->shouldLoadPluginManually();
+    bool loadManually = is<PluginDocument>(*document()) && !m_containsPlugins && downcast<PluginDocument>(*document()).shouldLoadPluginManually();
 
 #if PLATFORM(IOS)
     // On iOS, we only tell the plugin to be in full page mode if the containing plugin document is the top level document.
@@ -409,7 +414,7 @@ bool SubframeLoader::loadPlugin(HTMLPlugInImageElement& pluginElement, const URL
         return false;
     }
 
-    pluginElement.subframeLoaderDidCreatePlugIn(widget.get());
+    pluginElement.subframeLoaderDidCreatePlugIn(*widget);
     renderer->setWidget(widget);
     m_containsPlugins = true;
     return true;

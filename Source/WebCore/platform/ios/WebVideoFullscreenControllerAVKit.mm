@@ -37,7 +37,7 @@
 
 using namespace WebCore;
 
-#if __IPHONE_OS_VERSION_MIN_REQUIRED < 80000
+#if __IPHONE_OS_VERSION_MIN_REQUIRED <= 80200 || !HAVE(AVKIT)
 
 @implementation WebVideoFullscreenController
 - (void)setVideoElement:(WebCore::HTMLVideoElement*)videoElement
@@ -50,9 +50,14 @@ using namespace WebCore;
     return nullptr;
 }
 
-- (void)enterFullscreen:(UIView *)view
+- (void)enterFullscreen:(UIView *)view mode:(WebCore::HTMLMediaElement::VideoFullscreenMode)mode
 {
     UNUSED_PARAM(view);
+    UNUSED_PARAM(mode);
+}
+
+- (void)requestHideAndExitFullscreen
+{
 }
 
 - (void)exitFullscreen
@@ -67,6 +72,7 @@ using namespace WebCore;
 - (void)didEnterFullscreen;
 - (void)didExitFullscreen;
 - (void)didCleanupFullscreen;
+- (void)fullscreenMayReturnToInline;
 @end
 
 class WebVideoFullscreenControllerChangeObserver : public WebVideoFullscreenChangeObserver {
@@ -77,6 +83,7 @@ public:
     virtual void didEnterFullscreen() override { [_target didEnterFullscreen]; }
     virtual void didExitFullscreen() override { [_target didExitFullscreen]; }
     virtual void didCleanupFullscreen() override { [_target didCleanupFullscreen]; }
+    virtual void fullscreenMayReturnToInline() override { [_target fullscreenMayReturnToInline]; }
 };
 
 @implementation WebVideoFullscreenController
@@ -114,18 +121,18 @@ public:
     return _videoElement.get();
 }
 
-- (void)enterFullscreen:(UIView *)view
+- (void)enterFullscreen:(UIView *)view mode:(HTMLMediaElement::VideoFullscreenMode)mode
 {
     [self retain]; // Balanced by -release in didExitFullscreen:
     
-    _interface = adoptRef(new WebVideoFullscreenInterfaceAVKit);
+    _interface = WebVideoFullscreenInterfaceAVKit::create();
     _interface->setWebVideoFullscreenChangeObserver(&_changeObserver);
-    _model = adoptRef(new WebVideoFullscreenModelVideoElement);
+    _model = WebVideoFullscreenModelVideoElement::create();
     _model->setWebVideoFullscreenInterface(_interface.get());
     _interface->setWebVideoFullscreenModel(_model.get());
     _model->setVideoElement(_videoElement.get());
     _videoFullscreenLayer = [CALayer layer];
-    _interface->setupFullscreen(*_videoFullscreenLayer.get(), _videoElement->clientRect(), view);
+    _interface->setupFullscreen(*_videoFullscreenLayer.get(), _videoElement->clientRect(), view, mode, _videoElement->mediaSession().allowsAlternateFullscreen(*_videoElement.get()));
 }
 
 - (void)exitFullscreen
@@ -141,8 +148,10 @@ public:
 
 - (void)didSetupFullscreen
 {
-    _model->setVideoFullscreenLayer(_videoFullscreenLayer.get());
-    _interface->enterFullscreen();
+    WebThreadRun(^{
+        _model->setVideoFullscreenLayer(_videoFullscreenLayer.get());
+        _interface->enterFullscreen();
+    });
 }
 
 - (void)didEnterFullscreen
@@ -170,6 +179,11 @@ public:
         
         [self release]; // Balance the -retain we did in enterFullscreen:
     });
+}
+
+- (void)fullscreenMayReturnToInline
+{
+    _interface->preparedToReturnToInline(true, _videoElement->clientRect());
 }
 
 @end

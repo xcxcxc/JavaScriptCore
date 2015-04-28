@@ -23,7 +23,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#include "config.h"
 #include "WebURLResponse.h"
 
 #include "WebKitDLL.h"
@@ -212,13 +211,13 @@ WebURLResponse::WebURLResponse()
     :m_refCount(0)
 {
     gClassCount++;
-    gClassNameCount.add("WebURLResponse");
+    gClassNameCount().add("WebURLResponse");
 }
 
 WebURLResponse::~WebURLResponse()
 {
     gClassCount--;
-    gClassNameCount.remove("WebURLResponse");
+    gClassNameCount().remove("WebURLResponse");
 }
 
 WebURLResponse* WebURLResponse::createInstance()

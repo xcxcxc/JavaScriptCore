@@ -44,7 +44,6 @@
 #include "SVGElement.h"
 #include "SVGFilterPrimitiveStandardAttributes.h"
 #include "Settings.h"
-#include "SourceAlpha.h"
 
 #include <algorithm>
 #include <wtf/MathExtras.h>
@@ -72,7 +71,7 @@ FilterEffectRenderer::FilterEffectRenderer()
     , m_hasFilterThatMovesPixels(false)
 {
     setFilterResolution(FloatSize(1, 1));
-    m_sourceGraphic = SourceGraphic::create(this);
+    m_sourceGraphic = SourceGraphic::create(*this);
 }
 
 FilterEffectRenderer::~FilterEffectRenderer()
@@ -87,7 +86,7 @@ GraphicsContext* FilterEffectRenderer::inputContext()
 PassRefPtr<FilterEffect> FilterEffectRenderer::buildReferenceFilter(RenderElement* renderer, PassRefPtr<FilterEffect> previousEffect, ReferenceFilterOperation* filterOperation)
 {
     if (!renderer)
-        return 0;
+        return nullptr;
 
     Document* document = &renderer->document();
 
@@ -100,28 +99,23 @@ PassRefPtr<FilterEffect> FilterEffectRenderer::buildReferenceFilter(RenderElemen
         document = cachedSVGDocument->document();
 
     if (!document)
-        return 0;
+        return nullptr;
 
     Element* filter = document->getElementById(filterOperation->fragment());
     if (!filter) {
         // Although we did not find the referenced filter, it might exist later in the document.
         // FIXME: This skips anonymous RenderObjects. <https://webkit.org/b/131085>
         if (Element* element = renderer->element())
-            document->accessSVGExtensions()->addPendingResource(filterOperation->fragment(), element);
-        return 0;
+            document->accessSVGExtensions().addPendingResource(filterOperation->fragment(), element);
+        return nullptr;
     }
 
     RefPtr<FilterEffect> effect;
 
-    // FIXME: Figure out what to do with SourceAlpha. Right now, we're
-    // using the alpha of the original input layer, which is obviously
-    // wrong. We should probably be extracting the alpha from the 
-    // previousEffect, but this requires some more processing.  
-    // This may need a spec clarification.
-    auto builder = std::make_unique<SVGFilterBuilder>(previousEffect, SourceAlpha::create(this));
+    auto builder = std::make_unique<SVGFilterBuilder>(previousEffect);
 
     for (auto& effectElement : childrenOfType<SVGFilterPrimitiveStandardAttributes>(*filter)) {
-        effect = effectElement.build(builder.get(), this);
+        effect = effectElement.build(builder.get(), *this);
         if (!effect)
             continue;
 
@@ -143,18 +137,18 @@ bool FilterEffectRenderer::build(RenderElement* renderer, const FilterOperations
     RefPtr<FilterEffect> previousEffect = m_sourceGraphic;
     for (size_t i = 0; i < operations.operations().size(); ++i) {
         RefPtr<FilterEffect> effect;
-        FilterOperation* filterOperation = operations.operations().at(i).get();
-        switch (filterOperation->type()) {
+        FilterOperation& filterOperation = *operations.operations().at(i);
+        switch (filterOperation.type()) {
         case FilterOperation::REFERENCE: {
-            ReferenceFilterOperation* referenceOperation = toReferenceFilterOperation(filterOperation);
-            effect = buildReferenceFilter(renderer, previousEffect, referenceOperation);
-            referenceOperation->setFilterEffect(effect);
+            ReferenceFilterOperation& referenceOperation = downcast<ReferenceFilterOperation>(filterOperation);
+            effect = buildReferenceFilter(renderer, previousEffect, &referenceOperation);
+            referenceOperation.setFilterEffect(effect);
             break;
         }
         case FilterOperation::GRAYSCALE: {
-            BasicColorMatrixFilterOperation* colorMatrixOperation = toBasicColorMatrixFilterOperation(filterOperation);
+            BasicColorMatrixFilterOperation& colorMatrixOperation = downcast<BasicColorMatrixFilterOperation>(filterOperation);
             Vector<float> inputParameters;
-            double oneMinusAmount = clampTo(1 - colorMatrixOperation->amount(), 0.0, 1.0);
+            double oneMinusAmount = clampTo(1 - colorMatrixOperation.amount(), 0.0, 1.0);
 
             // See https://dvcs.w3.org/hg/FXTF/raw-file/tip/filters/index.html#grayscaleEquivalent
             // for information on parameters.
@@ -176,13 +170,13 @@ bool FilterEffectRenderer::build(RenderElement* renderer, const FilterOperations
 
             lastMatrixRow(inputParameters);
 
-            effect = FEColorMatrix::create(this, FECOLORMATRIX_TYPE_MATRIX, inputParameters);
+            effect = FEColorMatrix::create(*this, FECOLORMATRIX_TYPE_MATRIX, inputParameters);
             break;
         }
         case FilterOperation::SEPIA: {
-            BasicColorMatrixFilterOperation* colorMatrixOperation = toBasicColorMatrixFilterOperation(filterOperation);
+            BasicColorMatrixFilterOperation& colorMatrixOperation = downcast<BasicColorMatrixFilterOperation>(filterOperation);
             Vector<float> inputParameters;
-            double oneMinusAmount = clampTo(1 - colorMatrixOperation->amount(), 0.0, 1.0);
+            double oneMinusAmount = clampTo(1 - colorMatrixOperation.amount(), 0.0, 1.0);
 
             // See https://dvcs.w3.org/hg/FXTF/raw-file/tip/filters/index.html#sepiaEquivalent
             // for information on parameters.
@@ -204,82 +198,82 @@ bool FilterEffectRenderer::build(RenderElement* renderer, const FilterOperations
 
             lastMatrixRow(inputParameters);
 
-            effect = FEColorMatrix::create(this, FECOLORMATRIX_TYPE_MATRIX, inputParameters);
+            effect = FEColorMatrix::create(*this, FECOLORMATRIX_TYPE_MATRIX, inputParameters);
             break;
         }
         case FilterOperation::SATURATE: {
-            BasicColorMatrixFilterOperation* colorMatrixOperation = toBasicColorMatrixFilterOperation(filterOperation);
+            BasicColorMatrixFilterOperation& colorMatrixOperation = downcast<BasicColorMatrixFilterOperation>(filterOperation);
             Vector<float> inputParameters;
-            inputParameters.append(narrowPrecisionToFloat(colorMatrixOperation->amount()));
-            effect = FEColorMatrix::create(this, FECOLORMATRIX_TYPE_SATURATE, inputParameters);
+            inputParameters.append(narrowPrecisionToFloat(colorMatrixOperation.amount()));
+            effect = FEColorMatrix::create(*this, FECOLORMATRIX_TYPE_SATURATE, inputParameters);
             break;
         }
         case FilterOperation::HUE_ROTATE: {
-            BasicColorMatrixFilterOperation* colorMatrixOperation = toBasicColorMatrixFilterOperation(filterOperation);
+            BasicColorMatrixFilterOperation& colorMatrixOperation = downcast<BasicColorMatrixFilterOperation>(filterOperation);
             Vector<float> inputParameters;
-            inputParameters.append(narrowPrecisionToFloat(colorMatrixOperation->amount()));
-            effect = FEColorMatrix::create(this, FECOLORMATRIX_TYPE_HUEROTATE, inputParameters);
+            inputParameters.append(narrowPrecisionToFloat(colorMatrixOperation.amount()));
+            effect = FEColorMatrix::create(*this, FECOLORMATRIX_TYPE_HUEROTATE, inputParameters);
             break;
         }
         case FilterOperation::INVERT: {
-            BasicComponentTransferFilterOperation* componentTransferOperation = toBasicComponentTransferFilterOperation(filterOperation);
+            BasicComponentTransferFilterOperation& componentTransferOperation = downcast<BasicComponentTransferFilterOperation>(filterOperation);
             ComponentTransferFunction transferFunction;
             transferFunction.type = FECOMPONENTTRANSFER_TYPE_TABLE;
             Vector<float> transferParameters;
-            transferParameters.append(narrowPrecisionToFloat(componentTransferOperation->amount()));
-            transferParameters.append(narrowPrecisionToFloat(1 - componentTransferOperation->amount()));
+            transferParameters.append(narrowPrecisionToFloat(componentTransferOperation.amount()));
+            transferParameters.append(narrowPrecisionToFloat(1 - componentTransferOperation.amount()));
             transferFunction.tableValues = transferParameters;
 
             ComponentTransferFunction nullFunction;
-            effect = FEComponentTransfer::create(this, transferFunction, transferFunction, transferFunction, nullFunction);
+            effect = FEComponentTransfer::create(*this, transferFunction, transferFunction, transferFunction, nullFunction);
             break;
         }
         case FilterOperation::OPACITY: {
-            BasicComponentTransferFilterOperation* componentTransferOperation = toBasicComponentTransferFilterOperation(filterOperation);
+            BasicComponentTransferFilterOperation& componentTransferOperation = downcast<BasicComponentTransferFilterOperation>(filterOperation);
             ComponentTransferFunction transferFunction;
             transferFunction.type = FECOMPONENTTRANSFER_TYPE_TABLE;
             Vector<float> transferParameters;
             transferParameters.append(0);
-            transferParameters.append(narrowPrecisionToFloat(componentTransferOperation->amount()));
+            transferParameters.append(narrowPrecisionToFloat(componentTransferOperation.amount()));
             transferFunction.tableValues = transferParameters;
 
             ComponentTransferFunction nullFunction;
-            effect = FEComponentTransfer::create(this, nullFunction, nullFunction, nullFunction, transferFunction);
+            effect = FEComponentTransfer::create(*this, nullFunction, nullFunction, nullFunction, transferFunction);
             break;
         }
         case FilterOperation::BRIGHTNESS: {
-            BasicComponentTransferFilterOperation* componentTransferOperation = toBasicComponentTransferFilterOperation(filterOperation);
+            BasicComponentTransferFilterOperation& componentTransferOperation = downcast<BasicComponentTransferFilterOperation>(filterOperation);
             ComponentTransferFunction transferFunction;
             transferFunction.type = FECOMPONENTTRANSFER_TYPE_LINEAR;
-            transferFunction.slope = narrowPrecisionToFloat(componentTransferOperation->amount());
+            transferFunction.slope = narrowPrecisionToFloat(componentTransferOperation.amount());
             transferFunction.intercept = 0;
 
             ComponentTransferFunction nullFunction;
-            effect = FEComponentTransfer::create(this, transferFunction, transferFunction, transferFunction, nullFunction);
+            effect = FEComponentTransfer::create(*this, transferFunction, transferFunction, transferFunction, nullFunction);
             break;
         }
         case FilterOperation::CONTRAST: {
-            BasicComponentTransferFilterOperation* componentTransferOperation = toBasicComponentTransferFilterOperation(filterOperation);
+            BasicComponentTransferFilterOperation& componentTransferOperation = downcast<BasicComponentTransferFilterOperation>(filterOperation);
             ComponentTransferFunction transferFunction;
             transferFunction.type = FECOMPONENTTRANSFER_TYPE_LINEAR;
-            float amount = narrowPrecisionToFloat(componentTransferOperation->amount());
+            float amount = narrowPrecisionToFloat(componentTransferOperation.amount());
             transferFunction.slope = amount;
             transferFunction.intercept = -0.5 * amount + 0.5;
             
             ComponentTransferFunction nullFunction;
-            effect = FEComponentTransfer::create(this, transferFunction, transferFunction, transferFunction, nullFunction);
+            effect = FEComponentTransfer::create(*this, transferFunction, transferFunction, transferFunction, nullFunction);
             break;
         }
         case FilterOperation::BLUR: {
-            BlurFilterOperation* blurOperation = toBlurFilterOperation(filterOperation);
-            float stdDeviation = floatValueForLength(blurOperation->stdDeviation(), 0);
-            effect = FEGaussianBlur::create(this, stdDeviation, stdDeviation, consumer == FilterProperty ? EDGEMODE_NONE : EDGEMODE_DUPLICATE);
+            BlurFilterOperation& blurOperation = downcast<BlurFilterOperation>(filterOperation);
+            float stdDeviation = floatValueForLength(blurOperation.stdDeviation(), 0);
+            effect = FEGaussianBlur::create(*this, stdDeviation, stdDeviation, consumer == FilterProperty ? EDGEMODE_NONE : EDGEMODE_DUPLICATE);
             break;
         }
         case FilterOperation::DROP_SHADOW: {
-            DropShadowFilterOperation* dropShadowOperation = toDropShadowFilterOperation(filterOperation);
-            effect = FEDropShadow::create(this, dropShadowOperation->stdDeviation(), dropShadowOperation->stdDeviation(),
-                                                dropShadowOperation->x(), dropShadowOperation->y(), dropShadowOperation->color(), 1);
+            DropShadowFilterOperation& dropShadowOperation = downcast<DropShadowFilterOperation>(filterOperation);
+            effect = FEDropShadow::create(*this, dropShadowOperation.stdDeviation(), dropShadowOperation.stdDeviation(),
+                dropShadowOperation.x(), dropShadowOperation.y(), dropShadowOperation.color(), 1);
             break;
         }
         default:
@@ -292,7 +286,7 @@ bool FilterEffectRenderer::build(RenderElement* renderer, const FilterOperations
             effect->setClipsToBounds(consumer == FilterFunction);
             effect->setOperatingColorSpace(ColorSpaceDeviceRGB);
             
-            if (filterOperation->type() != FilterOperation::REFERENCE) {
+            if (filterOperation.type() != FilterOperation::REFERENCE) {
                 effect->inputEffects().append(previousEffect);
                 m_effects.append(effect);
             }

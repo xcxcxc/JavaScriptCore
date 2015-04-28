@@ -51,11 +51,13 @@ public:
     virtual void requestSucceeded(PassRefPtr<RTCStatsResponseBase>) override;
     virtual void requestFailed(const String&) override;
 
-    // ActiveDOMObject
-    virtual void stop() override;
-
 private:
     RTCStatsRequestImpl(ScriptExecutionContext*, PassRefPtr<RTCStatsCallback>, PassRefPtr<RTCPeerConnectionErrorCallback>, PassRefPtr<MediaStreamTrackPrivate>);
+
+    // ActiveDOMObject API.
+    void stop() override;
+    const char* activeDOMObjectName() const override;
+    bool canSuspendForPageCache() const override;
 
     void clear();
 

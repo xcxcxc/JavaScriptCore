@@ -27,31 +27,31 @@
 #define Deallocator_h
 
 #include "FixedVector.h"
-#include "MediumLine.h"
-#include "Sizes.h"
-#include "SmallLine.h"
 
 namespace bmalloc {
+
+class Heap;
 
 // Per-cache object deallocator.
 
 class Deallocator {
 public:
-    Deallocator();
+    Deallocator(Heap*);
     ~Deallocator();
 
     void deallocate(void*);
-    bool deallocateFastCase(void*);
-    void deallocateSlowCase(void*);
-
     void scavenge();
     
 private:
+    bool deallocateFastCase(void*);
+    void deallocateSlowCase(void*);
+
     void deallocateLarge(void*);
     void deallocateXLarge(void*);
     void processObjectLog();
 
     FixedVector<void*, deallocatorLogCapacity> m_objectLog;
+    bool m_isBmallocEnabled;
 };
 
 inline bool Deallocator::deallocateFastCase(void* object)

@@ -30,11 +30,8 @@
 #include "config.h"
 #include "DatabaseBackendBase.h"
 
-#if ENABLE(SQL_DATABASE)
-
+#include "Database.h"
 #include "DatabaseAuthorizer.h"
-#include "DatabaseBackendContext.h"
-#include "DatabaseBase.h"
 #include "DatabaseContext.h"
 #include "DatabaseManager.h"
 #include "DatabaseTracker.h"
@@ -57,7 +54,7 @@
 // =======================================================
 // The DatabaseTracker maintains a list of databases that have been
 // "opened" so that the client can call interrupt or delete on every database
-// associated with a DatabaseBackendContext.
+// associated with a DatabaseContext.
 //
 // We will only call DatabaseTracker::addOpenDatabase() to add the database
 // to the tracker as opened when we've succeeded in opening the database,
@@ -97,17 +94,17 @@ static bool retrieveTextResultFromDatabase(SQLiteDatabase& db, const String& que
     SQLiteStatement statement(db, query);
     int result = statement.prepare();
 
-    if (result != SQLResultOk) {
+    if (result != SQLITE_OK) {
         LOG_ERROR("Error (%i) preparing statement to read text result from database (%s)", result, query.ascii().data());
         return false;
     }
 
     result = statement.step();
-    if (result == SQLResultRow) {
+    if (result == SQLITE_ROW) {
         resultString = statement.getColumnText(0);
         return true;
     }
-    if (result == SQLResultDone) {
+    if (result == SQLITE_DONE) {
         resultString = String();
         return true;
     }
@@ -121,7 +118,7 @@ static bool setTextValueInDatabase(SQLiteDatabase& db, const String& query, cons
     SQLiteStatement statement(db, query);
     int result = statement.prepare();
 
-    if (result != SQLResultOk) {
+    if (result != SQLITE_OK) {
         LOG_ERROR("Failed to prepare statement to set value in database (%s)", query.ascii().data());
         return false;
     }
@@ -129,7 +126,7 @@ static bool setTextValueInDatabase(SQLiteDatabase& db, const String& query, cons
     statement.bindText(1, value);
 
     result = statement.step();
-    if (result != SQLResultDone) {
+    if (result != SQLITE_DONE) {
         LOG_ERROR("Failed to step statement to set value in database (%s)", query.ascii().data());
         return false;
     }
@@ -182,7 +179,6 @@ static DatabaseGuid guidForOriginAndName(const String& origin, const String& nam
 {
     String stringID = origin + "/" + name;
 
-    typedef HashMap<String, int> IDGuidMap;
     static NeverDestroyed<HashMap<String, int>> map;
     DatabaseGuid guid = map.get().get(stringID);
     if (!guid) {
@@ -207,8 +203,7 @@ String DatabaseBackendBase::databaseDebugName() const
 }
 #endif
 
-DatabaseBackendBase::DatabaseBackendBase(PassRefPtr<DatabaseBackendContext> databaseContext, const String& name,
-    const String& expectedVersion, const String& displayName, unsigned long estimatedSize, DatabaseType databaseType)
+DatabaseBackendBase::DatabaseBackendBase(PassRefPtr<DatabaseContext> databaseContext, const String& name, const String& expectedVersion, const String& displayName, unsigned long estimatedSize)
     : m_databaseContext(databaseContext)
     , m_name(name.isolatedCopy())
     , m_expectedVersion(expectedVersion.isolatedCopy())
@@ -216,7 +211,6 @@ DatabaseBackendBase::DatabaseBackendBase(PassRefPtr<DatabaseBackendContext> data
     , m_estimatedSize(estimatedSize)
     , m_opened(false)
     , m_new(false)
-    , m_isSyncDatabase(databaseType == DatabaseType::Sync)
 {
     m_contextThreadSecurityOrigin = m_databaseContext->securityOrigin()->isolatedCopy();
 
@@ -235,7 +229,7 @@ DatabaseBackendBase::DatabaseBackendBase(PassRefPtr<DatabaseBackendContext> data
         hashSet->add(this);
     }
 
-    m_filename = DatabaseManager::manager().fullPathForDatabase(securityOrigin(), m_name);
+    m_filename = DatabaseManager::singleton().fullPathForDatabase(securityOrigin(), m_name);
 }
 
 DatabaseBackendBase::~DatabaseBackendBase()
@@ -260,7 +254,7 @@ void DatabaseBackendBase::closeDatabase()
     m_sqliteDatabase.close();
     m_opened = false;
     // See comment at the top this file regarding calling removeOpenDatabase().
-    DatabaseTracker::tracker().removeOpenDatabase(this);
+    DatabaseTracker::tracker().removeOpenDatabase(static_cast<Database*>(this));
     {
         std::lock_guard<std::mutex> locker(guidMutex());
 
@@ -293,7 +287,7 @@ public:
     }
     ~DoneCreatingDatabaseOnExitCaller()
     {
-        DatabaseTracker::tracker().doneCreatingDatabase(m_database);
+        DatabaseTracker::tracker().doneCreatingDatabase(static_cast<Database*>(m_database));
     }
 
     void setOpenSucceeded() { m_openSucceeded = true; }
@@ -401,7 +395,7 @@ bool DatabaseBackendBase::performOpenAndVerify(bool shouldSetVersionInNewDatabas
     m_sqliteDatabase.setAuthorizer(m_databaseAuthorizer);
 
     // See comment at the top this file regarding calling addOpenDatabase().
-    DatabaseTracker::tracker().addOpenDatabase(this);
+    DatabaseTracker::tracker().addOpenDatabase(static_cast<Database*>(this));
     m_opened = true;
 
     // Declare success:
@@ -525,12 +519,6 @@ void DatabaseBackendBase::enableAuthorizer()
     m_databaseAuthorizer->enable();
 }
 
-void DatabaseBackendBase::setAuthorizerReadOnly()
-{
-    ASSERT(m_databaseAuthorizer);
-    m_databaseAuthorizer->setReadOnly();
-}
-
 void DatabaseBackendBase::setAuthorizerPermissions(int permissions)
 {
     ASSERT(m_databaseAuthorizer);
@@ -569,7 +557,7 @@ void DatabaseBackendBase::resetAuthorizer()
 
 unsigned long long DatabaseBackendBase::maximumSize() const
 {
-    return DatabaseTracker::tracker().getMaxSizeForDatabase(this);
+    return DatabaseTracker::tracker().getMaxSizeForDatabase(static_cast<const Database*>(this));
 }
 
 void DatabaseBackendBase::incrementalVacuumIfNeeded()
@@ -580,7 +568,7 @@ void DatabaseBackendBase::incrementalVacuumIfNeeded()
     int64_t totalSize = m_sqliteDatabase.totalSize();
     if (totalSize <= 10 * freeSpaceSize) {
         int result = m_sqliteDatabase.runIncrementalVacuumCommand();
-        if (result != SQLResultOk)
+        if (result != SQLITE_OK)
             m_frontend->logErrorMessage(formatErrorMessage("error vacuuming database", result, m_sqliteDatabase.lastErrorMsg()));
     }
 }
@@ -597,5 +585,3 @@ bool DatabaseBackendBase::isInterrupted()
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(SQL_DATABASE)

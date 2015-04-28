@@ -168,8 +168,7 @@ static inline NSDictionary* dictionaryForViewportArguments(const WebCore::Viewpo
               @"maximum-scale":@(arguments.maxZoom),
               @"user-scalable":@(arguments.userZoom),
               @"width":@(arguments.width),
-              @"height":@(arguments.height),
-              @"minimal-ui":@(arguments.minimalUI) };
+              @"height":@(arguments.height) };
 }
 
 FloatSize WebChromeClientIOS::screenSize() const
@@ -309,16 +308,14 @@ void WebChromeClientIOS::webAppOrientationsUpdated()
 
 void WebChromeClientIOS::focusedElementChanged(Element* element)
 {
-    if (!element)
-        return;
-    if (!isHTMLInputElement(element))
+    if (!is<HTMLInputElement>(element))
         return;
 
-    HTMLInputElement* inputElement = toHTMLInputElement(element);
-    if (!inputElement->isText())
+    HTMLInputElement& inputElement = downcast<HTMLInputElement>(*element);
+    if (!inputElement.isText())
         return;
 
-    CallFormDelegate(webView(), @selector(didFocusTextField:inFrame:), kit(inputElement), kit(inputElement->document().frame()));
+    CallFormDelegate(webView(), @selector(didFocusTextField:inFrame:), kit(&inputElement), kit(inputElement.document().frame()));
 }
 
 void WebChromeClientIOS::showPlaybackTargetPicker(bool hasVideo)

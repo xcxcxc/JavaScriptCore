@@ -394,7 +394,7 @@ bool IDBTransaction::dispatchEvent(PassRefPtr<Event> event)
     return returnValue;
 }
 
-bool IDBTransaction::canSuspend() const
+bool IDBTransaction::canSuspendForPageCache() const
 {
     // FIXME: Technically we can suspend before the first request is schedule
     //        and after the complete/abort event is enqueued.
@@ -406,6 +406,11 @@ void IDBTransaction::stop()
     m_contextStopped = true;
 
     abort(IGNORE_EXCEPTION);
+}
+
+const char* IDBTransaction::activeDOMObjectName() const
+{
+    return "IDBTransaction";
 }
 
 void IDBTransaction::enqueueEvent(PassRefPtr<Event> event)

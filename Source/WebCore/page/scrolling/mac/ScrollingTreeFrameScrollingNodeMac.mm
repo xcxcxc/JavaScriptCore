@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2012, 2014-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,8 +47,6 @@
 namespace WebCore {
 
 static void logThreadedScrollingMode(unsigned synchronousScrollingReasons);
-static void logWheelEventHandlerCountChanged(unsigned);
-
 
 PassRefPtr<ScrollingTreeFrameScrollingNode> ScrollingTreeFrameScrollingNodeMac::create(ScrollingTree& scrollingTree, ScrollingNodeID nodeID)
 {
@@ -57,23 +55,34 @@ PassRefPtr<ScrollingTreeFrameScrollingNode> ScrollingTreeFrameScrollingNodeMac::
 
 ScrollingTreeFrameScrollingNodeMac::ScrollingTreeFrameScrollingNodeMac(ScrollingTree& scrollingTree, ScrollingNodeID nodeID)
     : ScrollingTreeFrameScrollingNode(scrollingTree, nodeID)
-    , m_scrollElasticityController(this)
+    , m_scrollController(*this)
     , m_verticalScrollbarPainter(0)
     , m_horizontalScrollbarPainter(0)
     , m_lastScrollHadUnfilledPixels(false)
+    , m_hadFirstUpdate(false)
 {
 }
 
 ScrollingTreeFrameScrollingNodeMac::~ScrollingTreeFrameScrollingNodeMac()
 {
-    if (m_snapRubberbandTimer)
-        CFRunLoopTimerInvalidate(m_snapRubberbandTimer.get());
 }
+
+#if ENABLE(CSS_SCROLL_SNAP)
+static inline Vector<LayoutUnit> convertToLayoutUnits(const Vector<float>& snapOffsetsAsFloat)
+{
+    Vector<LayoutUnit> snapOffsets;
+    snapOffsets.reserveInitialCapacity(snapOffsetsAsFloat.size());
+    for (auto offset : snapOffsetsAsFloat)
+        snapOffsets.append(offset);
+
+    return snapOffsets;
+}
+#endif
 
 void ScrollingTreeFrameScrollingNodeMac::updateBeforeChildren(const ScrollingStateNode& stateNode)
 {
     ScrollingTreeFrameScrollingNode::updateBeforeChildren(stateNode);
-    const auto& scrollingStateNode = toScrollingStateFrameScrollingNode(stateNode);
+    const auto& scrollingStateNode = downcast<ScrollingStateFrameScrollingNode>(stateNode);
 
     if (scrollingStateNode.hasChangedProperty(ScrollingStateNode::ScrollLayer))
         m_scrollLayer = scrollingStateNode.layer();
@@ -101,6 +110,7 @@ void ScrollingTreeFrameScrollingNodeMac::updateBeforeChildren(const ScrollingSta
         m_horizontalScrollbarPainter = scrollingStateNode.horizontalScrollbarPainter();
     }
 
+    bool logScrollingMode = !m_hadFirstUpdate;
     if (scrollingStateNode.hasChangedProperty(ScrollingStateFrameScrollingNode::ReasonsForSynchronousScrolling)) {
         if (shouldUpdateScrollLayerPositionSynchronously()) {
             // We're transitioning to the slow "update scroll layer position on the main thread" mode.
@@ -113,21 +123,30 @@ void ScrollingTreeFrameScrollingNodeMac::updateBeforeChildren(const ScrollingSta
             }
         }
 
+        logScrollingMode = true;
+    }
+
+    if (logScrollingMode) {
         if (scrollingTree().scrollingPerformanceLoggingEnabled())
             logThreadedScrollingMode(synchronousScrollingReasons());
     }
 
-    if (scrollingStateNode.hasChangedProperty(ScrollingStateFrameScrollingNode::WheelEventHandlerCount)) {
-        if (scrollingTree().scrollingPerformanceLoggingEnabled())
-            logWheelEventHandlerCountChanged(scrollingStateNode.wheelEventHandlerCount());
-    }
+#if ENABLE(CSS_SCROLL_SNAP)
+    if (scrollingStateNode.hasChangedProperty(ScrollingStateFrameScrollingNode::HorizontalSnapOffsets))
+        m_scrollController.updateScrollSnapPoints(ScrollEventAxis::Horizontal, convertToLayoutUnits(scrollingStateNode.horizontalSnapOffsets()));
+
+    if (scrollingStateNode.hasChangedProperty(ScrollingStateFrameScrollingNode::VerticalSnapOffsets))
+        m_scrollController.updateScrollSnapPoints(ScrollEventAxis::Vertical, convertToLayoutUnits(scrollingStateNode.verticalSnapOffsets()));
+#endif
+
+    m_hadFirstUpdate = true;
 }
 
 void ScrollingTreeFrameScrollingNodeMac::updateAfterChildren(const ScrollingStateNode& stateNode)
 {
     ScrollingTreeFrameScrollingNode::updateAfterChildren(stateNode);
 
-    const auto& scrollingStateNode = toScrollingStateScrollingNode(stateNode);
+    const auto& scrollingStateNode = downcast<ScrollingStateScrollingNode>(stateNode);
 
     // Update the scroll position after child nodes have been updated, because they need to have updated their constraints before any scrolling happens.
     if (scrollingStateNode.hasChangedProperty(ScrollingStateScrollingNode::RequestedScrollPosition))
@@ -153,7 +172,7 @@ void ScrollingTreeFrameScrollingNodeMac::handleWheelEvent(const PlatformWheelEve
         [m_horizontalScrollbarPainter setUsePresentationValue:NO];
     }
 
-    m_scrollElasticityController.handleWheelEvent(wheelEvent);
+    m_scrollController.handleWheelEvent(wheelEvent);
     scrollingTree().setOrClearLatchedNode(wheelEvent, scrollingNodeID());
     scrollingTree().handleWheelEventPhase(wheelEvent.phase());
 }
@@ -296,30 +315,12 @@ void ScrollingTreeFrameScrollingNodeMac::immediateScrollByWithoutContentEdgeCons
     scrollByWithoutContentEdgeConstraints(offset);
 }
 
-void ScrollingTreeFrameScrollingNodeMac::startSnapRubberbandTimer()
-{
-    ASSERT(!m_snapRubberbandTimer);
-
-    CFTimeInterval timerInterval = 1.0 / 60.0;
-
-    m_snapRubberbandTimer = adoptCF(CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent() + timerInterval, timerInterval, 0, 0, ^(CFRunLoopTimerRef) {
-        m_scrollElasticityController.snapRubberBandTimerFired();
-    }));
-    CFRunLoopAddTimer(CFRunLoopGetCurrent(), m_snapRubberbandTimer.get(), kCFRunLoopDefaultMode);
-}
-
 void ScrollingTreeFrameScrollingNodeMac::stopSnapRubberbandTimer()
 {
-    if (!m_snapRubberbandTimer)
-        return;
-
     scrollingTree().setMainFrameIsRubberBanding(false);
 
     // Since the rubberband timer has stopped, totalContentsSizeForRubberBand can be synchronized with totalContentsSize.
     setTotalContentsSizeForRubberBand(totalContentsSize());
-
-    CFRunLoopTimerInvalidate(m_snapRubberbandTimer.get());
-    m_snapRubberbandTimer = nullptr;
 }
 
 void ScrollingTreeFrameScrollingNodeMac::adjustScrollPositionToBoundsIfNecessary()
@@ -535,10 +536,30 @@ static void logThreadedScrollingMode(unsigned synchronousScrollingReasons)
         WTFLogAlways("SCROLLING: Switching to threaded scrolling mode. Time: %f\n", WTF::monotonicallyIncreasingTime());
 }
 
-void logWheelEventHandlerCountChanged(unsigned count)
+#if ENABLE(CSS_SCROLL_SNAP) && PLATFORM(MAC)
+LayoutUnit ScrollingTreeFrameScrollingNodeMac::scrollOffsetOnAxis(ScrollEventAxis axis) const
 {
-    WTFLogAlways("SCROLLING: Wheel event handler count changed. Time: %f Count: %u\n", WTF::monotonicallyIncreasingTime(), count);
+    const FloatPoint& currentPosition = scrollPosition();
+    return axis == ScrollEventAxis::Horizontal ? currentPosition.x() : currentPosition.y();
 }
+
+void ScrollingTreeFrameScrollingNodeMac::immediateScrollOnAxis(ScrollEventAxis axis, float delta)
+{
+    const FloatPoint& currentPosition = scrollPosition();
+    FloatPoint change;
+    if (axis == ScrollEventAxis::Horizontal)
+        change = FloatPoint(currentPosition.x() + delta, currentPosition.y());
+    else
+        change = FloatPoint(currentPosition.x(), currentPosition.y() + delta);
+
+    immediateScrollBy(change - currentPosition);
+}
+
+float ScrollingTreeFrameScrollingNodeMac::pageScaleFactor() const
+{
+    return frameScaleFactor();
+}
+#endif
 
 } // namespace WebCore
 

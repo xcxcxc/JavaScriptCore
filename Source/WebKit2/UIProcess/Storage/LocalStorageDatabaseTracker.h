@@ -31,14 +31,13 @@
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 #include <wtf/ThreadSafeRefCounted.h>
+#include <wtf/WorkQueue.h>
 #include <wtf/text/StringHash.h>
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
 class SecurityOrigin;
 }
-
-class WorkQueue;
 
 namespace WebKit {
 
@@ -54,6 +53,9 @@ public:
     void didOpenDatabaseWithOrigin(WebCore::SecurityOrigin*);
     void deleteDatabaseWithOrigin(WebCore::SecurityOrigin*);
     void deleteAllDatabases();
+
+    // Returns a vector of the origins whose databases have been deleted.
+    Vector<Ref<WebCore::SecurityOrigin>> deleteDatabasesModifiedSince(std::chrono::system_clock::time_point);
 
     Vector<RefPtr<WebCore::SecurityOrigin>> origins() const;
     Vector<LocalStorageDetails> details();

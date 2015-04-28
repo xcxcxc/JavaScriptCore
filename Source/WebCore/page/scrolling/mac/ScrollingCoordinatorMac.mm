@@ -54,7 +54,7 @@ PassRefPtr<ScrollingCoordinator> ScrollingCoordinator::create(Page* page)
 
 ScrollingCoordinatorMac::ScrollingCoordinatorMac(Page* page)
     : AsyncScrollingCoordinator(page)
-    , m_scrollingStateTreeCommitterTimer(this, &ScrollingCoordinatorMac::scrollingStateTreeCommitterTimerFired)
+    , m_scrollingStateTreeCommitterTimer(*this, &ScrollingCoordinatorMac::scrollingStateTreeCommitterTimerFired)
 {
     setScrollingTree(ScrollingTreeMac::create(this));
 }
@@ -72,19 +72,18 @@ void ScrollingCoordinatorMac::pageDestroyed()
 
     // Invalidating the scrolling tree will break the reference cycle between the ScrollingCoordinator and ScrollingTree objects.
     RefPtr<ThreadedScrollingTree> scrollingTree = static_pointer_cast<ThreadedScrollingTree>(releaseScrollingTree());
-    ScrollingThread::dispatch(bind(&ThreadedScrollingTree::invalidate, scrollingTree));
+    ScrollingThread::dispatch([scrollingTree] {
+        scrollingTree->invalidate();
+    });
 }
 
 void ScrollingCoordinatorMac::commitTreeStateIfNeeded()
 {
-    if (!scrollingStateTree()->hasChangedProperties())
-        return;
-
     commitTreeState();
     m_scrollingStateTreeCommitterTimer.stop();
 }
 
-bool ScrollingCoordinatorMac::handleWheelEvent(FrameView*, const PlatformWheelEvent& wheelEvent)
+bool ScrollingCoordinatorMac::handleWheelEvent(FrameView&, const PlatformWheelEvent& wheelEvent)
 {
     ASSERT(isMainThread());
     ASSERT(m_page);
@@ -92,13 +91,16 @@ bool ScrollingCoordinatorMac::handleWheelEvent(FrameView*, const PlatformWheelEv
     if (scrollingTree()->willWheelEventStartSwipeGesture(wheelEvent))
         return false;
 
-    ScrollingThread::dispatch(bind(&ThreadedScrollingTree::handleWheelEvent, toThreadedScrollingTree(scrollingTree()), wheelEvent));
+    RefPtr<ThreadedScrollingTree> threadedScrollingTree = downcast<ThreadedScrollingTree>(scrollingTree());
+    ScrollingThread::dispatch([threadedScrollingTree, wheelEvent] {
+        threadedScrollingTree->handleWheelEvent(wheelEvent);
+    });
     return true;
 }
 
 void ScrollingCoordinatorMac::scheduleTreeStateCommit()
 {
-    ASSERT(scrollingStateTree()->hasChangedProperties());
+    ASSERT(scrollingStateTree()->hasChangedProperties() || nonFastScrollableRegionDirty());
 
     if (m_scrollingStateTreeCommitterTimer.isActive())
         return;
@@ -106,17 +108,24 @@ void ScrollingCoordinatorMac::scheduleTreeStateCommit()
     m_scrollingStateTreeCommitterTimer.startOneShot(0);
 }
 
-void ScrollingCoordinatorMac::scrollingStateTreeCommitterTimerFired(Timer<ScrollingCoordinatorMac>*)
+void ScrollingCoordinatorMac::scrollingStateTreeCommitterTimerFired()
 {
     commitTreeState();
 }
 
 void ScrollingCoordinatorMac::commitTreeState()
 {
-    ASSERT(scrollingStateTree()->hasChangedProperties());
+    willCommitTree();
+    if (!scrollingStateTree()->hasChangedProperties())
+        return;
 
-    OwnPtr<ScrollingStateTree> treeState = scrollingStateTree()->commit(LayerRepresentation::PlatformLayerRepresentation);
-    ScrollingThread::dispatch(bind(&ThreadedScrollingTree::commitNewTreeState, toThreadedScrollingTree(scrollingTree()), treeState.release()));
+    RefPtr<ThreadedScrollingTree> threadedScrollingTree = downcast<ThreadedScrollingTree>(scrollingTree());
+    ScrollingStateTree* unprotectedTreeState = scrollingStateTree()->commit(LayerRepresentation::PlatformLayerRepresentation).release();
+
+    ScrollingThread::dispatch([threadedScrollingTree, unprotectedTreeState] {
+        std::unique_ptr<ScrollingStateTree> treeState(unprotectedTreeState);
+        threadedScrollingTree->commitNewTreeState(WTF::move(treeState));
+    });
 
     updateTiledScrollingIndicator();
 }
@@ -134,8 +143,6 @@ void ScrollingCoordinatorMac::updateTiledScrollingIndicator()
     ScrollingModeIndication indicatorMode;
     if (shouldUpdateScrollLayerPositionSynchronously())
         indicatorMode = SynchronousScrollingBecauseOfStyleIndication;
-    else if (scrollingStateTree()->rootStateNode() && scrollingStateTree()->rootStateNode()->wheelEventHandlerCount())
-        indicatorMode =  SynchronousScrollingBecauseOfEventHandlersIndication;
     else
         indicatorMode = AsyncScrollingIndication;
     

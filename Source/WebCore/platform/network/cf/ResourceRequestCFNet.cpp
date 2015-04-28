@@ -28,7 +28,6 @@
 
 #include "HTTPHeaderNames.h"
 #include "ResourceRequest.h"
-#include <wtf/PassOwnPtr.h>
 
 #if ENABLE(PUBLIC_SUFFIX_LIST)
 #include "PublicSuffix.h"
@@ -158,7 +157,7 @@ void ResourceRequest::doUpdatePlatformRequest()
         wkHTTPRequestEnablePipelining(cfRequest);
 
     if (resourcePrioritiesEnabled())
-        wkSetHTTPRequestPriority(cfRequest, toPlatformRequestPriority(m_priority));
+        wkSetHTTPRequestPriority(cfRequest, toPlatformRequestPriority(priority()));
 
 #if !PLATFORM(WIN)
     wkCFURLRequestAllowAllPostCaching(cfRequest);
@@ -232,17 +231,13 @@ void ResourceRequest::updateFromDelegatePreservingOldProperties(const ResourceRe
 {
     ResourceLoadPriority oldPriority = priority();
     RefPtr<FormData> oldHTTPBody = httpBody();
-#if ENABLE(INSPECTOR)
     bool isHiddenFromInspector = hiddenFromInspector();
-#endif
 
     *this = delegateProvidedRequest;
 
     setPriority(oldPriority);
     setHTTPBody(oldHTTPBody.release());
-#if ENABLE(INSPECTOR)
     setHiddenFromInspector(isHiddenFromInspector);
-#endif
 }
 
 void ResourceRequest::doUpdateResourceRequest()
@@ -278,11 +273,8 @@ void ResourceRequest::doUpdateResourceRequest()
     }
     m_allowCookies = CFURLRequestShouldHandleHTTPCookies(m_cfRequest.get());
 
-    if (resourcePrioritiesEnabled()) {
-        auto priority = toResourceLoadPriority(wkGetHTTPRequestPriority(m_cfRequest.get()));
-        if (priority > ResourceLoadPriorityUnresolved)
-            m_priority = priority;
-    }
+    if (resourcePrioritiesEnabled())
+        m_priority = toResourceLoadPriority(wkGetHTTPRequestPriority(m_cfRequest.get()));
 
     m_httpHeaderFields.clear();
     if (CFDictionaryRef headers = CFURLRequestCopyAllHTTPHeaderFields(m_cfRequest.get())) {
@@ -373,7 +365,7 @@ String ResourceRequest::partitionName(const String& domain)
 }
 #endif
 
-PassOwnPtr<CrossThreadResourceRequestData> ResourceRequest::doPlatformCopyData(PassOwnPtr<CrossThreadResourceRequestData> data) const
+std::unique_ptr<CrossThreadResourceRequestData> ResourceRequest::doPlatformCopyData(std::unique_ptr<CrossThreadResourceRequestData> data) const
 {
 #if ENABLE(CACHE_PARTITIONING)
     data->m_cachePartition = m_cachePartition;
@@ -381,7 +373,7 @@ PassOwnPtr<CrossThreadResourceRequestData> ResourceRequest::doPlatformCopyData(P
     return data;
 }
 
-void ResourceRequest::doPlatformAdopt(PassOwnPtr<CrossThreadResourceRequestData> data)
+void ResourceRequest::doPlatformAdopt(std::unique_ptr<CrossThreadResourceRequestData> data)
 {
 #if ENABLE(CACHE_PARTITIONING)
     m_cachePartition = data->m_cachePartition;

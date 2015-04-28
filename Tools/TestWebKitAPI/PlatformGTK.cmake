@@ -2,13 +2,12 @@
 # disabled and this triggers the inclusion of the WebKit2 headers.
 add_definitions(-DBUILDING_WEBKIT2__)
 
-add_custom_target(forwarding-headersGTKForTestWebKitAPI
-    COMMAND ${PERL_EXECUTABLE} ${WEBKIT2_DIR}/Scripts/generate-forwarding-headers.pl ${WEBKIT2_DIR} ${FORWARDING_HEADERS_DIR} gtk
-    COMMAND ${PERL_EXECUTABLE} ${WEBKIT2_DIR}/Scripts/generate-forwarding-headers.pl ${TESTWEBKITAPI_DIR} ${FORWARDING_HEADERS_DIR}  gtk
-    COMMAND ${PERL_EXECUTABLE} ${WEBKIT2_DIR}/Scripts/generate-forwarding-headers.pl ${WEBKIT2_DIR} ${FORWARDING_HEADERS_DIR} soup
-    COMMAND ${PERL_EXECUTABLE} ${WEBKIT2_DIR}/Scripts/generate-forwarding-headers.pl ${TESTWEBKITAPI_DIR} ${FORWARDING_HEADERS_DIR}  soup
+add_custom_target(TestWebKitAPI-forwarding-headers
+    COMMAND ${PERL_EXECUTABLE} ${WEBKIT2_DIR}/Scripts/generate-forwarding-headers.pl --include-path ${TESTWEBKITAPI_DIR} --output ${FORWARDING_HEADERS_DIR} --platform gtk --platform soup
+    DEPENDS WebKit2-forwarding-headers
 )
-set(ForwardingHeadersForTestWebKitAPI_NAME forwarding-headersGTKForTestWebKitAPI)
+
+set(ForwardingHeadersForTestWebKitAPI_NAME TestWebKitAPI-forwarding-headers)
 
 include_directories(
     ${FORWARDING_HEADERS_DIR}
@@ -97,6 +96,7 @@ add_executable(TestWebKit2
     ${TESTWEBKITAPI_DIR}/Tests/WebKit2/ResizeWindowAfterCrash.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebKit2/RestoreSessionStateContainingFormData.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebKit2/ShouldGoToBackForwardListItem.cpp
+    ${TESTWEBKITAPI_DIR}/Tests/WebKit2/UserMedia.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebKit2/UserMessage.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebKit2/WillSendSubmitEvent.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebKit2/WKPageGetScaleFactorNotZero.cpp
@@ -104,6 +104,7 @@ add_executable(TestWebKit2
     ${TESTWEBKITAPI_DIR}/Tests/WebKit2/WKString.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebKit2/WKStringJSString.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebKit2/WKURL.cpp
+    ${TESTWEBKITAPI_DIR}/Tests/WebKit2/gtk/InputMethodFilter.cpp
 )
 
 target_link_libraries(TestWebKit2 ${test_webkit2_api_LIBRARIES})
@@ -112,13 +113,6 @@ set_tests_properties(TestWebKit2 PROPERTIES TIMEOUT 60)
 set_target_properties(TestWebKit2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/WebKit2)
 
 set(TestWebCoreGtk_SOURCES
-    ${WEBCORE_DIR}/platform/graphics/IntPoint.cpp
-    ${WEBCORE_DIR}/platform/graphics/IntRect.cpp
-    ${WEBCORE_DIR}/platform/graphics/IntSize.cpp
-    ${WEBCORE_DIR}/platform/graphics/cairo/IntRectCairo.cpp
-    ${WEBCORE_DIR}/platform/graphics/gtk/IntRectGtk.cpp
-    ${WEBCORE_DIR}/platform/gtk/GtkInputMethodFilter.cpp
-    ${TESTWEBKITAPI_DIR}/Tests/WebCore/gtk/InputMethodFilter.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WebCore/gtk/UserAgentQuirks.cpp
 )
 
@@ -131,10 +125,13 @@ add_executable(TestWebCore
 )
 
 target_link_libraries(TestWebCore ${test_webcore_LIBRARIES})
+add_dependencies(TestWebCore ${ForwardingHeadersForTestWebKitAPI_NAME})
+
 add_test(TestWebCore ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/WebCore/TestWebCore)
 set_tests_properties(TestWebCore PROPERTIES TIMEOUT 60)
 set_target_properties(TestWebCore PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${TESTWEBKITAPI_RUNTIME_OUTPUT_DIRECTORY}/WebCore)
 
 list(APPEND TestWTF_SOURCES
+    ${TESTWEBKITAPI_DIR}/Tests/WTF/gobject/GMainLoopSource.cpp
     ${TESTWEBKITAPI_DIR}/Tests/WTF/gobject/GUniquePtr.cpp
 )

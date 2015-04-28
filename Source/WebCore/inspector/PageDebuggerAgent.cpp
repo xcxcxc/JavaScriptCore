@@ -31,8 +31,6 @@
 #include "config.h"
 #include "PageDebuggerAgent.h"
 
-#if ENABLE(INSPECTOR)
-
 #include "CachedResource.h"
 #include "InspectorOverlay.h"
 #include "InspectorPageAgent.h"
@@ -45,6 +43,7 @@
 #include <inspector/InjectedScriptManager.h>
 #include <inspector/ScriptCallStack.h>
 #include <inspector/ScriptCallStackFactory.h>
+#include <profiler/Profile.h>
 
 using namespace Inspector;
 
@@ -121,7 +120,7 @@ void PageDebuggerAgent::breakpointActionLog(JSC::ExecState* exec, const String& 
     m_pageAgent->page()->console().addMessage(MessageSource::JS, MessageLevel::Log, message, createScriptCallStack(exec, ScriptCallStack::maxCallStackSizeToCapture));
 }
 
-InjectedScript PageDebuggerAgent::injectedScriptForEval(ErrorString* errorString, const int* executionContextId)
+InjectedScript PageDebuggerAgent::injectedScriptForEval(ErrorString& errorString, const int* executionContextId)
 {
     if (!executionContextId) {
         JSC::ExecState* scriptState = mainWorldExecState(m_pageAgent->mainFrame());
@@ -130,12 +129,12 @@ InjectedScript PageDebuggerAgent::injectedScriptForEval(ErrorString* errorString
 
     InjectedScript injectedScript = injectedScriptManager()->injectedScriptForId(*executionContextId);
     if (injectedScript.hasNoValue())
-        *errorString = ASCIILiteral("Execution context with given id not found.");
+        errorString = ASCIILiteral("Execution context with given id not found.");
 
     return injectedScript;
 }
 
-void PageDebuggerAgent::setOverlayMessage(ErrorString*, const String* message)
+void PageDebuggerAgent::setOverlayMessage(ErrorString&, const String* message)
 {
     m_overlay->setPausedInDebuggerMessage(message);
 }
@@ -146,5 +145,3 @@ void PageDebuggerAgent::didClearMainFrameWindowObject()
 }
 
 } // namespace WebCore
-
-#endif // ENABLE(INSPECTOR)

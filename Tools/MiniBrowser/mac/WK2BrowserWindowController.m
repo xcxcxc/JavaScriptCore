@@ -33,9 +33,9 @@
 #import <WebKit/WKNavigationDelegate.h>
 #import <WebKit/WKPreferencesPrivate.h>
 #import <WebKit/WKUIDelegate.h>
-#import <WebKit/WKWebView.h>
-#import <WebKit/WKWebViewConfiguration.h>
+#import <WebKit/WKWebViewConfigurationPrivate.h>
 #import <WebKit/WKWebViewPrivate.h>
+#import <WebKit/WebNSURLExtras.h>
 
 static void* keyValueObservingContext = &keyValueObservingContext;
 
@@ -43,19 +43,15 @@ static void* keyValueObservingContext = &keyValueObservingContext;
 @end
 
 @implementation WK2BrowserWindowController {
+    WKWebViewConfiguration *_configuration;
     WKWebView *_webView;
     BOOL _zoomTextOnly;
+    BOOL _isPrivateBrowsingWindow;
 }
 
 - (void)awakeFromNib
 {
-    static WKWebViewConfiguration *configuration;
-    if (!configuration) {
-        configuration = [[WKWebViewConfiguration alloc] init];
-        configuration.preferences._fullScreenEnabled = YES;
-        configuration.preferences._developerExtrasEnabled = YES;
-    }
-    _webView = [[WKWebView alloc] initWithFrame:[containerView bounds] configuration:configuration];
+    _webView = [[WKWebView alloc] initWithFrame:[containerView bounds] configuration:_configuration];
     [self didChangeSettings];
 
     _webView.allowsMagnification = YES;
@@ -76,6 +72,17 @@ static void* keyValueObservingContext = &keyValueObservingContext;
     _zoomTextOnly = NO;
 }
 
+- (instancetype)initWithConfiguration:(WKWebViewConfiguration *)configuration
+{
+    if (!(self = [super initWithWindowNibName:@"BrowserWindow"]))
+        return nil;
+
+    _configuration = [configuration copy];
+    _isPrivateBrowsingWindow = !_configuration.websiteDataStore.isPersistent;
+
+    return self;
+}
+
 - (void)dealloc
 {
     [_webView removeObserver:self forKeyPath:@"title"];
@@ -85,6 +92,7 @@ static void* keyValueObservingContext = &keyValueObservingContext;
     [progressIndicator unbind:NSValueBinding];
 
     [_webView release];
+    [_configuration release];
 
     [super dealloc];
 }
@@ -93,7 +101,7 @@ static void* keyValueObservingContext = &keyValueObservingContext;
 {
     [urlText setStringValue:[self addProtocolIfNecessary:[urlText stringValue]]];
 
-    [_webView loadRequest:[NSURLRequest requestWithURL:[NSURL URLWithString:[[urlText stringValue] stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding]]]];
+    [_webView loadRequest:[NSURLRequest requestWithURL:[NSURL _web_URLWithUserTypedString:[urlText stringValue]]]];
 }
 
 - (IBAction)showHideWebView:(id)sender
@@ -112,6 +120,37 @@ static void* keyValueObservingContext = &keyValueObservingContext;
         [containerView addSubview:_webView];
         [_webView release];
     }
+}
+
+static CGFloat viewScaleForMenuItemTag(NSInteger tag)
+{
+    if (tag == 1)
+        return 1;
+    if (tag == 2)
+        return 0.75;
+    if (tag == 3)
+        return 0.5;
+    if (tag == 4)
+        return 0.25;
+
+    return 1;
+}
+
+- (IBAction)setScale:(id)sender
+{
+    CGFloat scale = viewScaleForMenuItemTag([sender tag]);
+    CGFloat oldScale = [_webView _viewScale];
+
+    if (scale == oldScale)
+        return;
+
+    [_webView _setLayoutMode:_WKLayoutModeDynamicSizeComputedFromViewScale];
+
+    NSRect oldFrame = self.window.frame;
+    NSSize newFrameSize = NSMakeSize(oldFrame.size.width * (scale / oldScale), oldFrame.size.height * (scale / oldScale));
+    [self.window setFrame:NSMakeRect(oldFrame.origin.x, oldFrame.origin.y - (newFrameSize.height - oldFrame.size.height), newFrameSize.width, newFrameSize.height) display:NO animate:NO];
+
+    [_webView _setViewScale:scale];
 }
 
 - (BOOL)validateMenuItem:(NSMenuItem *)menuItem
@@ -137,6 +176,9 @@ static void* keyValueObservingContext = &keyValueObservingContext;
         [menuItem setTitle:[_webView window] ? @"Remove Web View" : @"Insert Web View"];
     else if (action == @selector(toggleZoomMode:))
         [menuItem setState:_zoomTextOnly ? NSOnState : NSOffState];
+
+    if (action == @selector(setScale:))
+        [menuItem setState:[_webView _viewScale] == viewScaleForMenuItemTag([menuItem tag])];
 
     return YES;
 }
@@ -219,7 +261,7 @@ static void* keyValueObservingContext = &keyValueObservingContext;
 
 - (void)windowWillClose:(NSNotification *)notification
 {
-    [(BrowserAppDelegate *)[NSApp delegate] browserWindowWillClose:self.window];
+    [(BrowserAppDelegate *)[[NSApplication sharedApplication] delegate] browserWindowWillClose:self.window];
     [self autorelease];
 }
 
@@ -278,6 +320,7 @@ static void* keyValueObservingContext = &keyValueObservingContext;
     preferences._tiledScrollingIndicatorVisible = settings.tiledScrollingIndicatorVisible;
     preferences._compositingBordersVisible = settings.layerBordersVisible;
     preferences._compositingRepaintCountersVisible = settings.layerBordersVisible;
+    preferences._simpleLineLayoutDebugBordersEnabled = settings.simpleLineLayoutDebugBordersEnabled;
 
     BOOL useTransparentWindows = settings.useTransparentWindows;
     if (useTransparentWindows != _webView._drawsTransparentBackground) {
@@ -298,6 +341,14 @@ static void* keyValueObservingContext = &keyValueObservingContext;
         } else
             _webView._paginationMode = _WKPaginationModeUnpaginated;
     }
+    
+    NSUInteger visibleOverlayRegions = 0;
+    if (settings.nonFastScrollableRegionOverlayVisible)
+        visibleOverlayRegions |= _WKNonFastScrollableRegion;
+    if (settings.wheelEventHandlerRegionOverlayVisible)
+        visibleOverlayRegions |= _WKWheelEventHandlerRegion;
+    
+    preferences._visibleDebugOverlayRegions = visibleOverlayRegions;
 }
 
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
@@ -306,12 +357,12 @@ static void* keyValueObservingContext = &keyValueObservingContext;
         return;
 
     if ([keyPath isEqualToString:@"title"])
-        self.window.title = [_webView.title stringByAppendingFormat:@" [WK2, %d]", _webView._webProcessIdentifier];
+        self.window.title = [NSString stringWithFormat:@"%@%@ [WK2 %d]", _isPrivateBrowsingWindow ? @"🙈 " : @"", _webView.title, _webView._webProcessIdentifier];
     else if ([keyPath isEqualToString:@"URL"])
         [self updateTextFieldFromURL:_webView.URL];
 }
 
-- (void)webView:(WKWebView *)webView runJavaScriptAlertPanelWithMessage:(NSString *)message initiatedByFrame:(WKFrameInfo *)frame completionHandler:(void (^)())completionHandler
+- (void)webView:(WKWebView *)webView runJavaScriptAlertPanelWithMessage:(NSString *)message initiatedByFrame:(WKFrameInfo *)frame completionHandler:(void (^)(void))completionHandler
 {
     NSAlert* alert = [[NSAlert alloc] init];
 
@@ -319,12 +370,10 @@ static void* keyValueObservingContext = &keyValueObservingContext;
     [alert setInformativeText:message];
     [alert addButtonWithTitle:@"OK"];
 
-#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
     [alert beginSheetModalForWindow:self.window completionHandler:^void (NSModalResponse response) {
         completionHandler();
         [alert release];
     }];
-#endif
 }
 
 - (void)webView:(WKWebView *)webView runJavaScriptConfirmPanelWithMessage:(NSString *)message initiatedByFrame:(WKFrameInfo *)frame completionHandler:(void (^)(BOOL result))completionHandler
@@ -337,12 +386,10 @@ static void* keyValueObservingContext = &keyValueObservingContext;
     [alert addButtonWithTitle:@"OK"];
     [alert addButtonWithTitle:@"Cancel"];
 
-#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
     [alert beginSheetModalForWindow:self.window completionHandler:^void (NSModalResponse response) {
         completionHandler(response == NSAlertFirstButtonReturn);
         [alert release];
     }];
-#endif
 }
 
 - (void)webView:(WKWebView *)webView runJavaScriptTextInputPanelWithPrompt:(NSString *)prompt defaultText:(NSString *)defaultText initiatedByFrame:(WKFrameInfo *)frame completionHandler:(void (^)(NSString *result))completionHandler
@@ -359,13 +406,11 @@ static void* keyValueObservingContext = &keyValueObservingContext;
     [input setStringValue:defaultText];
     [alert setAccessoryView:input];
     
-#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
     [alert beginSheetModalForWindow:self.window completionHandler:^void (NSModalResponse response) {
         [input validateEditing];
         completionHandler(response == NSAlertFirstButtonReturn ? [input stringValue] : nil);
         [alert release];
     }];
-#endif
 }
 
 - (void)updateTextFieldFromURL:(NSURL *)URL
@@ -376,7 +421,7 @@ static void* keyValueObservingContext = &keyValueObservingContext;
     if (!URL.absoluteString.length)
         return;
 
-    urlText.stringValue = [[URL absoluteString] stringByReplacingPercentEscapesUsingEncoding:NSUTF8StringEncoding];
+    urlText.stringValue = [URL _web_userVisibleString];
 }
 
 - (void)loadURLString:(NSString *)urlString
@@ -393,6 +438,36 @@ static void* keyValueObservingContext = &keyValueObservingContext;
 
 - (IBAction)find:(id)sender
 {
+}
+
+static NSSet *dataTypes()
+{
+    return [WKWebsiteDataStore allWebsiteDataTypes];
+}
+
+- (IBAction)fetchWebsiteData:(id)sender
+{
+    [_configuration.websiteDataStore fetchDataRecordsOfTypes:dataTypes() completionHandler:^(NSArray *websiteDataRecords) {
+        NSLog(@"did fetch website data %@.", websiteDataRecords);
+    }];
+}
+
+- (IBAction)fetchAndClearWebsiteData:(id)sender
+{
+    [_configuration.websiteDataStore fetchDataRecordsOfTypes:dataTypes() completionHandler:^(NSArray *websiteDataRecords) {
+        [_configuration.websiteDataStore removeDataOfTypes:dataTypes() forDataRecords:websiteDataRecords completionHandler:^{
+            [_configuration.websiteDataStore fetchDataRecordsOfTypes:dataTypes() completionHandler:^(NSArray *websiteDataRecords) {
+                NSLog(@"did clear website data, after clearing data is %@.", websiteDataRecords);
+            }];
+        }];
+    }];
+}
+
+- (IBAction)clearWebsiteData:(id)sender
+{
+    [_configuration.websiteDataStore removeDataOfTypes:dataTypes() modifiedSince:[NSDate distantPast] completionHandler:^{
+        NSLog(@"Did clear website data.");
+    }];
 }
 
 #pragma mark WKNavigationDelegate

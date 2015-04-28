@@ -39,7 +39,7 @@
 
 class TestRunner : public RefCounted<TestRunner> {
 public:
-    static PassRefPtr<TestRunner> create(const std::string& testPathOrURL, const std::string& expectedPixelHash);
+    static PassRefPtr<TestRunner> create(const std::string& testURL, const std::string& expectedPixelHash);
 
     static const unsigned viewWidth;
     static const unsigned viewHeight;
@@ -52,6 +52,8 @@ public:
     void makeWindowObject(JSContextRef, JSObjectRef windowObject, JSValueRef* exception);
 
     void addDisallowedURL(JSStringRef url);
+    const std::set<std::string>& allowedHosts() const { return m_allowedHosts; }
+    void setAllowedHosts(std::set<std::string> hosts) { m_allowedHosts = WTF::move(hosts); }
     void addURLToRedirect(std::string origin, std::string destination);
     const std::string& redirectionDestinationForURL(std::string);
     void clearAllApplicationCaches();
@@ -285,7 +287,7 @@ public:
     bool useDeferredFrameLoading() const { return m_useDeferredFrameLoading; }
     void setUseDeferredFrameLoading(bool flag) { m_useDeferredFrameLoading = flag; }
 
-    const std::string& testPathOrURL() const { return m_testPathOrURL; }
+    const std::string& testURL() const { return m_testURL; }
     const std::string& expectedPixelHash() const { return m_expectedPixelHash; }
 
     const std::vector<char>& audioResult() const { return m_audioResult; }
@@ -333,13 +335,6 @@ public:
     // Simulate a request an embedding application could make, populating per-session credential storage.
     void authenticateSession(JSStringRef url, JSStringRef username, JSStringRef password);
 
-    JSValueRef originsWithLocalStorage(JSContextRef);
-    void deleteAllLocalStorage();
-    void deleteLocalStorageForOrigin(JSStringRef originIdentifier);
-    long long localStorageDiskUsageForOrigin(JSStringRef originIdentifier);
-    void observeStorageTrackerNotifications(unsigned number);
-    void syncLocalStorage();
-
     void setShouldPaintBrokenImage(bool);
     bool shouldPaintBrokenImage() const { return m_shouldPaintBrokenImage; }
 
@@ -356,8 +351,10 @@ public:
 
     bool hasPendingWebNotificationClick() const { return m_hasPendingWebNotificationClick; }
 
+    void setCustomTimeout(int duration) { m_timeout = duration; }
+
 private:
-    TestRunner(const std::string& testPathOrURL, const std::string& expectedPixelHash);
+    TestRunner(const std::string& testURL, const std::string& expectedPixelHash);
 
     void setGeolocationPermissionCommon(bool allow);
 
@@ -418,19 +415,22 @@ private:
 
     std::string m_authenticationUsername;
     std::string m_authenticationPassword; 
-    std::string m_testPathOrURL;
+    std::string m_testURL;
     std::string m_expectedPixelHash; // empty string if no hash
     std::string m_titleTextDirection;
 
     std::set<std::string> m_willSendRequestClearHeaders;
+    std::set<std::string> m_allowedHosts;
 
     std::vector<char> m_audioResult;
 
     std::map<std::string, std::string> m_URLsToRedirect;
-    
+
     static JSClassRef getJSClass();
     static JSStaticValue* staticValues();
     static JSStaticFunction* staticFunctions();
+
+    int m_timeout;
 };
 
 #endif // TestRunner_h

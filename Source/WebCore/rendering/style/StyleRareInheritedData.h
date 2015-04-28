@@ -47,8 +47,8 @@ class StyleImage;
 // actually uses one of these properties.
 class StyleRareInheritedData : public RefCounted<StyleRareInheritedData> {
 public:
-    static PassRef<StyleRareInheritedData> create() { return adoptRef(*new StyleRareInheritedData); }
-    PassRef<StyleRareInheritedData> copy() const;
+    static Ref<StyleRareInheritedData> create() { return adoptRef(*new StyleRareInheritedData); }
+    Ref<StyleRareInheritedData> copy() const;
     ~StyleRareInheritedData();
 
     bool operator==(const StyleRareInheritedData& o) const;
@@ -128,6 +128,12 @@ public:
 #if PLATFORM(IOS)
     unsigned touchCalloutEnabled : 1;
 #endif
+
+#if ENABLE(CSS_TRAILING_WORD)
+    unsigned trailingWord : 1;
+#endif
+
+    unsigned fontSynthesis : 2;
 
     AtomicString hyphenationString;
     short hyphenationLimitBefore;

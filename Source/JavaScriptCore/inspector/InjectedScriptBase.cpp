@@ -32,8 +32,6 @@
 #include "config.h"
 #include "InjectedScriptBase.h"
 
-#if ENABLE(INSPECTOR)
-
 #include "DebuggerEvalEnabler.h"
 #include "InspectorValues.h"
 #include "JSCInlines.h"
@@ -114,38 +112,48 @@ void InjectedScriptBase::makeCall(Deprecated::ScriptFunctionCall& function, RefP
         *result = InspectorString::create("Exception while making a call.");
 }
 
-void InjectedScriptBase::makeEvalCall(ErrorString* errorString, Deprecated::ScriptFunctionCall& function, RefPtr<Protocol::Runtime::RemoteObject>* objectResult, Protocol::OptOutput<bool>* wasThrown)
+void InjectedScriptBase::makeEvalCall(ErrorString& errorString, Deprecated::ScriptFunctionCall& function, RefPtr<Protocol::Runtime::RemoteObject>* objectResult, Protocol::OptOutput<bool>* wasThrown, Protocol::OptOutput<int>* savedResultIndex)
 {
     RefPtr<InspectorValue> result;
     makeCall(function, &result);
     if (!result) {
-        *errorString = ASCIILiteral("Internal error: result value is empty");
+        errorString = ASCIILiteral("Internal error: result value is empty");
         return;
     }
 
     if (result->type() == InspectorValue::Type::String) {
         result->asString(errorString);
-        ASSERT(errorString->length());
+        ASSERT(errorString.length());
         return;
     }
 
-    RefPtr<InspectorObject> resultPair = result->asObject();
-    if (!resultPair) {
-        *errorString = ASCIILiteral("Internal error: result is not an Object");
+    RefPtr<InspectorObject> resultTuple;
+    if (!result->asObject(resultTuple)) {
+        errorString = ASCIILiteral("Internal error: result is not an Object");
         return;
     }
 
-    RefPtr<InspectorObject> resultObj = resultPair->getObject(ASCIILiteral("result"));
-    bool wasThrownVal = false;
-    if (!resultObj || !resultPair->getBoolean(ASCIILiteral("wasThrown"), &wasThrownVal)) {
-        *errorString = ASCIILiteral("Internal error: result is not a pair of value and wasThrown flag");
+    RefPtr<InspectorObject> resultObject;
+    if (!resultTuple->getObject(ASCIILiteral("result"), resultObject)) {
+        errorString = ASCIILiteral("Internal error: result is not a pair of value and wasThrown flag");
         return;
     }
 
-    *objectResult = BindingTraits<Protocol::Runtime::RemoteObject>::runtimeCast(resultObj);
-    *wasThrown = wasThrownVal;
+    bool wasThrownValue = false;
+    if (!resultTuple->getBoolean(ASCIILiteral("wasThrown"), wasThrownValue)) {
+        errorString = ASCIILiteral("Internal error: result is not a pair of value and wasThrown flag");
+        return;
+    }
+
+    *objectResult = BindingTraits<Protocol::Runtime::RemoteObject>::runtimeCast(resultObject);
+    *wasThrown = wasThrownValue;
+
+    if (savedResultIndex) {
+        int savedIndex = 0;
+        if (resultTuple->getInteger(ASCIILiteral("savedResultIndex"), savedIndex))
+            *savedResultIndex = savedIndex;
+    }
 }
 
 } // namespace Inspector
 
-#endif // ENABLE(INSPECTOR)

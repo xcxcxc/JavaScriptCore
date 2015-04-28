@@ -37,7 +37,7 @@ def _should_file_trigger_build(target_platform, file):
     # and start using it for their bots. Someone familiar with each platform
     # will have to figure out what the right set of directories/patterns is for
     # that platform.
-    assert(target_platform in ("mac-leopard", "mac-lion", "mac-mavericks", "mac-mountainlion", "mac-snowleopard", "win"))
+    assert(target_platform in ("mac-mavericks", "mac-yosemite", "win"))
 
     directories = [
         # Directories that shouldn't trigger builds on any bots.
@@ -51,7 +51,6 @@ def _should_file_trigger_build(target_platform, file):
         ("opengl", []),
         ("opentype", []),
         ("openvg", []),
-        ("wince", []),
         ("wx", []),
 
         # Directories that should trigger builds on only some bots.
@@ -84,7 +83,6 @@ def _should_file_trigger_build(target_platform, file):
         (r"/LICENSE[^/]+$", []),
         (r"ARM(?:v7)?\.(?:cpp|h)$", []),
         (r"MIPS\.(?:cpp|h)$", []),
-        (r"WinCE\.(?:cpp|h|mm)$", []),
         (r"\.(?:bkl|mk)$", []),
 
         # Patterns that should trigger builds on only some bots.

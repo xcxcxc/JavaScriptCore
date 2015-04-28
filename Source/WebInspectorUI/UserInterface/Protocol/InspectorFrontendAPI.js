@@ -25,28 +25,16 @@
 
 InspectorFrontendAPI = {
     _loaded: false,
-
     _pendingCommands: [],
 
     savedURL: function(url)
     {
-        // FIXME: Not implemented.
+        // Not used yet.
     },
 
     appendedToURL: function(url)
     {
-        // FIXME: Not implemented.
-    },
-
-    isDebuggingEnabled: function()
-    {
-        // FIXME: Not implemented.
-        return false;
-    },
-
-    setDebuggingEnabled: function(enabled)
-    {
-        // FIXME: Not implemented.
+        // Not used yet.
     },
 
     isTimelineProfilingEnabled: function()
@@ -56,12 +44,11 @@ InspectorFrontendAPI = {
 
     setTimelineProfilingEnabled: function(enabled)
     {
-        if (WebInspector.timelineManager.isCapturing() !== enabled)
+        if (WebInspector.timelineManager.isCapturing() === enabled)
             return;
 
         if (enabled) {
-            WebInspector.navigationSidebar.selectedSidebarPanel = WebInspector.timelineSidebarPanel;
-            WebInspector.timelineSidebarPanel.showTimelineOverview();
+            WebInspector.showTimelineTab();
             WebInspector.timelineManager.startCapturing();
         } else {
             WebInspector.timelineManager.stopCapturing();
@@ -75,7 +62,7 @@ InspectorFrontendAPI = {
 
     showConsole: function()
     {
-        WebInspector.showConsoleView();
+        WebInspector.showConsoleTab();
 
         WebInspector.quickConsole.prompt.focus();
 
@@ -96,31 +83,22 @@ InspectorFrontendAPI = {
 
     showResources: function()
     {
-        WebInspector.ignoreLastContentCookie = true;
-        WebInspector.navigationSidebar.selectedSidebarPanel = WebInspector.resourceSidebarPanel;
-        WebInspector.navigationSidebar.collapsed = false;
+        WebInspector.showResourcesTab();
     },
 
     showMainResourceForFrame: function(frameIdentifier)
     {
-        WebInspector.ignoreLastContentCookie = true;
-        WebInspector.navigationSidebar.selectedSidebarPanel = WebInspector.resourceSidebarPanel;
-        WebInspector.resourceSidebarPanel.showSourceCodeForFrame(frameIdentifier, true);
-    },
-
-    setDockingUnavailable: function(unavailable)
-    {
-        // Not used.
+        WebInspector.showSourceCodeForFrame(frameIdentifier, true);
     },
 
     contextMenuItemSelected: function(id)
     {
-        WebInspector.contextMenuItemSelected(id);
+        WebInspector.ContextMenu.contextMenuItemSelected(id);
     },
 
     contextMenuCleared: function()
     {
-        WebInspector.contextMenuCleared();
+        WebInspector.ContextMenu.contextMenuCleared();
     },
 
     dispatchMessageAsync: function(messageObject)
@@ -141,6 +119,10 @@ InspectorFrontendAPI = {
         }
 
         var methodName = signature.shift();
+        console.assert(InspectorFrontendAPI[methodName], "Unexpected InspectorFrontendAPI method name: " + methodName);
+        if (!InspectorFrontendAPI[methodName])
+            return;
+
         return InspectorFrontendAPI[methodName].apply(InspectorFrontendAPI, signature);
     },
 
@@ -151,6 +133,6 @@ InspectorFrontendAPI = {
         for (var i = 0; i < InspectorFrontendAPI._pendingCommands.length; ++i)
             InspectorFrontendAPI.dispatch(InspectorFrontendAPI._pendingCommands[i]);
 
-        InspectorFrontendAPI._pendingCommands = [];
+        delete InspectorFrontendAPI._pendingCommands;
     }
 };

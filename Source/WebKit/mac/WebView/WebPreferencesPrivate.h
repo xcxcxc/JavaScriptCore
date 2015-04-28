@@ -52,6 +52,12 @@ typedef enum {
     WebBlockAllStorage
 } WebStorageBlockingPolicy;
 
+typedef enum {
+    WebKitJavaScriptRuntimeFlagsSymbolDisabled = 1u << 0,
+    WebKitJavaScriptRuntimeFlagsPromiseDisabled = 1u << 1,
+    WebKitJavaScriptRuntimeFlagsAllEnabled = 0
+} WebKitJavaScriptRuntimeFlags;
+
 extern NSString *WebPreferencesChangedNotification;
 extern NSString *WebPreferencesRemovedNotification;
 extern NSString *WebPreferencesChangedInternalNotification;
@@ -67,8 +73,8 @@ extern NSString *WebPreferencesCacheModelChangedInternalNotification;
 - (BOOL)developerExtrasEnabled;
 - (void)setDeveloperExtrasEnabled:(BOOL)flag;
 
-- (BOOL)javaScriptExperimentsEnabled;
-- (void)setJavaScriptExperimentsEnabled:(BOOL)flag;
+- (WebKitJavaScriptRuntimeFlags)javaScriptRuntimeFlags;
+- (void)setJavaScriptRuntimeFlags:(WebKitJavaScriptRuntimeFlags)flags;
 
 - (BOOL)authorAndUserStylesEnabled;
 - (void)setAuthorAndUserStylesEnabled:(BOOL)flag;
@@ -101,6 +107,9 @@ extern NSString *WebPreferencesCacheModelChangedInternalNotification;
 
 - (BOOL)automaticallyDetectsCacheModel;
 - (void)setAutomaticallyDetectsCacheModel:(BOOL)automaticallyDetectsCacheModel;
+
+- (BOOL)domTimersThrottlingEnabled;
+- (void)setDOMTimersThrottlingEnabled:(BOOL)domTimersThrottlingEnabled;
 
 - (BOOL)webArchiveDebugModeEnabled;
 - (void)setWebArchiveDebugModeEnabled:(BOOL)webArchiveDebugModeEnabled;
@@ -208,6 +217,9 @@ extern NSString *WebPreferencesCacheModelChangedInternalNotification;
 - (BOOL)showDebugBorders;
 - (void)setShowDebugBorders:(BOOL)show;
 
+- (BOOL)simpleLineLayoutDebugBordersEnabled;
+- (void)setSimpleLineLayoutDebugBordersEnabled:(BOOL)enabled;
+
 - (BOOL)showRepaintCounter;
 - (void)setShowRepaintCounter:(BOOL)show;
 
@@ -219,9 +231,6 @@ extern NSString *WebPreferencesCacheModelChangedInternalNotification;
 
 - (BOOL)webGLEnabled;
 - (void)setWebGLEnabled:(BOOL)enabled;
-
-- (BOOL)multithreadedWebGLEnabled;
-- (void)setMultithreadedWebGLEnabled:(BOOL)enabled;
 
 - (BOOL)forceSoftwareWebGLRendering;
 - (void)setForceSoftwareWebGLRendering:(BOOL)forced;
@@ -240,6 +249,9 @@ extern NSString *WebPreferencesCacheModelChangedInternalNotification;
 
 - (void)setMediaPlaybackAllowsInline:(BOOL)flag;
 - (BOOL)mediaPlaybackAllowsInline;
+
+- (void)setAllowsAlternateFullscreen:(BOOL)flag;
+- (BOOL)allowsAlternateFullscreen;
 
 - (NSString *)pictographFontFamily;
 - (void)setPictographFontFamily:(NSString *)family;
@@ -287,8 +299,6 @@ extern NSString *WebPreferencesCacheModelChangedInternalNotification;
 - (void)_setStandalone:(BOOL)flag;
 - (void)_setTelephoneNumberParsingEnabled:(BOOL)flag;
 - (BOOL)_telephoneNumberParsingEnabled;
-- (void)_setAlwaysUseBaselineOfPrimaryFont:(BOOL)flag;
-- (BOOL)_alwaysUseBaselineOfPrimaryFont;
 - (void)_setAllowMultiElementImplicitFormSubmission:(BOOL)flag;
 - (BOOL)_allowMultiElementImplicitFormSubmission;
 - (void)_setAlwaysRequestGeolocationPermission:(BOOL)flag;
@@ -317,6 +327,7 @@ extern NSString *WebPreferencesCacheModelChangedInternalNotification;
 // For DumpRenderTree use only.
 + (void)_switchNetworkLoaderToNewTestingSession;
 + (void)_setCurrentNetworkLoaderSessionCookieAcceptPolicy:(NSHTTPCookieAcceptPolicy)cookieAcceptPolicy;
++ (void)_clearNetworkLoaderSession;
 
 + (void)setWebKitLinkTimeVersion:(int)version;
 
@@ -389,9 +400,6 @@ extern NSString *WebPreferencesCacheModelChangedInternalNotification;
 - (BOOL)diagnosticLoggingEnabled;
 - (void)setDiagnosticLoggingEnabled:(BOOL)enabled;
 
-- (BOOL)screenFontSubstitutionEnabled;
-- (void)setScreenFontSubstitutionEnabled:(BOOL)enabled;
-
 - (void)setStorageBlockingPolicy:(WebStorageBlockingPolicy)storageBlockingPolicy;
 - (WebStorageBlockingPolicy)storageBlockingPolicy;
 
@@ -419,8 +427,19 @@ extern NSString *WebPreferencesCacheModelChangedInternalNotification;
 - (void)setImageControlsEnabled:(BOOL)flag;
 - (BOOL)imageControlsEnabled;
 
+- (void)setServiceControlsEnabled:(BOOL)flag;
+- (BOOL)serviceControlsEnabled;
+
 - (void)setGamepadsEnabled:(BOOL)flag;
 - (BOOL)gamepadsEnabled;
+
+- (void)setMediaKeysStorageDirectory:(NSString *)directory;
+- (NSString *)mediaKeysStorageDirectory;
+
+- (void)setAntialiasedFontDilationEnabled:(BOOL)flag;
+- (BOOL)antialiasedFontDilationEnabled;
+
+@property (nonatomic) BOOL javaScriptMarkupEnabled;
 
 #if TARGET_OS_IPHONE && __IPHONE_OS_VERSION_MIN_REQUIRED < 80000
 - (void)_setAllowCompositingLayerVisualDegradation:(BOOL)flag;

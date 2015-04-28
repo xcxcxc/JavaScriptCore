@@ -51,27 +51,60 @@ static RepaintMap& repaintRectMap()
     return map;
 }
 
-void KeyframeValueList::insert(PassOwnPtr<const AnimationValue> value)
+void KeyframeValueList::insert(std::unique_ptr<const AnimationValue> value)
 {
     for (size_t i = 0; i < m_values.size(); ++i) {
         const AnimationValue* curValue = m_values[i].get();
         if (curValue->keyTime() == value->keyTime()) {
             ASSERT_NOT_REACHED();
             // insert after
-            m_values.insert(i + 1, value);
+            m_values.insert(i + 1, WTF::move(value));
             return;
         }
         if (curValue->keyTime() > value->keyTime()) {
             // insert before
-            m_values.insert(i, value);
+            m_values.insert(i, WTF::move(value));
             return;
         }
     }
     
-    m_values.append(value);
+    m_values.append(WTF::move(value));
 }
 
-GraphicsLayer::GraphicsLayer(GraphicsLayerClient& client)
+#if !USE(CA)
+bool GraphicsLayer::supportsLayerType(Type type)
+{
+    switch (type) {
+    case Type::Normal:
+    case Type::PageTiledBacking:
+    case Type::Scrolling:
+        return true;
+    case Type::Shape:
+        return false;
+    }
+    ASSERT_NOT_REACHED();
+    return false;
+}
+
+bool GraphicsLayer::supportsBackgroundColorContent()
+{
+#if USE(TEXTURE_MAPPER)
+    return true;
+#else
+    return false;
+#endif
+}
+#endif
+
+#if !USE(COORDINATED_GRAPHICS)
+bool GraphicsLayer::supportsContentsTiling()
+{
+    // FIXME: Enable the feature on different ports.
+    return false;
+}
+#endif
+
+GraphicsLayer::GraphicsLayer(Type type, GraphicsLayerClient& client)
     : m_client(client)
     , m_anchorPoint(0.5f, 0.5f, 0)
     , m_opacity(1)
@@ -79,6 +112,7 @@ GraphicsLayer::GraphicsLayer(GraphicsLayerClient& client)
 #if ENABLE(CSS_COMPOSITING)
     , m_blendMode(BlendModeNormal)
 #endif
+    , m_type(type)
     , m_contentsOpaque(false)
     , m_preserves3D(false)
     , m_backfaceVisibility(true)
@@ -93,13 +127,12 @@ GraphicsLayer::GraphicsLayer(GraphicsLayerClient& client)
     , m_isMaskLayer(false)
     , m_paintingPhase(GraphicsLayerPaintAllWithOverflowClip)
     , m_contentsOrientation(CompositingCoordinatesTopDown)
-    , m_parent(0)
-    , m_maskLayer(0)
-    , m_replicaLayer(0)
-    , m_replicatedLayer(0)
+    , m_parent(nullptr)
+    , m_maskLayer(nullptr)
+    , m_replicaLayer(nullptr)
+    , m_replicatedLayer(nullptr)
     , m_repaintCount(0)
     , m_customAppearance(NoCustomAppearance)
-    , m_customBehavior(NoCustomBehavior)
 {
 #ifndef NDEBUG
     m_client.verifyNotPainting();
@@ -253,14 +286,7 @@ void GraphicsLayer::removeAllChildren()
 void GraphicsLayer::removeFromParent()
 {
     if (m_parent) {
-        unsigned i;
-        for (i = 0; i < m_parent->m_children.size(); i++) {
-            if (this == m_parent->m_children[i]) {
-                m_parent->m_children.remove(i);
-                break;
-            }
-        }
-
+        m_parent->m_children.removeFirst(this);
         setParent(nullptr);
     }
 }
@@ -280,6 +306,42 @@ void GraphicsLayer::setMaskLayer(GraphicsLayer* layer)
     }
     
     m_maskLayer = layer;
+}
+
+Path GraphicsLayer::shapeLayerPath() const
+{
+#if USE(CA)
+    return m_shapeLayerPath;
+#else
+    return Path();
+#endif
+}
+
+void GraphicsLayer::setShapeLayerPath(const Path& path)
+{
+#if USE(CA)
+    m_shapeLayerPath = path;
+#else
+    UNUSED_PARAM(path);
+#endif
+}
+
+WindRule GraphicsLayer::shapeLayerWindRule() const
+{
+#if USE(CA)
+    return m_shapeLayerWindRule;
+#else
+    return RULE_NONZERO;
+#endif
+}
+
+void GraphicsLayer::setShapeLayerWindRule(WindRule windRule)
+{
+#if USE(CA)
+    m_shapeLayerWindRule = windRule;
+#else
+    UNUSED_PARAM(windRule);
+#endif
 }
 
 void GraphicsLayer::noteDeviceOrPageScaleFactorChangedIncludingDescendants()
@@ -489,7 +551,7 @@ static inline const TransformOperations& operationsAt(const KeyframeValueList& v
 
 int GraphicsLayer::validateTransformOperations(const KeyframeValueList& valueList, bool& hasBigRotation)
 {
-    ASSERT(valueList.property() == AnimatedPropertyWebkitTransform);
+    ASSERT(valueList.property() == AnimatedPropertyTransform);
 
     hasBigRotation = false;
     
@@ -521,8 +583,8 @@ int GraphicsLayer::validateTransformOperations(const KeyframeValueList& valueLis
     }
 
     // Keyframes are valid, check for big rotations.    
-    double lastRotAngle = 0.0;
-    double maxRotAngle = -1.0;
+    double lastRotationAngle = 0.0;
+    double maxRotationAngle = -1.0;
         
     for (size_t j = 0; j < firstVal.operations().size(); ++j) {
         TransformOperation::OperationType type = firstVal.operations().at(j)->type();
@@ -532,23 +594,23 @@ int GraphicsLayer::validateTransformOperations(const KeyframeValueList& valueLis
             type == TransformOperation::ROTATE_Y ||
             type == TransformOperation::ROTATE_Z ||
             type == TransformOperation::ROTATE_3D) {
-            lastRotAngle = toRotateTransformOperation(firstVal.operations().at(j).get())->angle();
+            lastRotationAngle = downcast<RotateTransformOperation>(*firstVal.operations().at(j)).angle();
             
-            if (maxRotAngle < 0)
-                maxRotAngle = fabs(lastRotAngle);
+            if (maxRotationAngle < 0)
+                maxRotationAngle = fabs(lastRotationAngle);
             
             for (size_t i = firstIndex + 1; i < valueList.size(); ++i) {
                 const TransformOperations& val = operationsAt(valueList, i);
-                double rotAngle = val.operations().isEmpty() ? 0 : (toRotateTransformOperation(val.operations().at(j).get())->angle());
-                double diffAngle = fabs(rotAngle - lastRotAngle);
-                if (diffAngle > maxRotAngle)
-                    maxRotAngle = diffAngle;
-                lastRotAngle = rotAngle;
+                double rotationAngle = val.operations().isEmpty() ? 0 : downcast<RotateTransformOperation>(*val.operations().at(j)).angle();
+                double diffAngle = fabs(rotationAngle - lastRotationAngle);
+                if (diffAngle > maxRotationAngle)
+                    maxRotationAngle = diffAngle;
+                lastRotationAngle = rotationAngle;
             }
         }
     }
     
-    hasBigRotation = maxRotAngle >= 180.0;
+    hasBigRotation = maxRotationAngle >= 180.0;
     
     return firstIndex;
 }
@@ -605,7 +667,7 @@ static void dumpChildren(TextStream& ts, const Vector<GraphicsLayer*>& children,
 {
     totalChildCount += children.size();
     for (auto* child : children) {
-        if (!child->client().shouldSkipLayerInDump(child)) {
+        if (!child->client().shouldSkipLayerInDump(child, behavior)) {
             child->dumpLayer(ts, indent + 2, behavior);
             continue;
         }
@@ -629,7 +691,10 @@ void GraphicsLayer::dumpProperties(TextStream& ts, int indent, LayerTreeAsTextBe
 
     if (m_anchorPoint != FloatPoint3D(0.5f, 0.5f, 0)) {
         writeIndent(ts, indent + 1);
-        ts << "(anchor " << m_anchorPoint.x() << " " << m_anchorPoint.y() << ")\n";
+        ts << "(anchor " << m_anchorPoint.x() << " " << m_anchorPoint.y();
+        if (m_anchorPoint.z())
+            ts << " " << m_anchorPoint.z();
+        ts << ")\n";
     }
 
     if (m_size != IntSize()) {
@@ -654,9 +719,10 @@ void GraphicsLayer::dumpProperties(TextStream& ts, int indent, LayerTreeAsTextBe
         ts << "(usingTiledLayer " << m_usingTiledBacking << ")\n";
     }
 
-    if (m_contentsOpaque) {
+    bool needsIOSDumpRenderTreeMainFrameRenderViewLayerIsAlwaysOpaqueHack = m_client.needsIOSDumpRenderTreeMainFrameRenderViewLayerIsAlwaysOpaqueHack(*this);
+    if (m_contentsOpaque || needsIOSDumpRenderTreeMainFrameRenderViewLayerIsAlwaysOpaqueHack) {
         writeIndent(ts, indent + 1);
-        ts << "(contentsOpaque " << m_contentsOpaque << ")\n";
+        ts << "(contentsOpaque " << (m_contentsOpaque || needsIOSDumpRenderTreeMainFrameRenderViewLayerIsAlwaysOpaqueHack) << ")\n";
     }
 
     if (m_preserves3D) {
@@ -761,6 +827,10 @@ void GraphicsLayer::dumpProperties(TextStream& ts, int indent, LayerTreeAsTextBe
             writeIndent(ts, indent + 2);
             ts << "GraphicsLayerPaintMask\n";
         }
+        if (paintingPhase() & GraphicsLayerPaintChildClippingMask) {
+            writeIndent(ts, indent + 2);
+            ts << "GraphicsLayerPaintChildClippingMask\n";
+        }
         if (paintingPhase() & GraphicsLayerPaintOverflowContents) {
             writeIndent(ts, indent + 2);
             ts << "GraphicsLayerPaintOverflowContents\n";
@@ -808,7 +878,7 @@ void showGraphicsLayerTree(const WebCore::GraphicsLayer* layer)
     if (!layer)
         return;
 
-    String output = layer->layerTreeAsText(WebCore::LayerTreeAsTextDebug | WebCore::LayerTreeAsTextIncludeVisibleRects | WebCore::LayerTreeAsTextIncludeTileCaches);
+    String output = layer->layerTreeAsText(WebCore::LayerTreeAsTextDebug | WebCore::LayerTreeAsTextIncludeVisibleRects | WebCore::LayerTreeAsTextIncludeTileCaches | WebCore::LayerTreeAsTextIncludeContentLayers);
     fprintf(stderr, "%s\n", output.utf8().data());
 }
 #endif

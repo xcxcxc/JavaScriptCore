@@ -33,7 +33,7 @@ class SVGAElement final : public SVGGraphicsElement,
                           public SVGURIReference,
                           public SVGExternalResourcesRequired {
 public:
-    static PassRefPtr<SVGAElement> create(const QualifiedName&, Document&);
+    static Ref<SVGAElement> create(const QualifiedName&, Document&);
 
 private:
     SVGAElement(const QualifiedName&, Document&);
@@ -43,11 +43,10 @@ private:
     virtual String title() const override;
     virtual String target() const override { return svgTarget(); }
 
-    bool isSupportedAttribute(const QualifiedName&);
     virtual void parseAttribute(const QualifiedName&, const AtomicString&) override;
     virtual void svgAttributeChanged(const QualifiedName&) override;
 
-    virtual RenderPtr<RenderElement> createElementRenderer(PassRef<RenderStyle>) override;
+    virtual RenderPtr<RenderElement> createElementRenderer(Ref<RenderStyle>&&, const RenderTreePosition&) override;
     virtual bool childShouldCreateRenderer(const Node&) const override;
 
     virtual void defaultEventHandler(Event*) override;

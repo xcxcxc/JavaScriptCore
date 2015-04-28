@@ -87,13 +87,11 @@ static void checkAndInitScrollbarTheme()
         scrollbarTheme = OpenThemeData(0, L"Scrollbar");
 }
 
-#if !USE(SAFARI_THEME)
 ScrollbarTheme* ScrollbarTheme::nativeTheme()
 {
     static ScrollbarThemeWin winTheme;
     return &winTheme;
 }
-#endif
 
 ScrollbarThemeWin::ScrollbarThemeWin()
 {
@@ -294,9 +292,7 @@ void ScrollbarThemeWin::paintButton(GraphicsContext* context, ScrollbarThemeClie
         if (scrollbar->pressedPart() == scrollbar->hoveredPart()) {
             xpState += TS_ACTIVE;
             classicState |= DFCS_PUSHED;
-#if !OS(WINCE)
             classicState |= DFCS_FLAT;
-#endif
         } else
             xpState += TS_HOVER;
     } else {

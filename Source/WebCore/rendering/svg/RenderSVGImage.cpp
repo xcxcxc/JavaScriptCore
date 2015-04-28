@@ -26,7 +26,6 @@
 #include "config.h"
 #include "RenderSVGImage.h"
 
-#include "Attr.h"
 #include "FloatQuad.h"
 #include "GraphicsContext.h"
 #include "LayoutRepainter.h"
@@ -44,7 +43,7 @@
 
 namespace WebCore {
 
-RenderSVGImage::RenderSVGImage(SVGImageElement& element, PassRef<RenderStyle> style)
+RenderSVGImage::RenderSVGImage(SVGImageElement& element, Ref<RenderStyle>&& style)
     : RenderSVGModelObject(element, WTF::move(style))
     , m_needsBoundariesUpdate(true)
     , m_needsTransformUpdate(true)
@@ -60,7 +59,7 @@ RenderSVGImage::~RenderSVGImage()
 
 SVGImageElement& RenderSVGImage::imageElement() const
 {
-    return toSVGImageElement(RenderSVGModelObject::element());
+    return downcast<SVGImageElement>(RenderSVGModelObject::element());
 }
 
 bool RenderSVGImage::updateImageViewport()

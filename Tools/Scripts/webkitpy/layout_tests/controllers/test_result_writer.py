@@ -29,6 +29,7 @@
 
 import logging
 
+from webkitpy.common.wavediff import WaveDiff
 from webkitpy.layout_tests.models import test_failures
 
 
@@ -161,6 +162,10 @@ class TestResultWriter(object):
     def write_audio_files(self, actual_audio, expected_audio):
         self.write_output_files('.wav', actual_audio, expected_audio)
 
+    def create_audio_diff_and_write_result(self, actual_audio, expected_audio):
+        diff_filename = self.output_filename(self.FILENAME_SUFFIX_DIFF + '.txt')
+        self._write_text_file(diff_filename, WaveDiff(expected_audio, actual_audio).diffText())
+
     def write_image_files(self, actual_image, expected_image):
         self.write_output_files('.png', actual_image, expected_image)
 
@@ -175,13 +180,8 @@ class TestResultWriter(object):
         if self._filesystem.exists(image_diff_template):
             image_diff_file = self._filesystem.read_text_file(image_diff_template)
 
-        # FIXME: old-run-webkit-tests shows the diff percentage as the text contents of the "diff" link.
-        # FIXME: old-run-webkit-tests include a link to the test file.
-        html = image_diff_file % {
-            'title': self._test_name,
-            'diff_filename': self._output_testname(self.FILENAME_SUFFIX_IMAGE_DIFF),
-            'prefix': self._output_testname(''),
-        }
+        html = image_diff_file.replace('__TITLE__', self._test_name);
+        html = html.replace('__PREFIX__', self._output_testname(''));
 
         diffs_html_filename = self.output_filename(self.FILENAME_SUFFIX_IMAGE_DIFFS_HTML)
         self._filesystem.write_text_file(diffs_html_filename, html)

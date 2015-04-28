@@ -36,6 +36,7 @@ class JSScope;
 class DebuggerScope : public JSNonFinalObject {
 public:
     typedef JSNonFinalObject Base;
+    static const unsigned StructureFlags = Base::StructureFlags | OverridesGetOwnPropertySlot | OverridesGetPropertyNames;
 
     static DebuggerScope* create(VM& vm, JSScope* scope)
     {
@@ -84,17 +85,19 @@ public:
     void invalidateChain();
     bool isValid() const { return !!m_scope; }
 
+    bool isCatchScope() const;
+    bool isFunctionNameScope() const;
     bool isWithScope() const;
     bool isGlobalScope() const;
     bool isFunctionOrEvalScope() const;
+
+    JSValue caughtValue() const;
 
 private:
     JS_EXPORT_PRIVATE DebuggerScope(VM&, JSScope*);
     JS_EXPORT_PRIVATE void finishCreation(VM&);
 
     JSScope* jsScope() const { return m_scope.get(); }
-
-    static const unsigned StructureFlags = OverridesGetOwnPropertySlot | OverridesGetPropertyNames | JSObject::StructureFlags;
 
     WriteBarrier<JSScope> m_scope;
     WriteBarrier<DebuggerScope> m_next;

@@ -32,20 +32,19 @@ namespace WebCore {
 class SVGRectElement final : public SVGGraphicsElement,
                              public SVGExternalResourcesRequired {
 public:
-    static PassRefPtr<SVGRectElement> create(const QualifiedName&, Document&);
+    static Ref<SVGRectElement> create(const QualifiedName&, Document&);
 
 private:
     SVGRectElement(const QualifiedName&, Document&);
     
     virtual bool isValid() const override { return SVGTests::isValid(); }
 
-    bool isSupportedAttribute(const QualifiedName&);
     virtual void parseAttribute(const QualifiedName&, const AtomicString&) override;
     virtual void svgAttributeChanged(const QualifiedName&) override;
 
     virtual bool selfHasRelativeLengths() const override { return true; }
 
-    virtual RenderPtr<RenderElement> createElementRenderer(PassRef<RenderStyle>) override;
+    virtual RenderPtr<RenderElement> createElementRenderer(Ref<RenderStyle>&&, const RenderTreePosition&) override;
 
     BEGIN_DECLARE_ANIMATED_PROPERTIES(SVGRectElement)
         DECLARE_ANIMATED_LENGTH(X, x)
@@ -57,8 +56,6 @@ private:
         DECLARE_ANIMATED_BOOLEAN(ExternalResourcesRequired, externalResourcesRequired)
     END_DECLARE_ANIMATED_PROPERTIES
 };
-
-NODE_TYPE_CASTS(SVGRectElement)
 
 } // namespace WebCore
 

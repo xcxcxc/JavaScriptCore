@@ -41,6 +41,7 @@
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
 #include "StringWithDirection.h"
+#include "StyleSheetContents.h"
 #include "SubstituteData.h"
 #include "Timer.h"
 #include <wtf/HashSet.h>
@@ -63,15 +64,17 @@ namespace WebCore {
     class ArchiveResourceCollection;
     class CachedRawResource;
     class CachedResourceLoader;
-    class ContentFilter;
     class FormState;
     class Frame;
     class FrameLoader;
     class Page;
-    class ResourceBuffer;
     class ResourceLoader;
     class SharedBuffer;
     class SubstituteResource;
+
+#if ENABLE(CONTENT_FILTERING)
+    class ContentFilter;
+#endif
 
     typedef HashMap<unsigned long, RefPtr<ResourceLoader>> ResourceLoaderMap;
     typedef Vector<ResourceResponse> ResponseVector;
@@ -79,9 +82,9 @@ namespace WebCore {
     class DocumentLoader : public RefCounted<DocumentLoader>, private CachedRawResourceClient {
         WTF_MAKE_FAST_ALLOCATED;
     public:
-        static PassRefPtr<DocumentLoader> create(const ResourceRequest& request, const SubstituteData& data)
+        static Ref<DocumentLoader> create(const ResourceRequest& request, const SubstituteData& data)
         {
-            return adoptRef(new DocumentLoader(request, data));
+            return adoptRef(*new DocumentLoader(request, data));
         }
         WEBCORE_EXPORT virtual ~DocumentLoader();
 
@@ -93,7 +96,7 @@ namespace WebCore {
 
         WEBCORE_EXPORT FrameLoader* frameLoader() const;
         WEBCORE_EXPORT ResourceLoader* mainResourceLoader() const;
-        WEBCORE_EXPORT PassRefPtr<ResourceBuffer> mainResourceData() const;
+        WEBCORE_EXPORT PassRefPtr<SharedBuffer> mainResourceData() const;
         
         DocumentWriter& writer() const { return m_writer; }
 
@@ -103,23 +106,21 @@ namespace WebCore {
         WEBCORE_EXPORT const ResourceRequest& request() const;
         WEBCORE_EXPORT ResourceRequest& request();
 
-        CachedResourceLoader& cachedResourceLoader() { return m_cachedResourceLoader.get(); }
+        CachedResourceLoader& cachedResourceLoader() { return m_cachedResourceLoader; }
 
         const SubstituteData& substituteData() const { return m_substituteData; }
 
-        // FIXME: This is the same as requestURL(). We should remove one of them.
         WEBCORE_EXPORT const URL& url() const;
         WEBCORE_EXPORT const URL& unreachableURL() const;
 
         const URL& originalURL() const;
-        WEBCORE_EXPORT const URL& requestURL() const;
         WEBCORE_EXPORT const URL& responseURL() const;
         WEBCORE_EXPORT const String& responseMIMEType() const;
 #if PLATFORM(IOS)
         // FIXME: This method seems to violate the encapsulation of this class.
         WEBCORE_EXPORT void setResponseMIMEType(const String&);
 #endif
-
+        const String& currentContentType() const;
         void replaceRequestURLForSameDocumentNavigation(const URL&);
         bool isStopping() const { return m_isStopping; }
         void stopLoading();
@@ -249,7 +250,7 @@ namespace WebCore {
         void recordMemoryCacheLoadForFutureClientNotification(const ResourceRequest&);
         void takeMemoryCacheLoadsForClientNotification(Vector<ResourceRequest>& loads);
 
-        DocumentLoadTiming* timing() { return &m_documentLoadTiming; }
+        DocumentLoadTiming& timing() { return m_documentLoadTiming; }
         void resetTiming() { m_documentLoadTiming = DocumentLoadTiming(); }
 
         // The WebKit layer calls this function when it's ready for the data to
@@ -266,6 +267,11 @@ namespace WebCore {
 #if USE(QUICK_LOOK)
         void setQuickLookHandle(std::unique_ptr<QuickLookHandle> quickLookHandle) { m_quickLookHandle = WTF::move(quickLookHandle); }
         QuickLookHandle* quickLookHandle() const { return m_quickLookHandle.get(); }
+#endif
+
+#if ENABLE(CONTENT_EXTENSIONS)
+        void addPendingContentExtensionSheet(const String& identifier, StyleSheetContents&);
+        void addPendingContentExtensionDisplayNoneSelector(const String& identifier, const String& selector, uint32_t selectorID);
 #endif
 
     protected:
@@ -314,16 +320,22 @@ namespace WebCore {
 #if HAVE(RUNLOOP_TIMER)
         typedef RunLoopTimer<DocumentLoader> DocumentLoaderTimer;
 #else
-        typedef Timer<DocumentLoader> DocumentLoaderTimer;
+        typedef Timer DocumentLoaderTimer;
 #endif
         void handleSubstituteDataLoadSoon();
-        void handleSubstituteDataLoadNow(DocumentLoaderTimer*);
+        void handleSubstituteDataLoadNow();
         void startDataLoadTimer();
 
         void deliverSubstituteResourcesAfterDelay();
-        void substituteResourceDeliveryTimerFired(Timer<DocumentLoader>&);
+        void substituteResourceDeliveryTimerFired();
 
         void clearMainResource();
+
+#if ENABLE(CONTENT_FILTERING)
+        void becomeMainResourceClientIfFilterAllows();
+        void installContentFilterUnblockHandler(ContentFilter&);
+        void contentFilterDidDecide();
+#endif
 
         Frame* m_frame;
         Ref<CachedResourceLoader> m_cachedResourceLoader;
@@ -387,9 +399,9 @@ namespace WebCore {
         
         typedef HashMap<RefPtr<ResourceLoader>, RefPtr<SubstituteResource>> SubstituteResourceMap;
         SubstituteResourceMap m_pendingSubstituteResources;
-        Timer<DocumentLoader> m_substituteResourceDeliveryTimer;
+        Timer m_substituteResourceDeliveryTimer;
 
-        OwnPtr<ArchiveResourceCollection> m_archiveResourceCollection;
+        std::unique_ptr<ArchiveResourceCollection> m_archiveResourceCollection;
 #if ENABLE(WEB_ARCHIVE) || ENABLE(MHTML)
         RefPtr<Archive> m_archive;
         RefPtr<SharedBuffer> m_parsedArchiveData;
@@ -416,7 +428,7 @@ namespace WebCore {
         bool m_subresourceLoadersArePageCacheAcceptable;
 
         friend class ApplicationCacheHost;  // for substitute resource delivery
-        OwnPtr<ApplicationCacheHost> m_applicationCacheHost;
+        std::unique_ptr<ApplicationCacheHost> m_applicationCacheHost;
 
 #if ENABLE(CONTENT_FILTERING)
         std::unique_ptr<ContentFilter> m_contentFilter;
@@ -425,6 +437,12 @@ namespace WebCore {
 #if USE(QUICK_LOOK)
         std::unique_ptr<QuickLookHandle> m_quickLookHandle;
 #endif
+
+#if ENABLE(CONTENT_EXTENSIONS)
+        HashMap<String, RefPtr<StyleSheetContents>> m_pendingNamedContentExtensionStyleSheets;
+        HashMap<String, std::pair<String, uint32_t>> m_pendingContentExtensionDisplayNoneSelectors;
+#endif
+
     };
 
     inline void DocumentLoader::recordMemoryCacheLoadForFutureClientNotification(const ResourceRequest& request)

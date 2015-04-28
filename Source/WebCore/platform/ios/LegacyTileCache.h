@@ -34,8 +34,6 @@
 #include "IntSize.h"
 #include "Timer.h"
 #include <wtf/Noncopyable.h>
-#include <wtf/OwnPtr.h>
-#include <wtf/PassOwnPtr.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/Threading.h>
@@ -169,7 +167,7 @@ private:
     void createTilesInActiveGrid(SynchronousTileCreationMode);
     void scheduleLayerFlushForPendingRepaint();
 
-    void tileCreationTimerFired(Timer<LegacyTileCache>*);
+    void tileCreationTimerFired();
 
     void drawReplacementImage(LegacyTileLayer*, CGContextRef, CGImageRef);
     void drawWindowContent(LegacyTileLayer*, CGContextRef, CGRect dirtyRect);
@@ -197,10 +195,10 @@ private:
     bool m_isSpeculativeTileCreationEnabled;
 
     bool m_didCallWillStartScrollingOrZooming;
-    OwnPtr<LegacyTileGrid> m_zoomedOutTileGrid;
-    OwnPtr<LegacyTileGrid> m_zoomedInTileGrid;
+    std::unique_ptr<LegacyTileGrid> m_zoomedOutTileGrid;
+    std::unique_ptr<LegacyTileGrid> m_zoomedInTileGrid;
 
-    Timer<LegacyTileCache> m_tileCreationTimer;
+    Timer m_tileCreationTimer;
 
     Vector<IntRect> m_savedDisplayRects;
 

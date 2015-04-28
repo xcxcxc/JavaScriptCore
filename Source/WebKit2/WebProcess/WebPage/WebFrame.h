@@ -27,6 +27,7 @@
 #define WebFrame_h
 
 #include "APIObject.h"
+#include "ShareableBitmap.h"
 #include "WKBase.h"
 #include "WebFrameLoaderClient.h"
 #include <JavaScriptCore/JSBase.h>
@@ -53,6 +54,7 @@ class URL;
 
 namespace WebKit {
 
+class InjectedBundleFileHandle;
 class InjectedBundleHitTestResult;
 class InjectedBundleNodeHandle;
 class InjectedBundleRangeHandle;
@@ -96,7 +98,7 @@ public:
     String innerText() const;
     bool isFrameSet() const;
     WebFrame* parentFrame() const;
-    PassRefPtr<API::Array> childFrames();
+    Ref<API::Array> childFrames();
     JSGlobalContextRef jsContext();
     JSGlobalContextRef jsContextForWorld(InjectedBundleScriptWorld*);
     WebCore::IntRect contentBounds() const;
@@ -111,11 +113,13 @@ public:
     bool containsAnyFormControls() const;
     void stopLoading();
     bool handlesPageScaleGesture() const;
+    void setAccessibleName(const String&);
 
     static WebFrame* frameForContext(JSContextRef);
 
     JSValueRef jsWrapperForWorld(InjectedBundleNodeHandle*, InjectedBundleScriptWorld*);
     JSValueRef jsWrapperForWorld(InjectedBundleRangeHandle*, InjectedBundleScriptWorld*);
+    JSValueRef jsWrapperForWorld(InjectedBundleFileHandle*, InjectedBundleScriptWorld*);
 
     static String counterValue(JSObjectRef element);
 
@@ -148,6 +152,8 @@ public:
     typedef bool (*FrameFilterFunction)(WKBundleFrameRef, WKBundleFrameRef subframe, void* context);
     RetainPtr<CFDataRef> webArchiveData(FrameFilterFunction, void* context);
 #endif
+
+    PassRefPtr<ShareableBitmap> createSelectionSnapshot() const;
 
 private:
     static PassRefPtr<WebFrame> create(std::unique_ptr<WebFrameLoaderClient>);

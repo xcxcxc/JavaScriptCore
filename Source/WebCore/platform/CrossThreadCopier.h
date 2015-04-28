@@ -33,7 +33,6 @@
 
 #include <wtf/Assertions.h>
 #include <wtf/Forward.h>
-#include <wtf/PassOwnPtr.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Threading.h>
@@ -92,9 +91,6 @@ namespace WebCore {
 
     // To allow a type to be passed across threads using its copy constructor, add a forward declaration of the type and
     // a CopyThreadCopierBase<false, false, TypeName> : public CrossThreadCopierPassThrough<TypeName> { }; to this file.
-    template<> struct CrossThreadCopierBase<false, false, ThreadableLoaderOptions> : public CrossThreadCopierPassThrough<ThreadableLoaderOptions> {
-    };
-
     template<> struct CrossThreadCopierBase<false, false, IntRect> : public CrossThreadCopierPassThrough<IntRect> {
     };
 
@@ -110,14 +106,6 @@ namespace WebCore {
         WEBCORE_EXPORT static Type copy(const T& refPtr)
         {
             return refPtr;
-        }
-    };
-
-    template<typename T> struct CrossThreadCopierBase<false, false, PassOwnPtr<T>> {
-        typedef PassOwnPtr<T> Type;
-        static Type copy(Type ownPtr)
-        {
-            return ownPtr;
         }
     };
 
@@ -137,12 +125,12 @@ namespace WebCore {
     };
 
     template<> struct CrossThreadCopierBase<false, false, ResourceRequest> {
-        typedef PassOwnPtr<CrossThreadResourceRequestData> Type;
+        typedef std::unique_ptr<CrossThreadResourceRequestData> Type;
         static Type copy(const ResourceRequest&);
     };
 
     template<> struct CrossThreadCopierBase<false, false, ResourceResponse> {
-        typedef PassOwnPtr<CrossThreadResourceResponseData> Type;
+        typedef std::unique_ptr<CrossThreadResourceResponseData> Type;
         static Type copy(const ResourceResponse&);
     };
 
@@ -158,13 +146,13 @@ namespace WebCore {
         enum class CursorType;
     }
     template<> struct CrossThreadCopierBase<false, false, IndexedDB::TransactionMode> {
-        static IndexedDB::TransactionMode copy(const IndexedDB::TransactionMode&);
+        WEBCORE_EXPORT static IndexedDB::TransactionMode copy(const IndexedDB::TransactionMode&);
     };
     template<> struct CrossThreadCopierBase<false, false, IndexedDB::CursorDirection> {
-        static IndexedDB::CursorDirection copy(const IndexedDB::CursorDirection&);
+        WEBCORE_EXPORT static IndexedDB::CursorDirection copy(const IndexedDB::CursorDirection&);
     };
     template<> struct CrossThreadCopierBase<false, false, IndexedDB::CursorType> {
-        static IndexedDB::CursorType copy(const IndexedDB::CursorType&);
+        WEBCORE_EXPORT static IndexedDB::CursorType copy(const IndexedDB::CursorType&);
     };
 
     struct IDBDatabaseMetadata;

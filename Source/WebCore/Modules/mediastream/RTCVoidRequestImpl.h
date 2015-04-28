@@ -50,13 +50,15 @@ public:
     virtual void requestSucceeded();
     virtual void requestFailed(const String& error);
 
-    // ActiveDOMObject
-    virtual void stop() override;
-
 private:
     RTCVoidRequestImpl(ScriptExecutionContext*, PassRefPtr<VoidCallback>, PassRefPtr<RTCPeerConnectionErrorCallback>);
 
     void clear();
+
+    // ActiveDOMObject
+    void stop() override;
+    const char* activeDOMObjectName() const override;
+    bool canSuspendForPageCache() const override;
 
     RefPtr<VoidCallback> m_successCallback;
     RefPtr<RTCPeerConnectionErrorCallback> m_errorCallback;

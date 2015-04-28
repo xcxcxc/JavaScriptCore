@@ -37,10 +37,16 @@ public:
         return adoptRef(new Matrix3DTransformOperation(matrix));
     }
 
+    virtual PassRefPtr<TransformOperation> clone() const override
+    {
+        return adoptRef(new Matrix3DTransformOperation(m_matrix));
+    }
+
     TransformationMatrix matrix() const {return m_matrix; }
 
 private:    
     virtual bool isIdentity() const override { return m_matrix.isIdentity(); }
+    virtual bool isAffectedByTransformOrigin() const { return !isIdentity(); }
 
     virtual OperationType type() const override { return MATRIX_3D; }
     virtual bool isSameType(const TransformOperation& o) const override { return o.type() == MATRIX_3D; }
@@ -63,8 +69,8 @@ private:
     TransformationMatrix m_matrix;
 };
 
-TRANSFORMOPERATION_TYPE_CASTS(Matrix3DTransformOperation, type() == TransformOperation::MATRIX_3D);
-
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_TRANSFORMOPERATION(WebCore::Matrix3DTransformOperation, type() == WebCore::TransformOperation::MATRIX_3D)
 
 #endif // Matrix3DTransformOperation_h

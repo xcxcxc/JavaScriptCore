@@ -29,7 +29,8 @@
 #include "CacheModel.h"
 #include "SandboxExtension.h"
 #include "TextCheckerState.h"
-#include <WebCore/SessionIDHash.h>
+#include "UserData.h"
+#include <WebCore/SessionID.h>
 #include <wtf/RetainPtr.h>
 #include <wtf/Vector.h>
 #include <wtf/text/StringHash.h>
@@ -37,7 +38,7 @@
 
 #if PLATFORM(COCOA)
 #include "MachPort.h"
-
+#include <WebCore/MachSendRight.h>
 #endif
 
 #if USE(SOUP)
@@ -49,20 +50,23 @@ class Data;
 }
 
 namespace IPC {
-    class ArgumentDecoder;
-    class ArgumentEncoder;
+class ArgumentDecoder;
+class ArgumentEncoder;
 }
 
 namespace WebKit {
 
 struct WebProcessCreationParameters {
     WebProcessCreationParameters();
+    ~WebProcessCreationParameters();
 
     void encode(IPC::ArgumentEncoder&) const;
     static bool decode(IPC::ArgumentDecoder&, WebProcessCreationParameters&);
 
     String injectedBundlePath;
     SandboxExtension::Handle injectedBundlePathExtensionHandle;
+
+    UserData initializationUserData;
 
     String applicationCacheDirectory;    
     SandboxExtension::Handle applicationCacheDirectoryExtensionHandle;
@@ -73,16 +77,17 @@ struct WebProcessCreationParameters {
     String cookieStorageDirectory;
 #if PLATFORM(IOS)
     SandboxExtension::Handle cookieStorageDirectoryExtensionHandle;
-    SandboxExtension::Handle openGLCacheDirectoryExtensionHandle;
+    SandboxExtension::Handle containerCachesDirectoryExtensionHandle;
     SandboxExtension::Handle containerTemporaryDirectoryExtensionHandle;
-    // FIXME: Remove this once <rdar://problem/17726660> is fixed.
-    SandboxExtension::Handle hstsDatabasePathExtensionHandle;
 #endif
+    SandboxExtension::Handle mediaKeyStorageDirectoryExtensionHandle;
+    String mediaKeyStorageDirectory;
 
     bool shouldUseTestingNetworkSession;
 
-    Vector<String> urlSchemesRegistererdAsEmptyDocument;
+    Vector<String> urlSchemesRegisteredAsEmptyDocument;
     Vector<String> urlSchemesRegisteredAsSecure;
+    Vector<String> urlSchemesRegisteredAsBypassingContentSecurityPolicy;
     Vector<String> urlSchemesForWhichDomainRelaxationIsForbidden;
     Vector<String> urlSchemesRegisteredAsLocal;
     Vector<String> urlSchemesRegisteredAsNoAccess;
@@ -91,13 +96,8 @@ struct WebProcessCreationParameters {
 #if ENABLE(CACHE_PARTITIONING)
     Vector<String> urlSchemesRegisteredAsCachePartitioned;
 #endif
-#if ENABLE(CUSTOM_PROTOCOLS)
     Vector<String> urlSchemesRegisteredForCustomProtocols;
-#endif
 #if USE(SOUP)
-#if !ENABLE(CUSTOM_PROTOCOLS)
-    Vector<String> urlSchemesRegistered;
-#endif
     String cookiePersistentStoragePath;
     uint32_t cookiePersistentStorageType;
     HTTPCookieAcceptPolicy cookieAcceptPolicy;
@@ -107,6 +107,7 @@ struct WebProcessCreationParameters {
     CacheModel cacheModel;
 
     bool shouldAlwaysUseComplexTextCodePath;
+    bool shouldEnableMemoryPressureReliefLogging;
     bool shouldUseFontSmoothing;
 
     bool iconDatabaseEnabled;
@@ -133,16 +134,14 @@ struct WebProcessCreationParameters {
     uint64_t nsURLCacheMemoryCapacity;
     uint64_t nsURLCacheDiskCapacity;
 
-    IPC::MachPort acceleratedCompositingPort;
+    WebCore::MachSendRight acceleratedCompositingPort;
 
     String uiProcessBundleResourcePath;
     SandboxExtension::Handle uiProcessBundleResourcePathExtensionHandle;
 
-    bool shouldForceScreenFontSubstitution;
     bool shouldEnableKerningAndLigaturesByDefault;
     bool shouldEnableJIT;
     bool shouldEnableFTLJIT;
-    bool shouldEnableMemoryPressureReliefLogging;
     
     RefPtr<API::Data> bundleParameterData;
 
@@ -165,6 +164,14 @@ struct WebProcessCreationParameters {
     bool hasImageServices;
     bool hasSelectionServices;
     bool hasRichContentServices;
+#endif
+
+#if ENABLE(NETSCAPE_PLUGIN_API)
+    HashMap<String, HashMap<String, HashMap<String, uint8_t>>> pluginLoadClientPolicies;
+#endif
+
+#if (TARGET_OS_IPHONE && __IPHONE_OS_VERSION_MIN_REQUIRED >= 90000) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100)
+    RetainPtr<CFDataRef> networkATSContext;
 #endif
 };
 

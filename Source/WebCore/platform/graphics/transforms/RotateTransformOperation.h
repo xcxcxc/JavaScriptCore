@@ -41,6 +41,11 @@ public:
         return adoptRef(new RotateTransformOperation(x, y, z, angle, type));
     }
 
+    virtual PassRefPtr<TransformOperation> clone() const override
+    {
+        return adoptRef(new RotateTransformOperation(m_x, m_y, m_z, m_angle, m_type));
+    }
+
     double x() const { return m_x; }
     double y() const { return m_y; }
     double z() const { return m_z; }
@@ -48,6 +53,7 @@ public:
 
 private:
     virtual bool isIdentity() const override { return m_angle == 0; }
+    virtual bool isAffectedByTransformOrigin() const { return !isIdentity(); }
 
     virtual OperationType type() const override { return m_type; }
     virtual bool isSameType(const TransformOperation& o) const override { return o.type() == m_type; }
@@ -79,8 +85,8 @@ private:
     OperationType m_type;
 };
 
-TRANSFORMOPERATION_TYPE_CASTS(RotateTransformOperation, isRotateTransformOperationType());
-
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_TRANSFORMOPERATION(WebCore::RotateTransformOperation, isRotateTransformOperationType())
 
 #endif // RotateTransformOperation_h

@@ -30,10 +30,8 @@
 #if USE(CG)
 
 #if PLATFORM(IOS)
-#import <CoreGraphics/CGContextPrivate.h>
-#import <CoreGraphics/CGContextGState.h>
-#import <CoreGraphics/CoreGraphics.h>
-#import <ImageIO/ImageIO.h>
+#include <CoreGraphics/CoreGraphics.h>
+#include <ImageIO/ImageIO.h>
 #endif
 
 #include "GraphicsContext.h"
@@ -227,6 +225,7 @@ void PDFDocumentImage::createPDFDocument()
 
 void PDFDocumentImage::computeBoundsForCurrentPage()
 {
+    ASSERT(pageCount() > 0);
     CGPDFPageRef cgPage = CGPDFDocumentGetPage(m_document.get(), 1);
     CGRect mediaBox = CGPDFPageGetBoxRect(cgPage, kCGPDFMediaBox);
 

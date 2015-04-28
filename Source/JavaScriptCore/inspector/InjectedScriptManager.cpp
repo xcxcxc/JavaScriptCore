@@ -31,8 +31,6 @@
 #include "config.h"
 #include "InjectedScriptManager.h"
 
-#if ENABLE(INSPECTOR)
-
 #include "Completion.h"
 #include "InjectedScriptHost.h"
 #include "InjectedScriptSource.h"
@@ -94,15 +92,19 @@ int InjectedScriptManager::injectedScriptIdFor(ExecState* scriptState)
 
 InjectedScript InjectedScriptManager::injectedScriptForObjectId(const String& objectId)
 {
-    RefPtr<InspectorValue> parsedObjectId = InspectorValue::parseJSON(objectId);
-    if (parsedObjectId && parsedObjectId->type() == InspectorValue::Type::Object) {
-        long injectedScriptId = 0;
-        bool success = parsedObjectId->asObject()->getInteger(ASCIILiteral("injectedScriptId"), &injectedScriptId);
-        if (success)
-            return m_idToInjectedScript.get(injectedScriptId);
-    }
+    RefPtr<InspectorValue> parsedObjectId;
+    if (!InspectorValue::parseJSON(objectId, parsedObjectId))
+        return InjectedScript();
 
-    return InjectedScript();
+    RefPtr<InspectorObject> resultObject;
+    if (!parsedObjectId->asObject(resultObject))
+        return InjectedScript();
+
+    long injectedScriptId = 0;
+    if (!resultObject->getInteger(ASCIILiteral("injectedScriptId"), injectedScriptId))
+        return InjectedScript();
+
+    return m_idToInjectedScript.get(injectedScriptId);
 }
 
 void InjectedScriptManager::discardInjectedScripts()
@@ -114,8 +116,14 @@ void InjectedScriptManager::discardInjectedScripts()
 
 void InjectedScriptManager::releaseObjectGroup(const String& objectGroup)
 {
-    for (auto it = m_idToInjectedScript.begin(); it != m_idToInjectedScript.end(); ++it)
-        it->value.releaseObjectGroup(objectGroup);
+    for (auto& injectedScript : m_idToInjectedScript.values())
+        injectedScript.releaseObjectGroup(objectGroup);
+}
+
+void InjectedScriptManager::clearExceptionValue()
+{
+    for (auto& injectedScript : m_idToInjectedScript.values())
+        injectedScript.clearExceptionValue();
 }
 
 String InjectedScriptManager::injectedScriptSource()
@@ -148,6 +156,7 @@ Deprecated::ScriptObject InjectedScriptManager::createInjectedScript(const Strin
     args.append(jsNumber(id));
 
     JSValue result = JSC::call(scriptState, functionValue, callType, callData, globalThisValue, args);
+    scriptState->clearException();
     if (result.isObject())
         return Deprecated::ScriptObject(scriptState, result.getObject());
 
@@ -181,4 +190,3 @@ void InjectedScriptManager::didCreateInjectedScript(InjectedScript)
 
 } // namespace Inspector
 
-#endif // ENABLE(INSPECTOR)

@@ -42,10 +42,16 @@ public:
         return adoptRef(new MatrixTransformOperation(t));
     }
 
+    virtual PassRefPtr<TransformOperation> clone() const override
+    {
+        return adoptRef(new MatrixTransformOperation(matrix()));
+    }
+
     TransformationMatrix matrix() const { return TransformationMatrix(m_a, m_b, m_c, m_d, m_e, m_f); }
 
 private:
     virtual bool isIdentity() const override { return m_a == 1 && m_b == 0 && m_c == 0 && m_d == 1 && m_e == 0 && m_f == 0; }
+    virtual bool isAffectedByTransformOrigin() const { return !isIdentity(); }
 
     virtual OperationType type() const override { return MATRIX; }
     virtual bool isSameType(const TransformOperation& o) const override { return o.type() == MATRIX; }
@@ -89,8 +95,8 @@ private:
     double m_f;
 };
 
-TRANSFORMOPERATION_TYPE_CASTS(MatrixTransformOperation, type() == TransformOperation::MATRIX);
-
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_TRANSFORMOPERATION(WebCore::MatrixTransformOperation, type() == WebCore::TransformOperation::MATRIX)
 
 #endif // MatrixTransformOperation_h

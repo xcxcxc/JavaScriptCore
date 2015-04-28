@@ -31,17 +31,16 @@ namespace WebCore {
 
 class SVGFEGaussianBlurElement final : public SVGFilterPrimitiveStandardAttributes {
 public:
-    static PassRefPtr<SVGFEGaussianBlurElement> create(const QualifiedName&, Document&);
+    static Ref<SVGFEGaussianBlurElement> create(const QualifiedName&, Document&);
 
     void setStdDeviation(float stdDeviationX, float stdDeviationY);
 
 private:
     SVGFEGaussianBlurElement(const QualifiedName&, Document&);
 
-    bool isSupportedAttribute(const QualifiedName&);
     virtual void parseAttribute(const QualifiedName&, const AtomicString&) override;
     virtual void svgAttributeChanged(const QualifiedName&) override;
-    virtual PassRefPtr<FilterEffect> build(SVGFilterBuilder*, Filter*) override;
+    virtual RefPtr<FilterEffect> build(SVGFilterBuilder*, Filter&) override;
 
     static const AtomicString& stdDeviationXIdentifier();
     static const AtomicString& stdDeviationYIdentifier();

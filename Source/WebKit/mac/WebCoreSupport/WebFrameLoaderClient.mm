@@ -28,11 +28,6 @@
 
 #import "WebFrameLoaderClient.h"
 
-// Terrible hack; lets us get at the WebFrame private structure.
-#define private public
-#import "WebFrame.h"
-#undef private
-
 #import "DOMElementInternal.h"
 #import "DOMHTMLFormElementInternal.h"
 #import "WebBackForwardList.h"
@@ -109,6 +104,7 @@
 #import <WebCore/MIMETypeRegistry.h>
 #import <WebCore/MainFrame.h>
 #import <WebCore/MouseEvent.h>
+#import <WebCore/NSURLDownloadSPI.h>
 #import <WebCore/NSURLFileTypeMappingsSPI.h>
 #import <WebCore/Page.h>
 #import <WebCore/PluginViewBase.h>
@@ -149,10 +145,19 @@
 #endif
 
 #if USE(QUICK_LOOK)
-#import <Foundation/NSFileManager_NSURLExtras.h>
 #import <WebCore/FileSystemIOS.h>
+#import <WebCore/NSFileManagerSPI.h>
 #import <WebCore/QuickLook.h>
 #import <WebCore/RuntimeApplicationChecksIOS.h>
+#endif
+
+#if HAVE(APP_LINKS)
+#import <WebCore/LaunchServicesSPI.h>
+#import <WebCore/WebCoreThreadRun.h>
+#endif
+
+#if ENABLE(CONTENT_FILTERING)
+#import <WebCore/PolicyChecker.h>
 #endif
 
 using namespace WebCore;
@@ -172,9 +177,16 @@ NSString *WebPluginContainerKey = @"WebPluginContainer";
 @interface WebFramePolicyListener : NSObject <WebPolicyDecisionListener, WebFormSubmissionListener> {
     RefPtr<Frame> _frame;
     FramePolicyFunction _policyFunction;
+#if HAVE(APP_LINKS)
+    RetainPtr<NSURL> _appLinkURL;
+#endif
 }
 
 - (id)initWithFrame:(Frame*)frame policyFunction:(FramePolicyFunction)policyFunction;
+#if HAVE(APP_LINKS)
+- (id)initWithFrame:(Frame*)frame policyFunction:(FramePolicyFunction)policyFunction appLinkURL:(NSURL *)url;
+#endif
+
 - (void)invalidate;
 
 @end
@@ -278,7 +290,10 @@ void WebFrameLoaderClient::convertMainResourceLoadToDownload(DocumentLoader* doc
 
     if (!documentLoader->mainResourceLoader()) {
         // The resource has already been cached, start a new download.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
         WebDownload *webDownload = [[WebDownload alloc] initWithRequest:request.nsURLRequest(UpdateHTTPBody) delegate:[webView downloadDelegate]];
+#pragma clang diagnostic pop
         [webDownload autorelease];
         return;
     }
@@ -347,9 +362,7 @@ void WebFrameLoaderClient::dispatchWillSendRequest(DocumentLoader* loader, unsig
     NSURLRequest *currentURLRequest = request.nsURLRequest(UpdateHTTPBody);
     NSURLRequest *newURLRequest = currentURLRequest;
     ResourceLoadPriority priority = request.priority();
-#if ENABLE(INSPECTOR)
     bool isHiddenFromInspector = request.hiddenFromInspector();
-#endif
 #if PLATFORM(IOS)
     bool isMainResourceRequest = request.deprecatedIsMainResourceRequest();
     if (implementations->webThreadWillSendRequestFunc) {
@@ -361,9 +374,7 @@ void WebFrameLoaderClient::dispatchWillSendRequest(DocumentLoader* loader, unsig
 
     if (newURLRequest != currentURLRequest)
         request = newURLRequest;
-#if ENABLE(INSPECTOR)
     request.setHiddenFromInspector(isHiddenFromInspector);
-#endif
 #if PLATFORM(IOS)
     request.deprecatedSetMainResourceRequest(isMainResourceRequest);
 #endif
@@ -670,7 +681,6 @@ void WebFrameLoaderClient::dispatchDidStartProvisionalLoad()
 {
     ASSERT(!m_webFrame->_private->provisionalURL);
     m_webFrame->_private->provisionalURL = core(m_webFrame.get())->loader().provisionalDocumentLoader()->url().string();
-    m_webFrame->_private->contentFilterForBlockedLoad = nullptr;
 
     WebView *webView = getWebView(m_webFrame.get());
 #if !PLATFORM(IOS)
@@ -850,7 +860,7 @@ Frame* WebFrameLoaderClient::dispatchCreatePage(const NavigationAction&)
     
 #if USE(PLUGIN_HOST_PROCESS) && ENABLE(NETSCAPE_PLUGIN_API)
     if (newWebView)
-        WebKit::NetscapePluginHostManager::shared().didCreateWindow();
+        WebKit::NetscapePluginHostManager::singleton().didCreateWindow();
 #endif
         
     return core([newWebView mainFrame]);
@@ -873,29 +883,45 @@ void WebFrameLoaderClient::dispatchDecidePolicyForResponse(const ResourceRespons
                                decisionListener:setUpPolicyListener(WTF::move(function)).get()];
 }
 
+
+static BOOL shouldTryAppLink(WebView *webView, const NavigationAction& action, Frame* targetFrame)
+{
+#if HAVE(APP_LINKS)
+    BOOL mainFrameNavigation = !targetFrame || targetFrame->isMainFrame();
+    if (!mainFrameNavigation)
+        return NO;
+
+    if (!action.processingUserGesture())
+        return NO;
+
+    return YES;
+#else
+    return NO;
+#endif
+}
+
 void WebFrameLoaderClient::dispatchDecidePolicyForNewWindowAction(const NavigationAction& action, const ResourceRequest& request, PassRefPtr<FormState> formState, const String& frameName, FramePolicyFunction function)
 {
     WebView *webView = getWebView(m_webFrame.get());
+    BOOL tryAppLink = shouldTryAppLink(webView, action, nullptr);
+
     [[webView _policyDelegateForwarder] webView:webView
             decidePolicyForNewWindowAction:actionDictionary(action, formState)
                                    request:request.nsURLRequest(UpdateHTTPBody)
                               newFrameName:frameName
-                          decisionListener:setUpPolicyListener(WTF::move(function)).get()];
+                          decisionListener:setUpPolicyListener(WTF::move(function), tryAppLink ? (NSURL *)request.url() : nil).get()];
 }
 
 void WebFrameLoaderClient::dispatchDecidePolicyForNavigationAction(const NavigationAction& action, const ResourceRequest& request, PassRefPtr<FormState> formState, FramePolicyFunction function)
 {
-    if ([m_webFrame _contentFilterDidHandleNavigationAction:request]) {
-        function(PolicyIgnore);
-        return;
-    }
-
     WebView *webView = getWebView(m_webFrame.get());
+    BOOL tryAppLink = shouldTryAppLink(webView, action, core(m_webFrame.get()));
+
     [[webView _policyDelegateForwarder] webView:webView
                 decidePolicyForNavigationAction:actionDictionary(action, formState)
                                         request:request.nsURLRequest(UpdateHTTPBody)
                                           frame:m_webFrame.get()
-                               decisionListener:setUpPolicyListener(WTF::move(function)).get()];
+                               decisionListener:setUpPolicyListener(WTF::move(function), tryAppLink ? (NSURL *)request.url() : nil).get()];
 }
 
 void WebFrameLoaderClient::cancelPolicyCheck()
@@ -1428,9 +1454,9 @@ void WebFrameLoaderClient::transitionToCommittedForNewPage()
     bool isMainFrame = coreFrame->isMainFrame();
     if (isMainFrame && coreFrame->view())
         coreFrame->view()->setParentVisible(false);
-    coreFrame->setView(0);
+    coreFrame->setView(nullptr);
     RefPtr<FrameView> coreView = FrameView::create(*coreFrame);
-    coreFrame->setView(coreView);
+    coreFrame->setView(coreView.copyRef());
 
     [m_webFrame.get() _updateBackgroundAndUpdatesWhileOffscreen];
     [m_webFrame->_private->webFrameView _install];
@@ -1479,12 +1505,17 @@ void WebFrameLoaderClient::dispatchDidBecomeFrameset(bool)
 {
 }
 
-RetainPtr<WebFramePolicyListener> WebFrameLoaderClient::setUpPolicyListener(FramePolicyFunction function)
+RetainPtr<WebFramePolicyListener> WebFrameLoaderClient::setUpPolicyListener(FramePolicyFunction function, NSURL *appLinkURL)
 {
     // FIXME: <rdar://5634381> We need to support multiple active policy listeners.
     [m_policyListener invalidate];
 
-    m_policyListener = adoptNS([[WebFramePolicyListener alloc] initWithFrame:core(m_webFrame.get()) policyFunction:function]);
+#if HAVE(APP_LINKS)
+    if (appLinkURL)
+        m_policyListener = adoptNS([[WebFramePolicyListener alloc] initWithFrame:core(m_webFrame.get()) policyFunction:function appLinkURL:appLinkURL]);
+    else
+#endif
+        m_policyListener = adoptNS([[WebFramePolicyListener alloc] initWithFrame:core(m_webFrame.get()) policyFunction:function]);
 
     return m_policyListener;
 }
@@ -1535,7 +1566,7 @@ NSDictionary *WebFrameLoaderClient::actionDictionary(const NavigationAction& act
     NSURL *originalURL = action.url();
 
     NSMutableDictionary *result = [NSMutableDictionary dictionaryWithObjectsAndKeys:
-        [NSNumber numberWithInt:action.type()], WebActionNavigationTypeKey,
+        [NSNumber numberWithInt:static_cast<int>(action.type())], WebActionNavigationTypeKey,
         [NSNumber numberWithInt:modifierFlags], WebActionModifierFlagsKey,
         originalURL, WebActionOriginalURLKey,
         nil];
@@ -1962,8 +1993,8 @@ PassRefPtr<Widget> WebFrameLoaderClient::createPlugin(const IntSize& size, HTMLP
     if (pluginPackage) {
         if (WKShouldBlockPlugin([pluginPackage bundleIdentifier], [pluginPackage bundleVersion])) {
             errorCode = WebKitErrorBlockedPlugInVersion;
-            if (element->renderer()->isEmbeddedObject())
-                toRenderEmbeddedObject(element->renderer())->setPluginUnavailabilityReason(RenderEmbeddedObject::InsecurePluginVersion);
+            if (is<RenderEmbeddedObject>(*element->renderer()))
+                downcast<RenderEmbeddedObject>(*element->renderer()).setPluginUnavailabilityReason(RenderEmbeddedObject::InsecurePluginVersion);
         } else {
             if ([pluginPackage isKindOfClass:[WebPluginPackage class]])
                 view = pluginView(m_webFrame.get(), (WebPluginPackage *)pluginPackage, attributeKeys, kit(paramValues), baseURL, kit(element), loadManually);
@@ -2067,8 +2098,8 @@ PassRefPtr<Widget> WebFrameLoaderClient::createJavaAppletWidget(const IntSize& s
     if (pluginPackage) {
         if (WKShouldBlockPlugin([pluginPackage bundleIdentifier], [pluginPackage bundleVersion])) {
             errorCode = WebKitErrorBlockedPlugInVersion;
-            if (element->renderer()->isEmbeddedObject())
-                toRenderEmbeddedObject(element->renderer())->setPluginUnavailabilityReason(RenderEmbeddedObject::InsecurePluginVersion);
+            if (is<RenderEmbeddedObject>(*element->renderer()))
+                downcast<RenderEmbeddedObject>(*element->renderer()).setPluginUnavailabilityReason(RenderEmbeddedObject::InsecurePluginVersion);
         } else {
 #if ENABLE(NETSCAPE_PLUGIN_API)
             if ([pluginPackage isKindOfClass:[WebNetscapePluginPackage class]]) {
@@ -2247,10 +2278,12 @@ void WebFrameLoaderClient::didCreateQuickLookHandle(WebCore::QuickLookHandle& ha
 }
 #endif
 
-void WebFrameLoaderClient::contentFilterDidBlockLoad(std::unique_ptr<WebCore::ContentFilter> contentFilter)
+#if ENABLE(CONTENT_FILTERING)
+void WebFrameLoaderClient::contentFilterDidBlockLoad(WebCore::ContentFilterUnblockHandler unblockHandler)
 {
-    m_webFrame->_private->contentFilterForBlockedLoad = WTF::move(contentFilter);
+    core(m_webFrame.get())->loader().policyChecker().setContentFilterUnblockHandler(WTF::move(unblockHandler));
 }
+#endif
 
 @implementation WebFramePolicyListener
 
@@ -2275,6 +2308,19 @@ void WebFrameLoaderClient::contentFilterDidBlockLoad(std::unique_ptr<WebCore::Co
 
     return self;
 }
+
+#if HAVE(APP_LINKS)
+- (id)initWithFrame:(Frame*)frame policyFunction:(FramePolicyFunction)policyFunction appLinkURL:(NSURL *)appLinkURL
+{
+    self = [self initWithFrame:frame policyFunction:policyFunction];
+    if (!self)
+        return nil;
+
+    _appLinkURL = appLinkURL;
+
+    return self;
+}
+#endif
 
 - (void)invalidate
 {
@@ -2314,6 +2360,20 @@ void WebFrameLoaderClient::contentFilterDidBlockLoad(std::unique_ptr<WebCore::Co
 
 - (void)use
 {
+#if HAVE(APP_LINKS)
+    if (_appLinkURL && _frame) {
+        [LSAppLink openWithURL:_appLinkURL.get() completionHandler:^(BOOL success, NSError *) {
+            WebThreadRun(^{
+                if (success)
+                    [self receivedPolicyDecision:PolicyIgnore];
+                else
+                    [self receivedPolicyDecision:PolicyUse];
+            });
+        }];
+        return;
+    }
+#endif
+
     [self receivedPolicyDecision:PolicyUse];
 }
 

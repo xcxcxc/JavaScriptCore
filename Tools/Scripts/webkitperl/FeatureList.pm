@@ -42,12 +42,15 @@ BEGIN {
 }
 
 my (
-    $threeDRenderingSupport,
+    $threeDTransformsSupport,
     $accelerated2DCanvasSupport,
+    $attachmentElementSupport,
     $batteryStatusSupport,
     $canvasPathSupport,
     $canvasProxySupport,
     $channelMessagingSupport,
+    $classSyntax,
+    $templateLiteralSyntax,
     $cspNextSupport,
     $css3ConditionalRulesSupport,
     $css3TextSupport,
@@ -75,6 +78,7 @@ my (
     $fullscreenAPISupport,
     $gamepadSupport,
     $geolocationSupport,
+    $hardwareConcurrencySupport,
     $highDPICanvasSupport,
     $icondatabaseSupport,
     $indexedDatabaseSupport,
@@ -86,7 +90,6 @@ my (
     $inputTypeMonthSupport,
     $inputTypeTimeSupport,
     $inputTypeWeekSupport,
-    $inspectorSupport,
     $legacyNotificationsSupport,
     $legacyVendorPrefixSupport,
     $legacyWebAudioSupport,
@@ -101,7 +104,6 @@ my (
     $mhtmlSupport,
     $mouseCursorScaleSupport,
     $netscapePluginAPISupport,
-    $networkInfoSupport,
     $nosniffSupport,
     $notificationsSupport,
     $orientationEventsSupport,
@@ -117,8 +119,7 @@ my (
     $resourceTimingSupport,
     $scriptedSpeechSupport,
     $seccompFiltersSupport,
-    $sharedWorkersSupport,
-    $sqlDatabaseSupport,
+    $streamsAPISupport,
     $styleScopedSupport,
     $subtleCrypto,
     $suidLinuxSandbox,
@@ -128,7 +129,7 @@ my (
     $systemMallocSupport,
     $templateElementSupport,
     $textAutosizingSupport,
-    $tiledBackingStoreSupport,
+    $threadedCompositorSupport,
     $threadedHTMLParserSupport,
     $touchEventsSupport,
     $touchSliderSupport,
@@ -145,15 +146,17 @@ my (
     $xhrTimeoutSupport,
     $xsltSupport,
     $ftlJITSupport,
-    $forceCLoop,
 );
 
 my @features = (
     { option => "3d-rendering", desc => "Toggle 3D Rendering support",
-      define => "ENABLE_3D_RENDERING", default => (isAppleMacWebKit() || isIOSWebKit() || isGtk() || isEfl()), value => \$threeDRenderingSupport },
+      define => "ENABLE_3D_TRANSFORMS", default => (isAppleMacWebKit() || isIOSWebKit() || isGtk() || isEfl()), value => \$threeDTransformsSupport },
 
     { option => "accelerated-2d-canvas", desc => "Toggle Accelerated 2D Canvas support",
       define => "ENABLE_ACCELERATED_2D_CANVAS", default => isGtk(), value => \$accelerated2DCanvasSupport },
+
+    { option => "attachment-element", desc => "Toggle Attachment Element support",
+      define => "ENABLE_ATTACHMENT_ELEMENT", default => 0, value => \$attachmentElementSupport },
 
     { option => "battery-status", desc => "Toggle Battery Status support",
       define => "ENABLE_BATTERY_STATUS", default => isEfl(), value => \$batteryStatusSupport },
@@ -166,6 +169,12 @@ my @features = (
 
     { option => "channel-messaging", desc => "Toggle Channel Messaging support",
       define => "ENABLE_CHANNEL_MESSAGING", default => 1, value => \$channelMessagingSupport },
+
+    { option => "class-syntax", desc => "Toggle ES6 class syntax support",
+      define => "ENABLE_ES6_CLASS_SYNTAX", default => 1, value => \$classSyntax },
+
+    { option => "template-literal-syntax", desc => "Toggle ES6 template literal syntax support",
+      define => "ENABLE_ES6_TEMPLATE_LITERAL_SYNTAX", default => 1, value => \$templateLiteralSyntax },
 
     { option => "csp-next", desc => "Toggle Content Security Policy 1.1 support",
       define => "ENABLE_CSP_NEXT", default => isGtk(), value => \$cspNextSupport },
@@ -231,7 +240,7 @@ my @features = (
       define => "ENABLE_FONT_LOAD_EVENTS", default => 0, value => \$fontLoadEventsSupport },
 
     { option => "ftpdir", desc => "Toggle FTP Directory support",
-      define => "ENABLE_FTPDIR", default => !isWinCE(), value => \$ftpDirSupport },
+      define => "ENABLE_FTPDIR", default => 1, value => \$ftpDirSupport },
 
     { option => "fullscreen-api", desc => "Toggle Fullscreen API support",
       define => "ENABLE_FULLSCREEN_API", default => (isAppleMacWebKit() || isEfl() || isGtk()), value => \$fullscreenAPISupport },
@@ -255,7 +264,7 @@ my @features = (
       define => "ENABLE_INPUT_SPEECH", default => 0, value => \$inputSpeechSupport },
 
     { option => "input-type-color", desc => "Toggle Input Type Color support",
-      define => "ENABLE_INPUT_TYPE_COLOR", default => isEfl(), value => \$inputTypeColorSupport },
+      define => "ENABLE_INPUT_TYPE_COLOR", default => (isEfl() || isGtk()), value => \$inputTypeColorSupport },
 
     { option => "input-type-date", desc => "Toggle Input Type Date support",
       define => "ENABLE_INPUT_TYPE_DATE", default => 0, value => \$inputTypeDateSupport },
@@ -274,9 +283,6 @@ my @features = (
 
     { option => "input-type-week", desc => "Toggle Input Type Week support",
       define => "ENABLE_INPUT_TYPE_WEEK", default => 0, value => \$inputTypeWeekSupport },
-
-    { option => "inspector", desc => "Toggle Inspector support",
-      define => "ENABLE_INSPECTOR", default => !isWinCE(), value => \$inspectorSupport },
 
     { option => "legacy-notifications", desc => "Toggle Legacy Notifications support",
       define => "ENABLE_LEGACY_NOTIFICATIONS", default => 0, value => \$legacyNotificationsSupport },
@@ -297,7 +303,7 @@ my @features = (
       define => "ENABLE_MEDIA_CAPTURE", default => isEfl(), value => \$mediaCaptureSupport },
 
     { option => "media-source", desc => "Toggle Media Source support",
-      define => "ENABLE_MEDIA_SOURCE", default => isGtk(), value => \$mediaSourceSupport },
+      define => "ENABLE_MEDIA_SOURCE", default => (isGtk() || isEfl()), value => \$mediaSourceSupport },
 
     { option => "media-statistics", desc => "Toggle Media Statistics support",
       define => "ENABLE_MEDIA_STATISTICS", default => 0, value => \$mediaStatisticsSupport },
@@ -318,7 +324,7 @@ my @features = (
       define => "ENABLE_NAVIGATOR_CONTENT_UTILS", default => isEfl(), value => \$registerProtocolHandlerSupport },
 
     { option => "navigator-hardware-concurrency", desc => "Toggle Navigator hardware concurrenct support",
-      define => "ENABLE_NAVIGATOR_HWCONCURRENCY", default => 1, value => \$registerProtocolHandlerSupport },
+      define => "ENABLE_NAVIGATOR_HWCONCURRENCY", default => 1, value => \$hardwareConcurrencySupport },
 
     { option => "netscape-plugin-api", desc => "Toggle Netscape Plugin API support",
       define => "ENABLE_NETSCAPE_PLUGIN_API", default => !isIOSWebKit(), value => \$netscapePluginAPISupport },
@@ -327,7 +333,7 @@ my @features = (
       define => "ENABLE_NOSNIFF", default => isEfl(), value => \$nosniffSupport },
 
     { option => "notifications", desc => "Toggle Notifications support",
-      define => "ENABLE_NOTIFICATIONS", default => 0, value => \$notificationsSupport },
+      define => "ENABLE_NOTIFICATIONS", default => isGtk(), value => \$notificationsSupport },
 
     { option => "orientation-events", desc => "Toggle Orientation Events support",
       define => "ENABLE_ORIENTATION_EVENTS", default => isIOSWebKit(), value => \$orientationEventsSupport },
@@ -362,14 +368,11 @@ my @features = (
     { option => "scripted-speech", desc => "Toggle Scripted Speech support",
       define => "ENABLE_SCRIPTED_SPEECH", default => 0, value => \$scriptedSpeechSupport },
 
-    { option => "shared-workers", desc => "Toggle Shared Workers support",
-      define => "ENABLE_SHARED_WORKERS", default => (isAppleWebKit() || isGtk() || isEfl()), value => \$sharedWorkersSupport },
-
-    { option => "sql-database", desc => "Toggle SQL Database support",
-      define => "ENABLE_SQL_DATABASE", default => 1, value => \$sqlDatabaseSupport },
+    { option => "streams-api", desc => "Toggle Streams API support",
+      define => "ENABLE_STREAMS_API", default => 1, value => \$streamsAPISupport },
 
     { option => "subtle-crypto", desc => "Toggle WebCrypto Subtle-Crypto support",
-      define => "ENABLE_SUBTLE_CRYPTO", default => (isGtk() || isAppleMacWebKit() || isIOSWebKit()), value => \$subtleCrypto },
+      define => "ENABLE_SUBTLE_CRYPTO", default => (isGtk() || isEfl() || isAppleMacWebKit() || isIOSWebKit()), value => \$subtleCrypto },
 
     { option => "suid-linux-sandbox", desc => "Toggle suid sandbox for linux",
       define => "ENABLE_SUID_SANDBOX_LINUX", default => 0, value => \$suidLinuxSandbox },
@@ -378,10 +381,13 @@ my @features = (
       define => "ENABLE_SVG_FONTS", default => 1, value => \$svgFontsSupport },
 
     { option => "system-malloc", desc => "Toggle system allocator instead of TCmalloc",
-      define => "USE_SYSTEM_MALLOC", default => isWinCE(), value => \$systemMallocSupport },
+      define => "USE_SYSTEM_MALLOC", default => 0, value => \$systemMallocSupport },
 
     { option => "template-element", desc => "Toggle HTMLTemplateElement support",
       define => "ENABLE_TEMPLATE_ELEMENT", default => 1, value => \$templateElementSupport },
+
+    { option => "threaded-compositor", desc => "Toggle threaded compositor support",
+      define => "ENABLE_THREADED_COMPOSITOR", default => 0, value => \$threadedCompositorSupport },
 
     { option => "text-autosizing", desc => "Toggle Text Autosizing support",
       define => "ENABLE_TEXT_AUTOSIZING", default => 0, value => \$textAutosizingSupport },
@@ -430,9 +436,6 @@ my @features = (
 
     { option => "ftl-jit", desc => "Toggle FTLJIT support",
       define => "ENABLE_FTL_JIT", default => 0, value => \$ftlJITSupport },
-
-    { option => "cloop", desc => "Force use of the llint c loop",
-      define => "ENABLE_LLINT_C_LOOP", default => 0, value => \$forceCLoop },
 );
 
 sub getFeatureOptionList()

@@ -59,8 +59,8 @@ public:
     const Vector<Element*>* getAllElementsById(const AtomicString&) const;
     bool hasElementWithId(const AtomicStringImpl&) const;
     bool containsMultipleElementsWithId(const AtomicString& id) const;
-    void addElementById(const AtomicStringImpl& elementId, Element&);
-    void removeElementById(const AtomicStringImpl& elementId, Element&);
+    void addElementById(const AtomicStringImpl& elementId, Element&, bool notifyObservers = true);
+    void removeElementById(const AtomicStringImpl& elementId, Element&, bool notifyObservers = true);
 
     Element* getElementByName(const AtomicString&) const;
     bool hasElementWithName(const AtomicStringImpl&) const;
@@ -76,8 +76,6 @@ public:
     void addImageMap(HTMLMapElement&);
     void removeImageMap(HTMLMapElement&);
     HTMLMapElement* getImageMap(const String& url) const;
-
-    Element* elementFromPoint(int x, int y) const;
 
     // For accessibility.
     bool shouldCacheLabelsByForAttribute() const { return !!m_labelsByForAttribute; }
@@ -148,7 +146,6 @@ inline bool TreeScope::containsMultipleElementsWithName(const AtomicString& name
     return m_elementsByName && name.impl() && m_elementsByName->containsMultiple(*name.impl());
 }
 
-Node* nodeFromPoint(Document*, int x, int y, LayoutPoint* localPoint = 0);
 TreeScope* commonTreeScope(Node*, Node*);
 
 } // namespace WebCore

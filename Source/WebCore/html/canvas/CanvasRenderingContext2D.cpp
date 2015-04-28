@@ -42,7 +42,6 @@
 #include "DOMPath.h"
 #include "ExceptionCodePlaceholder.h"
 #include "FloatQuad.h"
-#include "FontCache.h"
 #include "GraphicsContext.h"
 #include "HTMLImageElement.h"
 #include "HTMLVideoElement.h"
@@ -1282,18 +1281,18 @@ static LayoutSize size(HTMLImageElement* image, ImageSizeType sizeType)
     if (CachedImage* cachedImage = image->cachedImage()) {
         size = cachedImage->imageSizeForRenderer(image->renderer(), 1.0f); // FIXME: Not sure about this.
 
-        if (sizeType == ImageSizeAfterDevicePixelRatio && image->renderer() && image->renderer()->isRenderImage() && cachedImage->image() && !cachedImage->image()->hasRelativeWidth())
-            size.scale(toRenderImage(image->renderer())->imageDevicePixelRatio());
+        if (sizeType == ImageSizeAfterDevicePixelRatio && is<RenderImage>(image->renderer()) && cachedImage->image() && !cachedImage->image()->hasRelativeWidth())
+            size.scale(downcast<RenderImage>(*image->renderer()).imageDevicePixelRatio());
     }
     return size;
 }
 
 #if ENABLE(VIDEO)
-static IntSize size(HTMLVideoElement* video)
+static FloatSize size(HTMLVideoElement* video)
 {
     if (MediaPlayer* player = video->player())
         return player->naturalSize();
-    return IntSize();
+    return FloatSize();
 }
 #endif
 
@@ -1378,8 +1377,6 @@ void CanvasRenderingContext2D::drawImage(HTMLImageElement* image, const FloatRec
     if (!cachedImage)
         return;
 
-    checkOrigin(image);
-
     if (rectContainsCanvas(normalizedDstRect)) {
         c->drawImage(cachedImage->imageForRenderer(image->renderer()), ColorSpaceDeviceRGB, normalizedDstRect, normalizedSrcRect, ImagePaintingOptions(op, blendMode));
         didDrawEntireCanvas();
@@ -1394,6 +1391,8 @@ void CanvasRenderingContext2D::drawImage(HTMLImageElement* image, const FloatRec
         c->drawImage(cachedImage->imageForRenderer(image->renderer()), ColorSpaceDeviceRGB, normalizedDstRect, normalizedSrcRect, ImagePaintingOptions(op, blendMode));
         didDraw(normalizedDstRect);
     }
+
+    checkOrigin(image);
 }
 
 void CanvasRenderingContext2D::drawImage(HTMLCanvasElement* sourceCanvas, float x, float y, ExceptionCode& ec)
@@ -1486,8 +1485,8 @@ void CanvasRenderingContext2D::drawImage(HTMLVideoElement* video, float x, float
         ec = TYPE_MISMATCH_ERR;
         return;
     }
-    IntSize s = size(video);
-    drawImage(video, x, y, s.width(), s.height(), ec);
+    FloatSize videoSize = size(video);
+    drawImage(video, x, y, videoSize.width(), videoSize.height(), ec);
 }
 
 void CanvasRenderingContext2D::drawImage(HTMLVideoElement* video,
@@ -1497,8 +1496,8 @@ void CanvasRenderingContext2D::drawImage(HTMLVideoElement* video,
         ec = TYPE_MISMATCH_ERR;
         return;
     }
-    IntSize s = size(video);
-    drawImage(video, FloatRect(0, 0, s.width(), s.height()), FloatRect(x, y, width, height), ec);
+    FloatSize videoSize = size(video);
+    drawImage(video, FloatRect(0, 0, videoSize.width(), videoSize.height()), FloatRect(x, y, width, height), ec);
 }
 
 void CanvasRenderingContext2D::drawImage(HTMLVideoElement* video,
@@ -1555,7 +1554,7 @@ void CanvasRenderingContext2D::drawImage(HTMLVideoElement* video, const FloatRec
     c->translate(dstRect.x(), dstRect.y());
     c->scale(FloatSize(dstRect.width() / srcRect.width(), dstRect.height() / srcRect.height()));
     c->translate(-srcRect.x(), -srcRect.y());
-    video->paintCurrentFrameInContext(c, IntRect(IntPoint(), size(video)));
+    video->paintCurrentFrameInContext(c, FloatRect(FloatPoint(), size(video)));
     stateSaver.restore();
     didDraw(dstRect);
 }
@@ -1700,65 +1699,66 @@ template<class T> void  CanvasRenderingContext2D::fullCanvasCompositedDrawImage(
     compositeBuffer(buffer.get(), bufferRect, op);
 }
 
-void CanvasRenderingContext2D::prepareGradientForDashboard(CanvasGradient* gradient) const
+void CanvasRenderingContext2D::prepareGradientForDashboard(CanvasGradient& gradient) const
 {
 #if ENABLE(DASHBOARD_SUPPORT)
     if (m_usesDashboardCompatibilityMode)
-        gradient->setDashboardCompatibilityMode();
+        gradient.setDashboardCompatibilityMode();
 #else
     UNUSED_PARAM(gradient);
 #endif
 }
 
-PassRefPtr<CanvasGradient> CanvasRenderingContext2D::createLinearGradient(float x0, float y0, float x1, float y1, ExceptionCode& ec)
+RefPtr<CanvasGradient> CanvasRenderingContext2D::createLinearGradient(float x0, float y0, float x1, float y1, ExceptionCode& ec)
 {
     if (!std::isfinite(x0) || !std::isfinite(y0) || !std::isfinite(x1) || !std::isfinite(y1)) {
         ec = NOT_SUPPORTED_ERR;
-        return 0;
+        return nullptr;
     }
 
-    RefPtr<CanvasGradient> gradient = CanvasGradient::create(FloatPoint(x0, y0), FloatPoint(x1, y1));
+    Ref<CanvasGradient> gradient = CanvasGradient::create(FloatPoint(x0, y0), FloatPoint(x1, y1));
     prepareGradientForDashboard(gradient.get());
-    return gradient.release();
+    return WTF::move(gradient);
 }
 
-PassRefPtr<CanvasGradient> CanvasRenderingContext2D::createRadialGradient(float x0, float y0, float r0, float x1, float y1, float r1, ExceptionCode& ec)
+RefPtr<CanvasGradient> CanvasRenderingContext2D::createRadialGradient(float x0, float y0, float r0, float x1, float y1, float r1, ExceptionCode& ec)
 {
     if (!std::isfinite(x0) || !std::isfinite(y0) || !std::isfinite(r0) || !std::isfinite(x1) || !std::isfinite(y1) || !std::isfinite(r1)) {
         ec = NOT_SUPPORTED_ERR;
-        return 0;
+        return nullptr;
     }
 
     if (r0 < 0 || r1 < 0) {
         ec = INDEX_SIZE_ERR;
-        return 0;
+        return nullptr;
     }
 
-    RefPtr<CanvasGradient> gradient = CanvasGradient::create(FloatPoint(x0, y0), r0, FloatPoint(x1, y1), r1);
+    Ref<CanvasGradient> gradient = CanvasGradient::create(FloatPoint(x0, y0), r0, FloatPoint(x1, y1), r1);
     prepareGradientForDashboard(gradient.get());
-    return gradient.release();
+    return WTF::move(gradient);
 }
 
-PassRefPtr<CanvasPattern> CanvasRenderingContext2D::createPattern(HTMLImageElement* image,
+RefPtr<CanvasPattern> CanvasRenderingContext2D::createPattern(HTMLImageElement* image,
     const String& repetitionType, ExceptionCode& ec)
 {
     if (!image) {
         ec = TYPE_MISMATCH_ERR;
-        return 0;
+        return nullptr;
     }
     bool repeatX, repeatY;
     ec = 0;
     CanvasPattern::parseRepetitionType(repetitionType, repeatX, repeatY, ec);
     if (ec)
-        return 0;
-
-    if (!image->complete())
-        return 0;
+        return nullptr;
 
     CachedImage* cachedImage = image->cachedImage();
-    if (!cachedImage || cachedImage->status() == CachedResource::LoadError) {
+    // If the image loading hasn't started or the image is not complete, it is not fully decodable.
+    if (!cachedImage || !image->complete())
+        return nullptr;
+
+    if (cachedImage->status() == CachedResource::LoadError) {
         ec = INVALID_STATE_ERR;
-        return 0;
+        return nullptr;
     }
 
     if (!image->cachedImage()->imageForRenderer(image->renderer()))
@@ -1768,23 +1768,23 @@ PassRefPtr<CanvasPattern> CanvasRenderingContext2D::createPattern(HTMLImageEleme
     return CanvasPattern::create(cachedImage->imageForRenderer(image->renderer()), repeatX, repeatY, originClean);
 }
 
-PassRefPtr<CanvasPattern> CanvasRenderingContext2D::createPattern(HTMLCanvasElement* canvas,
+RefPtr<CanvasPattern> CanvasRenderingContext2D::createPattern(HTMLCanvasElement* canvas,
     const String& repetitionType, ExceptionCode& ec)
 {
     if (!canvas) {
         ec = TYPE_MISMATCH_ERR;
-        return 0;
+        return nullptr;
     }
     if (!canvas->width() || !canvas->height() || !canvas->buffer()) {
         ec = INVALID_STATE_ERR;
-        return 0;
+        return nullptr;
     }
 
     bool repeatX, repeatY;
     ec = 0;
     CanvasPattern::parseRepetitionType(repetitionType, repeatX, repeatY, ec);
     if (ec)
-        return 0;
+        return nullptr;
     return CanvasPattern::create(canvas->copiedImage(), repeatX, repeatY, canvas->originClean());
 }
 
@@ -1842,41 +1842,41 @@ GraphicsContext* CanvasRenderingContext2D::drawingContext() const
     return canvas()->drawingContext();
 }
 
-static PassRefPtr<ImageData> createEmptyImageData(const IntSize& size)
+static RefPtr<ImageData> createEmptyImageData(const IntSize& size)
 {
     if (RefPtr<ImageData> data = ImageData::create(size)) {
         data->data()->zeroFill();
-        return data.release();
+        return data;
     }
 
     return nullptr;
 }
 
-PassRefPtr<ImageData> CanvasRenderingContext2D::createImageData(PassRefPtr<ImageData> imageData, ExceptionCode& ec) const
+RefPtr<ImageData> CanvasRenderingContext2D::createImageData(RefPtr<ImageData>&& imageData, ExceptionCode& ec) const
 {
     if (!imageData) {
         ec = NOT_SUPPORTED_ERR;
-        return 0;
+        return nullptr;
     }
 
     return createEmptyImageData(imageData->size());
 }
 
-PassRefPtr<ImageData> CanvasRenderingContext2D::createImageData(float sw, float sh, ExceptionCode& ec) const
+RefPtr<ImageData> CanvasRenderingContext2D::createImageData(float sw, float sh, ExceptionCode& ec) const
 {
     ec = 0;
     if (!sw || !sh) {
         ec = INDEX_SIZE_ERR;
-        return 0;
+        return nullptr;
     }
     if (!std::isfinite(sw) || !std::isfinite(sh)) {
         ec = TypeError;
-        return 0;
+        return nullptr;
     }
 
     FloatSize logicalSize(fabs(sw), fabs(sh));
     if (!logicalSize.isExpressibleAsIntSize())
-        return 0;
+        return nullptr;
 
     IntSize size = expandedIntSize(logicalSize);
     if (size.width() < 1)
@@ -1887,32 +1887,32 @@ PassRefPtr<ImageData> CanvasRenderingContext2D::createImageData(float sw, float 
     return createEmptyImageData(size);
 }
 
-PassRefPtr<ImageData> CanvasRenderingContext2D::getImageData(float sx, float sy, float sw, float sh, ExceptionCode& ec) const
+RefPtr<ImageData> CanvasRenderingContext2D::getImageData(float sx, float sy, float sw, float sh, ExceptionCode& ec) const
 {
     return getImageData(ImageBuffer::LogicalCoordinateSystem, sx, sy, sw, sh, ec);
 }
 
-PassRefPtr<ImageData> CanvasRenderingContext2D::webkitGetImageDataHD(float sx, float sy, float sw, float sh, ExceptionCode& ec) const
+RefPtr<ImageData> CanvasRenderingContext2D::webkitGetImageDataHD(float sx, float sy, float sw, float sh, ExceptionCode& ec) const
 {
     return getImageData(ImageBuffer::BackingStoreCoordinateSystem, sx, sy, sw, sh, ec);
 }
 
-PassRefPtr<ImageData> CanvasRenderingContext2D::getImageData(ImageBuffer::CoordinateSystem coordinateSystem, float sx, float sy, float sw, float sh, ExceptionCode& ec) const
+RefPtr<ImageData> CanvasRenderingContext2D::getImageData(ImageBuffer::CoordinateSystem coordinateSystem, float sx, float sy, float sw, float sh, ExceptionCode& ec) const
 {
     if (!canvas()->originClean()) {
         DEPRECATED_DEFINE_STATIC_LOCAL(String, consoleMessage, (ASCIILiteral("Unable to get image data from canvas because the canvas has been tainted by cross-origin data.")));
         canvas()->document().addConsoleMessage(MessageSource::Security, MessageLevel::Error, consoleMessage);
         ec = SECURITY_ERR;
-        return 0;
+        return nullptr;
     }
 
     if (!sw || !sh) {
         ec = INDEX_SIZE_ERR;
-        return 0;
+        return nullptr;
     }
     if (!std::isfinite(sx) || !std::isfinite(sy) || !std::isfinite(sw) || !std::isfinite(sh)) {
         ec = NOT_SUPPORTED_ERR;
-        return 0;
+        return nullptr;
     }
 
     if (sw < 0) {
@@ -1930,7 +1930,7 @@ PassRefPtr<ImageData> CanvasRenderingContext2D::getImageData(ImageBuffer::Coordi
     if (logicalRect.height() < 1)
         logicalRect.setHeight(1);
     if (!logicalRect.isExpressibleAsIntRect())
-        return 0;
+        return nullptr;
 
     IntRect imageDataRect = enclosingIntRect(logicalRect);
     ImageBuffer* buffer = canvas()->buffer();
@@ -1939,7 +1939,7 @@ PassRefPtr<ImageData> CanvasRenderingContext2D::getImageData(ImageBuffer::Coordi
 
     RefPtr<Uint8ClampedArray> byteArray = buffer->getUnmultipliedImageData(imageDataRect, coordinateSystem);
     if (!byteArray)
-        return 0;
+        return nullptr;
 
     return ImageData::create(imageDataRect.size(), byteArray.release());
 }
@@ -2075,7 +2075,7 @@ void CanvasRenderingContext2D::setFont(const String& newFont)
         return;
 
     RefPtr<MutableStyleProperties> parsedStyle = MutableStyleProperties::create();
-    CSSParser::parseValue(parsedStyle.get(), CSSPropertyFont, newFont, true, strictToCSSParserMode(!m_usesCSSCompatibilityParseMode), 0);
+    CSSParser::parseValue(parsedStyle.get(), CSSPropertyFont, newFont, true, strictToCSSParserMode(!m_usesCSSCompatibilityParseMode), nullptr);
     if (parsedStyle->isEmpty())
         return;
 
@@ -2094,7 +2094,10 @@ void CanvasRenderingContext2D::setFont(const String& newFont)
     // Map the <canvas> font into the text style. If the font uses keywords like larger/smaller, these will work
     // relative to the canvas.
     RefPtr<RenderStyle> newStyle = RenderStyle::create();
-    canvas()->document().updateStyleIfNeeded();
+
+    Document& document = canvas()->document();
+    document.updateStyleIfNeeded();
+
     if (RenderStyle* computedStyle = canvas()->computedStyle())
         newStyle->setFontDescription(computedStyle->fontDescription());
     else {
@@ -2106,7 +2109,7 @@ void CanvasRenderingContext2D::setFont(const String& newFont)
         newStyle->setFontDescription(defaultFontDescription);
     }
 
-    newStyle->font().update(newStyle->font().fontSelector());
+    newStyle->fontCascade().update(newStyle->fontCascade().fontSelector());
 
     // Now map the font property longhands into the style.
     StyleResolver& styleResolver = canvas()->document().ensureStyleResolver();
@@ -2123,10 +2126,10 @@ void CanvasRenderingContext2D::setFont(const String& newFont)
     styleResolver.updateFont();
     styleResolver.applyPropertyToCurrentStyle(CSSPropertyLineHeight, parsedStyle->getPropertyCSSValue(CSSPropertyLineHeight).get());
 
-    modifiableState().m_font = newStyle->font();
-    modifiableState().m_font.update(styleResolver.fontSelector());
+    modifiableState().m_font = newStyle->fontCascade();
+    modifiableState().m_font.update(&document.fontSelector());
     modifiableState().m_realizedFont = true;
-    styleResolver.fontSelector()->registerForInvalidationCallbacks(&modifiableState());
+    document.fontSelector().registerForInvalidationCallbacks(&modifiableState());
 }
 
 String CanvasRenderingContext2D::textAlign() const
@@ -2255,18 +2258,16 @@ static void normalizeSpaces(String& text)
     text = String::adopt(charVector);
 }
 
-PassRefPtr<TextMetrics> CanvasRenderingContext2D::measureText(const String& text)
+Ref<TextMetrics> CanvasRenderingContext2D::measureText(const String& text)
 {
-    FontCachePurgePreventer fontCachePurgePreventer;
-
-    RefPtr<TextMetrics> metrics = TextMetrics::create();
+    Ref<TextMetrics> metrics = TextMetrics::create();
 
     String normalizedText = text;
     normalizeSpaces(normalizedText);
 
     metrics->setWidth(accessFont().width(TextRun(normalizedText)));
 
-    return metrics.release();
+    return metrics;
 }
 
 void CanvasRenderingContext2D::drawTextInternal(const String& text, float x, float y, bool fill, float maxWidth, bool useMaxWidth)
@@ -2290,9 +2291,7 @@ void CanvasRenderingContext2D::drawTextInternal(const String& text, float x, flo
     if (fill && gradient && gradient->isZeroSize())
         return;
 
-    FontCachePurgePreventer fontCachePurgePreventer;
-
-    const Font& font = accessFont();
+    const FontCascade& font = accessFont();
     const FontMetrics& fontMetrics = font.fontMetrics();
 
     String normalizedText = text;
@@ -2306,7 +2305,7 @@ void CanvasRenderingContext2D::drawTextInternal(const String& text, float x, flo
     bool isRTL = direction == RTL;
     bool override = computedStyle ? isOverride(computedStyle->unicodeBidi()) : false;
 
-    TextRun textRun(normalizedText, 0, 0, TextRun::AllowTrailingExpansion, direction, override, true, TextRun::NoRounding);
+    TextRun textRun(normalizedText, 0, 0, AllowTrailingExpansion, direction, override, true, TextRun::NoRounding);
     // Draw the item text at the correct point.
     FloatPoint location(x, y);
     switch (state().m_textBaseline) {
@@ -2327,7 +2326,7 @@ void CanvasRenderingContext2D::drawTextInternal(const String& text, float x, flo
         break;
     }
 
-    float fontWidth = font.width(TextRun(normalizedText, 0, 0, TextRun::AllowTrailingExpansion, direction, override));
+    float fontWidth = font.width(TextRun(normalizedText, 0, 0, AllowTrailingExpansion, direction, override));
 
     useMaxWidth = (useMaxWidth && maxWidth < fontWidth);
     float width = useMaxWidth ? maxWidth : fontWidth;
@@ -2377,10 +2376,10 @@ void CanvasRenderingContext2D::drawTextInternal(const String& text, float x, flo
             maskImageContext->translate(location.x() - maskRect.x(), location.y() - maskRect.y());
             // We draw when fontWidth is 0 so compositing operations (eg, a "copy" op) still work.
             maskImageContext->scale(FloatSize((fontWidth > 0 ? (width / fontWidth) : 0), 1));
-            maskImageContext->drawBidiText(font, textRun, FloatPoint(0, 0), Font::UseFallbackIfFontNotReady);
+            maskImageContext->drawBidiText(font, textRun, FloatPoint(0, 0), FontCascade::UseFallbackIfFontNotReady);
         } else {
             maskImageContext->translate(-maskRect.x(), -maskRect.y());
-            maskImageContext->drawBidiText(font, textRun, location, Font::UseFallbackIfFontNotReady);
+            maskImageContext->drawBidiText(font, textRun, location, FontCascade::UseFallbackIfFontNotReady);
         }
 
         GraphicsContextStateSaver stateSaver(*c);
@@ -2403,15 +2402,15 @@ void CanvasRenderingContext2D::drawTextInternal(const String& text, float x, flo
 
     if (isFullCanvasCompositeMode(state().m_globalComposite)) {
         beginCompositeLayer();
-        c->drawBidiText(font, textRun, location, Font::UseFallbackIfFontNotReady);
+        c->drawBidiText(font, textRun, location, FontCascade::UseFallbackIfFontNotReady);
         endCompositeLayer();
         didDrawEntireCanvas();
     } else if (state().m_globalComposite == CompositeCopy) {
         clearCanvas();
-        c->drawBidiText(font, textRun, location, Font::UseFallbackIfFontNotReady);
+        c->drawBidiText(font, textRun, location, FontCascade::UseFallbackIfFontNotReady);
         didDrawEntireCanvas();
     } else {
-        c->drawBidiText(font, textRun, location, Font::UseFallbackIfFontNotReady);
+        c->drawBidiText(font, textRun, location, FontCascade::UseFallbackIfFontNotReady);
         didDraw(textRect);
     }
 }
@@ -2431,7 +2430,7 @@ void CanvasRenderingContext2D::inflateStrokeRect(FloatRect& rect) const
     rect.inflate(delta);
 }
 
-const Font& CanvasRenderingContext2D::accessFont()
+const FontCascade& CanvasRenderingContext2D::accessFont()
 {
     canvas()->document().updateStyleIfNeeded();
 

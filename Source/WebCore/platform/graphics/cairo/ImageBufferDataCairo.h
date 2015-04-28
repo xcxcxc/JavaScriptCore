@@ -26,6 +26,8 @@
 #ifndef ImageBufferDataCairo_h
 #define ImageBufferDataCairo_h
 
+#if USE(CAIRO)
+
 #include "PlatformContextCairo.h"
 #include "RefPtrCairo.h"
 
@@ -48,6 +50,7 @@ public:
 
     RefPtr<cairo_surface_t> m_surface;
     PlatformContextCairo m_platformContext;
+    std::unique_ptr<GraphicsContext> m_context;
     IntSize m_size;
 
 #if ENABLE(ACCELERATED_2D_CANVAS)
@@ -57,5 +60,7 @@ public:
 };
 
 } // namespace WebCore
+
+#endif // USE(CAIRO)
 
 #endif // ImageBufferDataCairo_h

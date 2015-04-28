@@ -71,7 +71,7 @@ void RTCVoidRequestImpl::requestSucceeded()
 void RTCVoidRequestImpl::requestFailed(const String& error)
 {
     if (m_errorCallback.get())
-        m_errorCallback->handleEvent(DOMError::create(error).get());
+        m_errorCallback->handleEvent(DOMError::create(error).ptr());
 
     clear();
 }
@@ -79,6 +79,17 @@ void RTCVoidRequestImpl::requestFailed(const String& error)
 void RTCVoidRequestImpl::stop()
 {
     clear();
+}
+
+const char* RTCVoidRequestImpl::activeDOMObjectName() const
+{
+    return "RTCVoidRequestImpl";
+}
+
+bool RTCVoidRequestImpl::canSuspendForPageCache() const
+{
+    // FIXME: We should try and do better here.
+    return false;
 }
 
 void RTCVoidRequestImpl::clear()

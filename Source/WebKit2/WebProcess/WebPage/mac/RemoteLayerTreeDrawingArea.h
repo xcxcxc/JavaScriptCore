@@ -67,10 +67,11 @@ private:
     virtual void setRootCompositingLayer(WebCore::GraphicsLayer*) override;
     virtual void scheduleCompositingLayerFlush() override;
     virtual void scheduleCompositingLayerFlushImmediately() override;
+    virtual void attachViewOverlayGraphicsLayer(WebCore::Frame*, WebCore::GraphicsLayer*) override;
 
     virtual void addTransactionCallbackID(uint64_t callbackID) override;
 
-    virtual PassRefPtr<WebCore::DisplayRefreshMonitor> createDisplayRefreshMonitor(PlatformDisplayID) override;
+    virtual RefPtr<WebCore::DisplayRefreshMonitor> createDisplayRefreshMonitor(PlatformDisplayID) override;
     void willDestroyDisplayRefreshMonitor(WebCore::DisplayRefreshMonitor*);
 
     virtual bool shouldUseTiledBackingForFrameView(const WebCore::FrameView*) override;
@@ -102,13 +103,14 @@ private:
 
     virtual void mainFrameContentSizeChanged(const WebCore::IntSize&) override;
 
-    virtual void viewStateDidChange(WebCore::ViewState::Flags changed, bool wantsDidUpdateViewState) override;
+    virtual void viewStateDidChange(WebCore::ViewState::Flags changed, bool wantsDidUpdateViewState, const Vector<uint64_t>& callbackIDs) override;
 
     virtual bool adjustLayerFlushThrottling(WebCore::LayerFlushThrottleState::Flags) override;
 
     void updateScrolledExposedRect();
+    void updateRootLayers();
 
-    void layerFlushTimerFired(WebCore::Timer<RemoteLayerTreeDrawingArea>*);
+    void layerFlushTimerFired();
     void flushLayers();
 
     WebCore::TiledBacking* mainFrameTiledBacking() const;
@@ -142,7 +144,7 @@ private:
     WebCore::FloatRect m_exposedRect;
     WebCore::FloatRect m_scrolledExposedRect;
 
-    WebCore::Timer<RemoteLayerTreeDrawingArea> m_layerFlushTimer;
+    WebCore::Timer m_layerFlushTimer;
     bool m_isFlushingSuspended;
     bool m_hasDeferredFlush;
     bool m_isThrottlingLayerFlushes;
@@ -160,10 +162,13 @@ private:
 
     uint64_t m_currentTransactionID;
     Vector<RemoteLayerTreeTransaction::TransactionCallbackID> m_pendingCallbackIDs;
+
+    WebCore::GraphicsLayer* m_contentLayer;
+    WebCore::GraphicsLayer* m_viewOverlayRootLayer;
 };
 
-DRAWING_AREA_TYPE_CASTS(RemoteLayerTreeDrawingArea, type() == DrawingAreaTypeRemoteLayerTree);
-
 } // namespace WebKit
+
+SPECIALIZE_TYPE_TRAITS_DRAWING_AREA(RemoteLayerTreeDrawingArea, DrawingAreaTypeRemoteLayerTree)
 
 #endif // RemoteLayerTreeDrawingArea_h

@@ -37,9 +37,11 @@ namespace WebCore {
 class GLContextGLX : public GLContext {
     WTF_MAKE_NONCOPYABLE(GLContextGLX);
 public:
-    static PassOwnPtr<GLContextGLX> createContext(XID window, GLContext* sharingContext);
-    static PassOwnPtr<GLContextGLX> createWindowContext(XID window, GLContext* sharingContext);
+    static std::unique_ptr<GLContextGLX> createContext(XID window, GLContext* sharingContext);
+    static std::unique_ptr<GLContextGLX> createWindowContext(XID window, GLContext* sharingContext);
 
+    GLContextGLX(GLXContext);
+    GLContextGLX(GLXContext, Pixmap, GLXPixmap);
     virtual ~GLContextGLX();
     virtual bool makeContextCurrent();
     virtual void swapBuffers();
@@ -47,17 +49,15 @@ public:
     virtual bool canRenderToDefaultFramebuffer();
     virtual IntSize defaultFrameBufferSize();
     virtual cairo_device_t* cairoDevice();
+    virtual bool isEGLContext() const { return false; }
 
-#if USE(3D_GRAPHICS)
+#if ENABLE(GRAPHICS_CONTEXT_3D)
     virtual PlatformGraphicsContext3D platformContext();
 #endif
 
 private:
-    static PassOwnPtr<GLContextGLX> createPbufferContext(GLXContext sharingContext);
-    static PassOwnPtr<GLContextGLX> createPixmapContext(GLXContext sharingContext);
-
-    GLContextGLX(GLXContext);
-    GLContextGLX(GLXContext, Pixmap, GLXPixmap);
+    static std::unique_ptr<GLContextGLX> createPbufferContext(GLXContext sharingContext);
+    static std::unique_ptr<GLContextGLX> createPixmapContext(GLXContext sharingContext);
 
     GLXContext m_context;
     XID m_window;

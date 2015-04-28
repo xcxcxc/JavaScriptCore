@@ -39,18 +39,20 @@
 
 namespace WebCore {
 
-class AnimationController;
 class CompositeAnimation;
 class Element;
+class FloatRect;
+class LayoutRect;
 class RenderElement;
 class RenderStyle;
 class TimingFunction;
+
 class AnimationBase : public RefCounted<AnimationBase> {
     friend class CompositeAnimation;
     friend class CSSPropertyAnimation;
-
+    WTF_MAKE_FAST_ALLOCATED;
 public:
-    AnimationBase(const Animation& transition, RenderElement*, CompositeAnimation*);
+    AnimationBase(Animation& transition, RenderElement*, CompositeAnimation*);
     virtual ~AnimationBase() { }
 
     RenderElement* renderer() const { return m_object; }
@@ -133,16 +135,20 @@ public:
 
     double progress(double scale, double offset, const TimingFunction*) const;
 
-    virtual void animate(CompositeAnimation*, RenderElement*, const RenderStyle* /*currentStyle*/, RenderStyle* /*targetStyle*/, RefPtr<RenderStyle>& /*animatedStyle*/) = 0;
+    // Returns true if the animation state changed.
+    virtual bool animate(CompositeAnimation*, RenderElement*, const RenderStyle* /*currentStyle*/, RenderStyle* /*targetStyle*/, RefPtr<RenderStyle>& /*animatedStyle*/) = 0;
     virtual void getAnimatedStyle(RefPtr<RenderStyle>& /*animatedStyle*/) = 0;
+
+    virtual bool computeExtentOfTransformAnimation(LayoutRect&) const = 0;
 
     virtual bool shouldFireEvents() const { return false; }
 
     void fireAnimationEventsIfNeeded();
 
-    bool animationsMatch(const Animation*) const;
+    bool animationsMatch(const Animation&) const;
 
-    void setAnimation(const Animation& animation) { m_animation = const_cast<Animation*>(&animation); }
+    const Animation& animation() const { return m_animation; }
+    void setAnimation(Animation& animation) { m_animation = animation; }
 
     // Return true if this animation is overridden. This will only be the case for
     // ImplicitAnimations and is used to determine whether or not we should force
@@ -206,8 +212,6 @@ public:
         updateStateMachine(AnimationStateInput::StyleAvailable, -1);
     }
 
-    const Animation& animation() const { return *m_animation; }
-
 protected:
     virtual void overrideAnimations() { }
     virtual void resumeOverriddenAnimations() { }
@@ -229,6 +233,7 @@ protected:
     void goIntoEndingOrLoopingState();
 
     bool isAccelerated() const { return m_isAccelerated; }
+    AnimationState state() const { return m_animationState; }
 
     static void setNeedsStyleRecalc(Element*);
     
@@ -236,22 +241,24 @@ protected:
 
     double fractionalTime(double scale, double elapsedTime, double offset) const;
 
-    AnimationState m_animationState;
-
-    bool m_isAccelerated;
-    bool m_transformFunctionListValid;
-    bool m_filterFunctionListsMatch;
-    double m_startTime;
-    double m_pauseTime;
-    double m_requestedStartTime;
-
-    double m_totalDuration;
-    double m_nextIterationDuration;
+    // These return true if we can easily compute a bounding box by applying the style's transform to the bounds rect.
+    bool computeTransformedExtentViaTransformList(const FloatRect& rendererBox, const RenderStyle&, LayoutRect& bounds) const;
+    bool computeTransformedExtentViaMatrix(const FloatRect& rendererBox, const RenderStyle&, LayoutRect& bounds) const;
 
     RenderElement* m_object;
+    CompositeAnimation* m_compositeAnimation; // Ideally this would be a reference, but it has to be cleared if an animation is destroyed inside an event callback.
+    Ref<Animation> m_animation;
 
-    RefPtr<Animation> m_animation;
-    CompositeAnimation* m_compositeAnimation;
+    double m_startTime { 0 };
+    double m_pauseTime { -1 };
+    double m_requestedStartTime { 0 };
+    double m_totalDuration { -1 };
+    double m_nextIterationDuration { -1 };
+
+    AnimationState m_animationState { AnimationState::New };
+    bool m_isAccelerated { false };
+    bool m_transformFunctionListValid { false };
+    bool m_filterFunctionListsMatch { false };
 };
 
 } // namespace WebCore

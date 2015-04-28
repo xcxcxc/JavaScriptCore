@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,6 +41,7 @@ class MediaSession;
 class RemoteCommandListener;
 
 class MediaSessionManager : private RemoteCommandListenerClient, private SystemSleepListener::Client, private AudioHardwareListener::Client {
+    WTF_MAKE_FAST_ALLOCATED;
 public:
     WEBCORE_EXPORT static MediaSessionManager& sharedManager();
     virtual ~MediaSessionManager() { }
@@ -54,7 +55,6 @@ public:
 
     WEBCORE_EXPORT void applicationWillEnterForeground() const;
     WEBCORE_EXPORT void applicationWillEnterBackground() const;
-    void wirelessRoutesAvailableChanged();
 
     enum SessionRestrictionFlags {
         NoRestrictions = 0,
@@ -62,25 +62,31 @@ public:
         InlineVideoPlaybackRestricted = 1 << 1,
         MetadataPreloadingNotPermitted = 1 << 2,
         AutoPreloadingNotPermitted = 1 << 3,
-        BackgroundPlaybackNotPermitted = 1 << 4,
+        BackgroundProcessPlaybackRestricted = 1 << 4,
+        BackgroundTabPlaybackRestricted = 1 << 5,
+        InterruptedPlaybackNotPermitted = 1 << 6,
     };
     typedef unsigned SessionRestrictions;
-    
+
     WEBCORE_EXPORT void addRestriction(MediaSession::MediaType, SessionRestrictions);
     WEBCORE_EXPORT void removeRestriction(MediaSession::MediaType, SessionRestrictions);
     WEBCORE_EXPORT SessionRestrictions restrictions(MediaSession::MediaType);
     virtual void resetRestrictions();
 
-    virtual void sessionWillBeginPlayback(MediaSession&);
+    virtual bool sessionWillBeginPlayback(MediaSession&);
     virtual void sessionWillEndPlayback(MediaSession&);
-    
+
     bool sessionRestrictsInlineVideoPlayback(const MediaSession&) const;
 
-#if ENABLE(IOS_AIRPLAY)
+    virtual bool sessionCanLoadMedia(const MediaSession&) const;
+
+#if PLATFORM(IOS)
+    virtual void configureWireLessTargetMonitoring() { }
     virtual bool hasWirelessTargetsAvailable() { return false; }
-    virtual void startMonitoringAirPlayRoutes() { }
-    virtual void stopMonitoringAirPlayRoutes() { }
 #endif
+
+    void setCurrentSession(MediaSession&);
+    MediaSession* currentSession();
 
 protected:
     friend class MediaSession;
@@ -88,10 +94,9 @@ protected:
 
     void addSession(MediaSession&);
     void removeSession(MediaSession&);
-    
-    void setCurrentSession(MediaSession&);
-    MediaSession* currentSession();
-    
+
+    Vector<MediaSession*> sessions() { return m_sessions; }
+
 private:
     friend class Internals;
 
@@ -110,12 +115,17 @@ private:
     virtual void systemDidWake() override;
 
     SessionRestrictions m_restrictions[MediaSession::WebAudio + 1];
-
     Vector<MediaSession*> m_sessions;
     std::unique_ptr<RemoteCommandListener> m_remoteCommandListener;
     std::unique_ptr<SystemSleepListener> m_systemSleepListener;
     RefPtr<AudioHardwareListener> m_audioHardwareListener;
-    bool m_interrupted;
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET) && !PLATFORM(IOS)
+    RefPtr<MediaPlaybackTarget> m_playbackTarget;
+    bool m_canPlayToTarget { false };
+#endif
+
+    bool m_interrupted { false };
 };
 
 }

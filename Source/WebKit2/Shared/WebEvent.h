@@ -58,6 +58,9 @@ public:
         MouseDown,
         MouseUp,
         MouseMove,
+        MouseForceChanged,
+        MouseForceDown,
+        MouseForceUp,
 
         // WebWheelEvent
         Wheel,
@@ -123,7 +126,11 @@ public:
 
     WebMouseEvent();
 
-    WebMouseEvent(Type, Button, const WebCore::IntPoint& position, const WebCore::IntPoint& globalPosition, float deltaX, float deltaY, float deltaZ, int clickCount, Modifiers, double timestamp);
+#if PLATFORM(MAC)
+    WebMouseEvent(Type, Button, const WebCore::IntPoint& position, const WebCore::IntPoint& globalPosition, float deltaX, float deltaY, float deltaZ, int clickCount, Modifiers, double timestamp, double force, int eventNumber = -1, int menuType = 0);
+#else
+    WebMouseEvent(Type, Button, const WebCore::IntPoint& position, const WebCore::IntPoint& globalPosition, float deltaX, float deltaY, float deltaZ, int clickCount, Modifiers, double timestamp, double force = 0);
+#endif
 
     Button button() const { return static_cast<Button>(m_button); }
     const WebCore::IntPoint& position() const { return m_position; }
@@ -132,6 +139,11 @@ public:
     float deltaY() const { return m_deltaY; }
     float deltaZ() const { return m_deltaZ; }
     int32_t clickCount() const { return m_clickCount; }
+#if PLATFORM(MAC)
+    int32_t eventNumber() const { return m_eventNumber; }
+    int32_t menuTypeForEvent() const { return m_menuTypeForEvent; }
+#endif
+    double force() const { return m_force; }
 
     void encode(IPC::ArgumentEncoder&) const;
     static bool decode(IPC::ArgumentDecoder&, WebMouseEvent&);
@@ -146,6 +158,11 @@ private:
     float m_deltaY;
     float m_deltaZ;
     int32_t m_clickCount;
+#if PLATFORM(MAC)
+    int32_t m_eventNumber;
+    int32_t m_menuTypeForEvent;
+#endif
+    double m_force { 0 };
 };
 
 // FIXME: Move this class to its own header file.
@@ -379,9 +396,7 @@ private:
 class WebTouchEvent : public WebEvent {
 public:
     WebTouchEvent() { }
- 
-    // FIXME: It would be nice not to have to copy the Vector here.
-    WebTouchEvent(Type, Vector<WebPlatformTouchPoint>, Modifiers, double timestamp);
+    WebTouchEvent(Type, Vector<WebPlatformTouchPoint>&&, Modifiers, double timestamp);
 
     const Vector<WebPlatformTouchPoint>& touchPoints() const { return m_touchPoints; }
 

@@ -26,6 +26,8 @@
 #ifndef GMainLoopSource_h
 #define GMainLoopSource_h
 
+#if USE(GLIB)
+
 #include <functional>
 #include <glib.h>
 #include <wtf/Noncopyable.h>
@@ -39,10 +41,8 @@ class GMainLoopSource {
     WTF_MAKE_NONCOPYABLE(GMainLoopSource);
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    static GMainLoopSource& createAndDeleteOnDestroy();
-
     WTF_EXPORT_PRIVATE GMainLoopSource();
-    WTF_EXPORT_PRIVATE ~GMainLoopSource();
+    WTF_EXPORT_PRIVATE virtual ~GMainLoopSource();
 
     static const bool Stop = false;
     static const bool Continue = true;
@@ -50,45 +50,88 @@ public:
     WTF_EXPORT_PRIVATE bool isScheduled() const;
     WTF_EXPORT_PRIVATE bool isActive() const;
 
-    WTF_EXPORT_PRIVATE void schedule(const char* name, std::function<void()>, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
-    WTF_EXPORT_PRIVATE void schedule(const char* name, std::function<bool()>, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    WTF_EXPORT_PRIVATE virtual void schedule(const char* name, std::function<void()>, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    WTF_EXPORT_PRIVATE virtual void schedule(const char* name, std::function<bool()>, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    WTF_EXPORT_PRIVATE virtual void scheduleAfterDelay(const char* name, std::function<void()>, std::chrono::milliseconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    WTF_EXPORT_PRIVATE virtual void scheduleAfterDelay(const char* name, std::function<bool()>, std::chrono::milliseconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    WTF_EXPORT_PRIVATE virtual void scheduleAfterDelay(const char* name, std::function<void()>, std::chrono::seconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    WTF_EXPORT_PRIVATE virtual void scheduleAfterDelay(const char* name, std::function<bool()>, std::chrono::seconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    WTF_EXPORT_PRIVATE virtual void scheduleAfterDelay(const char* name, std::function<void()>, std::chrono::microseconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    WTF_EXPORT_PRIVATE virtual void scheduleAfterDelay(const char* name, std::function<bool()>, std::chrono::microseconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    WTF_EXPORT_PRIVATE virtual void cancel();
+
     WTF_EXPORT_PRIVATE void schedule(const char* name, std::function<bool(GIOCondition)>, GSocket*, GIOCondition, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
-    WTF_EXPORT_PRIVATE void scheduleAfterDelay(const char* name, std::function<void()>, std::chrono::milliseconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
-    WTF_EXPORT_PRIVATE void scheduleAfterDelay(const char* name, std::function<bool()>, std::chrono::milliseconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
-    WTF_EXPORT_PRIVATE void scheduleAfterDelay(const char* name, std::function<void()>, std::chrono::seconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
-    WTF_EXPORT_PRIVATE void scheduleAfterDelay(const char* name, std::function<bool()>, std::chrono::seconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
-    WTF_EXPORT_PRIVATE void cancel();
+
+    static void scheduleAndDeleteOnDestroy(const char* name, std::function<void()>, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    static void scheduleAndDeleteOnDestroy(const char* name, std::function<bool()>, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    static void scheduleAfterDelayAndDeleteOnDestroy(const char* name, std::function<void()>, std::chrono::milliseconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    static void scheduleAfterDelayAndDeleteOnDestroy(const char* name, std::function<bool()>, std::chrono::milliseconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    static void scheduleAfterDelayAndDeleteOnDestroy(const char* name, std::function<void()>, std::chrono::seconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    static void scheduleAfterDelayAndDeleteOnDestroy(const char* name, std::function<bool()>, std::chrono::seconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    static void scheduleAfterDelayAndDeleteOnDestroy(const char* name, std::function<void()>, std::chrono::microseconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+    static void scheduleAfterDelayAndDeleteOnDestroy(const char* name, std::function<bool()>, std::chrono::microseconds, int priority = G_PRIORITY_DEFAULT, std::function<void()> destroyFunction = nullptr, GMainContext* = nullptr);
+
+protected:
+    enum Status { Ready, Scheduled, Dispatching };
+
+    struct Context {
+        Context() = default;
+        Context& operator=(Context&& c)
+        {
+            source = WTF::move(c.source);
+            cancellable = WTF::move(c.cancellable);
+            socketCancellable = WTF::move(c.socketCancellable);
+            voidCallback = WTF::move(c.voidCallback);
+            boolCallback = WTF::move(c.boolCallback);
+            socketCallback = WTF::move(c.socketCallback);
+            destroyCallback = WTF::move(c.destroyCallback);
+            return *this;
+        }
+
+        void destroySource();
+
+        GRefPtr<GSource> source;
+        GRefPtr<GCancellable> cancellable;
+        GRefPtr<GCancellable> socketCancellable;
+        std::function<void ()> voidCallback;
+        std::function<bool ()> boolCallback;
+        std::function<bool (GIOCondition)> socketCallback;
+        std::function<void ()> destroyCallback;
+    };
+
+    virtual void voidCallback();
+    virtual bool boolCallback();
+
+    virtual bool prepareVoidCallback(Context&);
+    virtual void finishVoidCallback();
+    virtual bool prepareBoolCallback(Context&);
+    virtual void finishBoolCallback(bool retval, Context&);
 
 private:
+    static GMainLoopSource& create();
+
     enum DeleteOnDestroyType { DeleteOnDestroy, DoNotDeleteOnDestroy };
     GMainLoopSource(DeleteOnDestroyType);
 
-    enum Status { Ready, Scheduled, Dispatched };
-
-    void reset();
     void scheduleIdleSource(const char* name, GSourceFunc, int priority, GMainContext*);
     void scheduleTimeoutSource(const char* name, GSourceFunc, int priority, GMainContext*);
-    void voidCallback();
-    bool boolCallback();
     bool socketCallback(GIOCondition);
-    void destroy();
 
     static gboolean voidSourceCallback(GMainLoopSource*);
     static gboolean boolSourceCallback(GMainLoopSource*);
     static gboolean socketSourceCallback(GSocket*, GIOCondition, GMainLoopSource*);
 
     DeleteOnDestroyType m_deleteOnDestroy;
+
+protected:
+    Context m_context;
     Status m_status;
-    GRefPtr<GSource> m_source;
-    GRefPtr<GCancellable> m_cancellable;
-    std::function<void ()> m_voidCallback;
-    std::function<bool ()> m_boolCallback;
-    std::function<bool (GIOCondition)> m_socketCallback;
-    std::function<void ()> m_destroyCallback;
 };
 
 } // namespace WTF
 
 using WTF::GMainLoopSource;
+
+#endif // USE(GLIB)
 
 #endif // GMainLoopSource_h

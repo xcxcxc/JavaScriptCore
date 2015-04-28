@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Apple Inc. All rights reserved.
+ * Copyright (C) 2013, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -34,12 +34,12 @@ namespace JSC {
 struct CodeOrigin;
 struct InlineCallFrame;
 
-class Arguments;
 class CodeBlock;
 class ExecState;
 class JSFunction;
 class JSObject;
 class JSScope;
+class ClonedArguments;
 class Register;
 
 typedef ExecState CallFrame;
@@ -60,7 +60,6 @@ public:
         bool callerIsVMEntryFrame() const { return m_callerIsVMEntryFrame; }
         CallFrame* callerFrame() const { return m_callerFrame; }
         JSObject* callee() const { return m_callee; }
-        JSScope* scope() const { return m_scope; }
         CodeBlock* codeBlock() const { return m_codeBlock; }
         unsigned bytecodeOffset() const { return m_bytecodeOffset; }
 #if ENABLE(DFG_JIT)
@@ -79,14 +78,11 @@ public:
         CodeType codeType() const;
         JS_EXPORT_PRIVATE void computeLineAndColumn(unsigned& line, unsigned& column);
 
-        Arguments* createArguments();
-        Arguments* existingArguments();
+        ClonedArguments* createArguments();
         VMEntryFrame* vmEntryFrame() const { return m_VMEntryFrame; }
         CallFrame* callFrame() const { return m_callFrame; }
         
-#ifndef NDEBUG
         JS_EXPORT_PRIVATE void print(int indentLevel);
-#endif
 
     private:
         Frame() { }
@@ -101,7 +97,6 @@ public:
         VMEntryFrame* m_CallerVMEntryFrame;
         CallFrame* m_callerFrame;
         JSObject* m_callee;
-        JSScope* m_scope;
         CodeBlock* m_codeBlock;
         unsigned m_bytecodeOffset;
         bool m_callerIsVMEntryFrame;
@@ -148,6 +143,32 @@ private:
 #endif
 
     Frame m_frame;
+};
+
+class CallerFunctor {
+public:
+    CallerFunctor()
+        : m_hasSkippedFirstFrame(false)
+        , m_callerFrame(0)
+    {
+    }
+
+    CallFrame* callerFrame() const { return m_callerFrame; }
+
+    StackVisitor::Status operator()(StackVisitor& visitor)
+    {
+        if (!m_hasSkippedFirstFrame) {
+            m_hasSkippedFirstFrame = true;
+            return StackVisitor::Continue;
+        }
+
+        m_callerFrame = visitor->callFrame();
+        return StackVisitor::Done;
+    }
+    
+private:
+    bool m_hasSkippedFirstFrame;
+    CallFrame* m_callerFrame;
 };
 
 } // namespace JSC

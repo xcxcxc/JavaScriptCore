@@ -29,13 +29,6 @@
 #import "SandboxUtilities.h"
 #import "XPCServiceEntryPoint.h"
 
-#if __has_include(<xpc/private.h>)
-#import <xpc/private.h>
-#else
-extern "C" xpc_object_t xpc_connection_copy_entitlement_value(xpc_connection_t connection, const char *entitlement);
-extern "C" mach_port_t xpc_dictionary_copy_mach_send(xpc_object_t, const char*);
-#endif
-
 namespace WebKit {
 
 XPCServiceInitializerDelegate::~XPCServiceInitializerDelegate()
@@ -72,7 +65,11 @@ bool XPCServiceInitializerDelegate::checkEntitlements()
 
 bool XPCServiceInitializerDelegate::getConnectionIdentifier(IPC::Connection::Identifier& identifier)
 {
-    identifier = IPC::Connection::Identifier(xpc_dictionary_copy_mach_send(m_initializerMessage, "server-port"), m_connection);
+    mach_port_t port = xpc_dictionary_copy_mach_send(m_initializerMessage, "server-port");
+    if (port == MACH_PORT_NULL)
+        return false;
+
+    identifier = IPC::Connection::Identifier(port, m_connection);
     return true;
 }
 
@@ -92,8 +89,14 @@ bool XPCServiceInitializerDelegate::getClientProcessName(String& clientProcessNa
     return true;
 }
 
-bool XPCServiceInitializerDelegate::getExtraInitializationData(HashMap<String, String>&)
+bool XPCServiceInitializerDelegate::getExtraInitializationData(HashMap<String, String>& extraInitializationData)
 {
+    xpc_object_t extraDataInitializationDataObject = xpc_dictionary_get_value(m_initializerMessage, "extra-initialization-data");
+
+    String inspectorProcess = xpc_dictionary_get_string(extraDataInitializationDataObject, "inspector-process");
+    if (!inspectorProcess.isEmpty())
+        extraInitializationData.add(ASCIILiteral("inspector-process"), inspectorProcess);
+
     return true;
 }
 

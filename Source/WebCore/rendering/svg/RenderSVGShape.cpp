@@ -63,7 +63,7 @@ private:
     const RenderSVGShape& m_renderer;
 };
 
-RenderSVGShape::RenderSVGShape(SVGGraphicsElement& element, PassRef<RenderStyle> style)
+RenderSVGShape::RenderSVGShape(SVGGraphicsElement& element, Ref<RenderStyle>&& style)
     : RenderSVGModelObject(element, WTF::move(style))
     , m_needsBoundariesUpdate(false) // Default is false, the cached rects are empty from the beginning.
     , m_needsShapeUpdate(true) // Default is true, so we grab a Path object once from SVGGraphicsElement.
@@ -271,7 +271,7 @@ void RenderSVGShape::strokeShape(GraphicsContext* context)
 
 void RenderSVGShape::fillStrokeMarkers(PaintInfo& childPaintInfo)
 {
-    Vector<PaintType> paintOrder = style().svgStyle().paintTypesForPaintOrder();
+    auto paintOrder = style().svgStyle().paintTypesForPaintOrder();
     for (unsigned i = 0; i < paintOrder.size(); ++i) {
         switch (paintOrder.at(i)) {
         case PaintTypeFill:

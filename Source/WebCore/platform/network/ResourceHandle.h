@@ -30,7 +30,6 @@
 #include "HTTPHeaderMap.h"
 #include "ResourceHandleTypes.h"
 #include "ResourceLoadPriority.h"
-#include <wtf/OwnPtr.h>
 #include <wtf/RefCounted.h>
 
 #if PLATFORM(COCOA) || USE(CFNETWORK)
@@ -49,13 +48,6 @@ typedef struct _SoupRequest SoupRequest;
 
 #if USE(CF)
 typedef const struct __CFData * CFDataRef;
-#endif
-
-#if USE(WININET)
-typedef unsigned long DWORD;
-typedef unsigned long DWORD_PTR;
-typedef void* LPVOID;
-typedef LPVOID HINTERNET;
 #endif
 
 #if PLATFORM(COCOA)
@@ -99,8 +91,7 @@ class ResourceLoadTiming;
 class ResourceRequest;
 class ResourceResponse;
 class SharedBuffer;
-
-template <typename T> class Timer;
+class Timer;
 
 class ResourceHandle : public RefCounted<ResourceHandle>
 #if PLATFORM(COCOA) || USE(CFNETWORK) || USE(CURL) || USE(SOUP)
@@ -181,14 +172,6 @@ public:
 
     WEBCORE_EXPORT static void forceContentSniffing();
 
-#if USE(WININET)
-    void setSynchronousInternetHandle(HINTERNET);
-    void fileLoadTimer(Timer<ResourceHandle>*);
-    void onRedirect();
-    bool onRequestComplete();
-    static void CALLBACK internetStatusCallback(HINTERNET, DWORD_PTR, DWORD, LPVOID, DWORD);
-#endif
-
 #if USE(CURL) || USE(SOUP)
     ResourceHandleInternal* getInternal() { return d.get(); }
 #endif
@@ -205,9 +188,6 @@ public:
     static void setIgnoreSSLErrors(bool);
     double m_requestTime;
 #endif
-
-    // Used to work around the fact that you don't get any more NSURLConnection callbacks until you return from the one you're in.
-    static bool loadsBlocked();    
 
     bool hasAuthenticationChallenge() const;
     void clearAuthentication();
@@ -241,7 +221,7 @@ public:
     WEBCORE_EXPORT ResourceRequest& firstRequest();
     const String& lastHTTPMethod() const;
 
-    void failureTimerFired(Timer<ResourceHandle>&);
+    void failureTimerFired();
 
     NetworkingContext* context() const;
 
@@ -303,7 +283,7 @@ static void getConnectionTimingData(NSDictionary *timingData, ResourceLoadTiming
 #endif
 
     friend class ResourceHandleInternal;
-    OwnPtr<ResourceHandleInternal> d;
+    std::unique_ptr<ResourceHandleInternal> d;
 
 #if USE(QUICK_LOOK)
     std::unique_ptr<QuickLookHandle> m_quickLook;

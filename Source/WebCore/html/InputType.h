@@ -174,6 +174,7 @@ public:
     virtual bool canSetStringValue() const;
     virtual String localizeValue(const String&) const;
     virtual String visibleValue() const;
+    virtual bool isEmptyValue() const;
     // Returing the null string means "use the default value."
     // This function must be called only by HTMLInputElement::sanitizeValue().
     virtual String sanitizeValue(const String&) const;
@@ -223,6 +224,8 @@ public:
     virtual HTMLElement* innerBlockElement() const { return nullptr; }
     virtual TextControlInnerTextElement* innerTextElement() const { return nullptr; }
     virtual HTMLElement* innerSpinButtonElement() const { return nullptr; }
+    virtual HTMLElement* capsLockIndicatorElement() const { return nullptr; }
+    virtual HTMLElement* autoFillButtonElement() const { return nullptr; }
     virtual HTMLElement* resultsButtonElement() const { return nullptr; }
     virtual HTMLElement* cancelButtonElement() const { return nullptr; }
     virtual HTMLElement* sliderThumbElement() const { return nullptr; }
@@ -231,7 +234,7 @@ public:
 
     // Miscellaneous functions
     virtual bool rendererIsNeeded();
-    virtual RenderPtr<RenderElement> createInputRenderer(PassRef<RenderStyle>);
+    virtual RenderPtr<RenderElement> createInputRenderer(Ref<RenderStyle>&&);
     virtual void addSearchResult();
     virtual void attach();
     virtual void detach();
@@ -271,9 +274,9 @@ public:
     virtual void disabledAttributeChanged();
     virtual void readonlyAttributeChanged();
     virtual void requiredAttributeChanged();
-    virtual void valueAttributeChanged();
+    virtual void capsLockStateMayHaveChanged();
+    virtual void updateAutoFillButton();
     virtual String defaultToolTip() const;
-    virtual void updateClearButtonVisibility();
 
 #if ENABLE(DATALIST_ELEMENT)
     virtual void listAttributeTargetChanged();

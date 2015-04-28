@@ -42,7 +42,7 @@ public:
     static RefPtr<ScrollingTreeIOS> create(AsyncScrollingCoordinator*);
     virtual ~ScrollingTreeIOS();
 
-    virtual void commitNewTreeState(PassOwnPtr<ScrollingStateTree>) override;
+    virtual void commitNewTreeState(std::unique_ptr<ScrollingStateTree>) override;
 
     // No wheel events on iOS
     virtual void handleWheelEvent(const PlatformWheelEvent&) override { }
@@ -63,9 +63,9 @@ private:
     RefPtr<AsyncScrollingCoordinator> m_scrollingCoordinator;
 };
 
-SCROLLING_TREE_TYPE_CASTS(ScrollingTreeIOS, isScrollingTreeIOS());
-
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_SCROLLING_TREE(WebCore::ScrollingTreeIOS, isScrollingTreeIOS())
 
 #endif // ENABLE(ASYNC_SCROLLING)
 

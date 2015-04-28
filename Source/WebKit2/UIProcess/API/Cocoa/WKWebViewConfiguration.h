@@ -29,9 +29,12 @@
 
 #import <Foundation/Foundation.h>
 
+WK_ASSUME_NONNULL_BEGIN
+
 @class WKPreferences;
 @class WKProcessPool;
 @class WKUserContentController;
+@class WKWebsiteDataStore;
 
 #if TARGET_OS_IPHONE
 /*! @enum WKSelectionGranularity
@@ -71,11 +74,19 @@ WK_CLASS_AVAILABLE(10_10, 8_0)
 */
 @property (nonatomic, strong) WKUserContentController *userContentController;
 
+/*! @abstract The website data store to be used by the web view.
+ */
+@property (nonatomic, strong) WKWebsiteDataStore *websiteDataStore WK_AVAILABLE(WK_MAC_TBA, WK_IOS_TBA);
+
 /*! @abstract A Boolean value indicating whether the web view suppresses
  content rendering until it is fully loaded into memory.
  @discussion The default value is NO.
  */
 @property (nonatomic) BOOL suppressesIncrementalRendering;
+
+/*! @abstract The name of the application as used in the user agent string.
+*/
+@property (WK_NULLABLE_PROPERTY nonatomic, copy) NSString *applicationNameForUserAgent WK_AVAILABLE(WK_MAC_TBA, WK_IOS_TBA);
 
 #if TARGET_OS_IPHONE
 /*! @abstract A Boolean value indicating whether HTML5 videos play inline
@@ -105,5 +116,7 @@ WK_CLASS_AVAILABLE(10_10, 8_0)
 #endif
 
 @end
+
+WK_ASSUME_NONNULL_END
 
 #endif

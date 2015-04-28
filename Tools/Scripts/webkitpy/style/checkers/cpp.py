@@ -118,7 +118,8 @@ for op, inv_replacement in [('==', 'NE'), ('!=', 'EQ'),
 _CONFIG_HEADER = 0
 _PRIMARY_HEADER = 1
 _OTHER_HEADER = 2
-_MOC_HEADER = 3
+_SOFT_LINK_HEADER = 3
+_MOC_HEADER = 4
 
 
 # A dictionary of items customize behavior for unit test. For example,
@@ -254,11 +255,13 @@ class _IncludeState(dict):
     _CONFIG_SECTION = 1
     _PRIMARY_SECTION = 2
     _OTHER_SECTION = 3
+    _SOFT_LINK_SECTION = 4
 
     _TYPE_NAMES = {
         _CONFIG_HEADER: 'WebCore config.h',
         _PRIMARY_HEADER: 'header this file implements',
         _OTHER_HEADER: 'other header',
+        _SOFT_LINK_HEADER: '*SoftLink.h header',
         _MOC_HEADER: 'moc file',
         }
     _SECTION_NAMES = {
@@ -266,18 +269,23 @@ class _IncludeState(dict):
         _CONFIG_SECTION: "WebCore config.h.",
         _PRIMARY_SECTION: 'a header this file implements.',
         _OTHER_SECTION: 'other header.',
+        _SOFT_LINK_SECTION: 'soft-link header section.',
         }
 
     def __init__(self):
         dict.__init__(self)
         self._section = self._INITIAL_SECTION
         self._visited_primary_section = False
-        self.header_types = dict();
+        self._visited_soft_link_section = False
+        self.header_types = dict()
 
     def visited_primary_section(self):
         return self._visited_primary_section
 
-    def check_next_include_order(self, header_type, file_is_header, primary_header_exists):
+    def visited_soft_link_section(self):
+        return self._visited_soft_link_section
+
+    def check_next_include_order(self, header_type, filename, file_is_header, primary_header_exists):
         """Returns a non-empty error message if the next header is out of order.
 
         This function also updates the internal state to be ready to check
@@ -285,7 +293,9 @@ class _IncludeState(dict):
 
         Args:
           header_type: One of the _XXX_HEADER constants defined above.
+          filename: The name of the current file.
           file_is_header: Whether the file that owns this _IncludeState is itself a header
+          primary_header_exists: Whether the primary header file actually exists on disk
 
         Returns:
           The empty string if the header is in the right order, or an
@@ -300,7 +310,7 @@ class _IncludeState(dict):
             return ''
 
         error_message = ''
-        if self._section != self._OTHER_SECTION:
+        if self._section < self._OTHER_SECTION:
             before_error_message = ('Found %s before %s' %
                                     (self._TYPE_NAMES[header_type],
                                      self._SECTION_NAMES[self._section + 1]))
@@ -319,12 +329,21 @@ class _IncludeState(dict):
                 error_message = before_error_message
             self._section = self._PRIMARY_SECTION
             self._visited_primary_section = True
-        else:
-            assert header_type == _OTHER_HEADER
+        elif header_type == _OTHER_HEADER:
             if not file_is_header and self._section < self._PRIMARY_SECTION:
-                if primary_header_exists:
+                if primary_header_exists and not filename.endswith('SoftLink.cpp'):
                     error_message = before_error_message
             self._section = self._OTHER_SECTION
+        else:
+            assert header_type == _SOFT_LINK_HEADER
+            if file_is_header:
+                error_message = '{} should never be included in a header.'.format(
+                    self._TYPE_NAMES[header_type])
+            self._section = self._SOFT_LINK_SECTION
+            self._visited_soft_link_section = True
+
+        if not error_message and self.visited_soft_link_section() and header_type != _SOFT_LINK_HEADER:
+            error_message = '*SoftLink.h header should be included after all other headers.'
 
         return error_message
 
@@ -2043,7 +2062,7 @@ def check_member_initialization_list(clean_lines, line_number, error):
         if search(r'[^:]\:[^\:\s]+', line):
             error(line_number, 'whitespace/init', 4,
                 'Missing spaces around :')
-        if search(r'[^\s]\(.*\)\s?\:.*[^;]*$', line):
+        if (not line.lstrip().startswith(':')) and search(r'[^\s]\(.*\)\s?\:.*[^;]*$', line):
             error(line_number, 'whitespace/indent', 4,
                 'Should be indented on a separate line, with the colon or comma first on that line.')
         else:
@@ -2421,7 +2440,7 @@ def check_braces(clean_lines, line_number, error):
         # We also allow '#' for #endif and '=' for array initialization,
         # and '- (' and '+ (' for Objective-C methods.
         previous_line = get_previous_non_blank_line(clean_lines, line_number)[0]
-        if ((not search(r'[;:}{)=]\s*$|\)\s*((const|override)\s*)?(->\s*\S+)?\s*$', previous_line)
+        if ((not search(r'[;:}{)=]\s*$|\)\s*((const|override|const override)\s*)?(->\s*\S+)?\s*$', previous_line)
              or search(r'\b(if|for|while|switch|else|NS_ENUM)\b', previous_line))
             and previous_line.find('#') < 0
             and previous_line.find('- (') != 0
@@ -2878,11 +2897,15 @@ def _classify_include(filename, include, is_system, include_state):
     if include == "config.h":
         return _CONFIG_HEADER
 
+    # If the include is named *SoftLink.h, then it's a soft-link header.
+    if include.endswith('SoftLink.h'):
+        return _SOFT_LINK_HEADER
+
     # There cannot be primary includes in header files themselves. Only an
     # include exactly matches the header filename will be is flagged as
     # primary, so that it triggers the "don't include yourself" check.
     if filename.endswith('.h') and filename != include:
-        return _OTHER_HEADER;
+        return _OTHER_HEADER
 
     # If the target file basename starts with the include we're checking
     # then we consider it the primary header.
@@ -2981,8 +3004,14 @@ def check_include_line(filename, file_extension, clean_lines, line_number, inclu
     # The include_state object keeps track of the last type seen
     # and complains if the header types are out of order or missing.
     error_message = include_state.check_next_include_order(header_type,
+                                                           filename,
                                                            file_extension == "h",
                                                            primary_header_exists)
+
+    # Check to make sure *SoftLink.h headers always appear last and never in a header.
+    if error_message and include_state.visited_soft_link_section():
+        error(line_number, 'build/include_order', 4, error_message)
+        return
 
     # Check to make sure we have a blank line after and none before primary header.
     if not error_message and header_type == _PRIMARY_HEADER:
@@ -2998,15 +3027,15 @@ def check_include_line(filename, file_extension, clean_lines, line_number, inclu
     # Check to make sure all headers besides config.h and the primary header are
     # alphabetically sorted.
     if not error_message and header_type == _OTHER_HEADER:
-         previous_line_number = line_number - 1;
-         previous_line = clean_lines.lines[previous_line_number]
-         previous_match = _RE_PATTERN_INCLUDE.search(previous_line)
-         while (not previous_match and previous_line_number > 0
-                and not search(r'\A(#if|#ifdef|#ifndef|#else|#elif|#endif)', previous_line)):
-            previous_line_number -= 1;
+        previous_line_number = line_number - 1
+        previous_line = clean_lines.lines[previous_line_number]
+        previous_match = _RE_PATTERN_INCLUDE.search(previous_line)
+        while (not previous_match and previous_line_number > 0
+               and not search(r'\A(#if|#ifdef|#ifndef|#else|#elif|#endif)', previous_line)):
+            previous_line_number -= 1
             previous_line = clean_lines.lines[previous_line_number]
             previous_match = _RE_PATTERN_INCLUDE.search(previous_line)
-         if previous_match:
+        if previous_match:
             previous_header_type = include_state.header_types[previous_line_number]
             if previous_header_type == _OTHER_HEADER:
                 if '<' in previous_line and '"' in line:
@@ -3244,7 +3273,7 @@ def check_language(filename, clean_lines, line_number, file_extension, include_s
     matched = re.match(r'\s*((const|mutable)\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s+[a-zA-Z_][a-zA-Z0-9_]*\s*:\s*\d+\s*;', line)
     if matched:
         # Make sure the type is an enum and not an integral type
-        if not match(r'char|(short(\s+int)?)|int|long(\s+(long|int))|(signed|unsigned)(\s+int)?', matched.group(3)):
+        if not match(r'bool|char|(short(\s+int)?)|int|long(\s+(long|int))|(signed|unsigned)(\s+int)?', matched.group(3)):
             error(line_number, 'runtime/enum_bitfields', 5,
                   'Please declare enum bitfields as unsigned integral types.')
 
@@ -3356,7 +3385,7 @@ def check_identifier_name_in_declaration(filename, line_number, line, file_state
         modified_identifier = sub(r'(^|(?<=::))[ms]_', '', identifier)
         if not file_state.is_objective_c_or_objective_cpp() and modified_identifier.find('_') >= 0:
             # Various exceptions to the rule: JavaScript op codes functions, const_iterator.
-            if (not (filename.find('JavaScriptCore') >= 0 and modified_identifier.find('op_') >= 0)
+            if (not (filename.find('JavaScriptCore') >= 0 and (modified_identifier.find('op_') >= 0 or modified_identifier.find('intrinsic_') >= 0))
                 and not (filename.find('gtk') >= 0 and modified_identifier.startswith('webkit_') >= 0)
                 and not modified_identifier.startswith('tst_')
                 and not modified_identifier.startswith('webkit_dom_object_')

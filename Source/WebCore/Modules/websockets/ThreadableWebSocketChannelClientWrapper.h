@@ -39,7 +39,6 @@
 #include "WorkerThreadableWebSocketChannel.h"
 #include <memory>
 #include <wtf/Forward.h>
-#include <wtf/PassOwnPtr.h>
 #include <wtf/Threading.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
@@ -80,7 +79,7 @@ public:
 
     void didConnect();
     void didReceiveMessage(const String& message);
-    void didReceiveBinaryData(PassOwnPtr<Vector<char>>);
+    void didReceiveBinaryData(Vector<char>&&);
     void didUpdateBufferedAmount(unsigned long bufferedAmount);
     void didStartClosingHandshake();
     void didClose(unsigned long unhandledBufferedAmount, WebSocketChannelClient::ClosingHandshakeCompletionStatus, unsigned short code, const String& reason);

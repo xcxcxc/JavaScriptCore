@@ -66,10 +66,6 @@ public:
 
     State readyState() const;
 
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(open);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(message);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(error);
-
     void close();
 
     using RefCounted<EventSource>::ref;
@@ -91,13 +87,16 @@ private:
     virtual void didFailAccessControlCheck(const ResourceError&) override;
     virtual void didFailRedirectCheck() override;
 
-    virtual void stop() override;
+    // ActiveDOMObject API.
+    void stop() override;
+    const char* activeDOMObjectName() const override;
+    bool canSuspendForPageCache() const override;
 
     void connect();
     void networkRequestEnded();
     void scheduleInitialConnect();
     void scheduleReconnect();
-    void connectTimerFired(Timer<EventSource>&);
+    void connectTimerFired();
     void abortConnectionAttempt();
     void parseEventStream();
     void parseEventStreamLine(unsigned pos, int fieldLength, int lineLength);
@@ -109,7 +108,7 @@ private:
 
     RefPtr<TextResourceDecoder> m_decoder;
     RefPtr<ThreadableLoader> m_loader;
-    Timer<EventSource> m_connectTimer;
+    Timer m_connectTimer;
     Vector<UChar> m_receiveBuf;
     bool m_discardTrailingNewline;
     bool m_requestInFlight;

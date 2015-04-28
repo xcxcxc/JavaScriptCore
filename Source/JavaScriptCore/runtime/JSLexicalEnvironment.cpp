@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008, 2009, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2008, 2009, 2014, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,7 +29,6 @@
 #include "config.h"
 #include "JSLexicalEnvironment.h"
 
-#include "Arguments.h"
 #include "Interpreter.h"
 #include "JSFunction.h"
 #include "JSCInlines.h"
@@ -40,31 +39,19 @@ namespace JSC {
 
 const ClassInfo JSLexicalEnvironment::s_info = { "JSLexicalEnvironment", &Base::s_info, 0, CREATE_METHOD_TABLE(JSLexicalEnvironment) };
 
-void JSLexicalEnvironment::visitChildren(JSCell* cell, SlotVisitor& visitor)
-{
-    JSLexicalEnvironment* thisObject = jsCast<JSLexicalEnvironment*>(cell);
-    ASSERT_GC_OBJECT_INHERITS(thisObject, info());
-    Base::visitChildren(thisObject, visitor);
-
-    // No need to mark our registers if they're still in the JSStack.
-    if (!thisObject->isTornOff())
-        return;
-
-    for (int i = 0; i < thisObject->symbolTable()->captureCount(); ++i)
-        visitor.append(&thisObject->storage()[i]);
-}
-
 inline bool JSLexicalEnvironment::symbolTableGet(PropertyName propertyName, PropertySlot& slot)
 {
     SymbolTableEntry entry = symbolTable()->inlineGet(propertyName.uid());
     if (entry.isNull())
         return false;
 
+    ScopeOffset offset = entry.scopeOffset();
+
     // Defend against the inspector asking for a var after it has been optimized out.
-    if (isTornOff() && !isValid(entry))
+    if (!isValid(offset))
         return false;
 
-    slot.setValue(this, DontEnum, registerAt(entry.getIndex()).get());
+    slot.setValue(this, DontEnum, variableAt(offset).get());
     return true;
 }
 
@@ -74,11 +61,13 @@ inline bool JSLexicalEnvironment::symbolTableGet(PropertyName propertyName, Prop
     if (entry.isNull())
         return false;
 
+    ScopeOffset offset = entry.scopeOffset();
+
     // Defend against the inspector asking for a var after it has been optimized out.
-    if (isTornOff() && !isValid(entry))
+    if (!isValid(offset))
         return false;
 
-    descriptor.setDescriptor(registerAt(entry.getIndex()).get(), entry.getAttributes());
+    descriptor.setDescriptor(variableAt(offset).get(), entry.getAttributes());
     return true;
 }
 
@@ -88,6 +77,7 @@ inline bool JSLexicalEnvironment::symbolTablePut(ExecState* exec, PropertyName p
     ASSERT(!Heap::heap(value) || Heap::heap(value) == Heap::heap(this));
     
     WriteBarrierBase<Unknown>* reg;
+    WatchpointSet* set;
     {
         GCSafeConcurrentJITLocker locker(symbolTable()->m_lock, exec->vm().heap);
         SymbolTable::Map::iterator iter = symbolTable()->find(locker, propertyName.uid());
@@ -99,14 +89,16 @@ inline bool JSLexicalEnvironment::symbolTablePut(ExecState* exec, PropertyName p
                 throwTypeError(exec, StrictModeReadonlyPropertyWriteError);
             return true;
         }
+        ScopeOffset offset = iter->value.scopeOffset();
         // Defend against the inspector asking for a var after it has been optimized out.
-        if (isTornOff() && !isValid(iter->value))
+        if (!isValid(offset))
             return false;
-        if (VariableWatchpointSet* set = iter->value.watchpointSet())
-            set->invalidate(VariableWriteFireDetail(this, propertyName)); // Don't mess around - if we had found this statically, we would have invcalidated it.
-        reg = &registerAt(iter->value.getIndex());
+        set = iter->value.watchpointSet();
+        reg = &variableAt(offset);
     }
     reg->set(vm, this, value);
+    if (set)
+        set->invalidate(VariableWriteFireDetail(this, propertyName)); // Don't mess around - if we had found this statically, we would have invalidated it.
     return true;
 }
 
@@ -114,19 +106,17 @@ void JSLexicalEnvironment::getOwnNonIndexPropertyNames(JSObject* object, ExecSta
 {
     JSLexicalEnvironment* thisObject = jsCast<JSLexicalEnvironment*>(object);
 
-    CallFrame* callFrame = CallFrame::create(reinterpret_cast<Register*>(thisObject->m_registers));
-    if (shouldIncludeDontEnumProperties(mode) && !thisObject->isTornOff() && (callFrame->codeBlock()->usesArguments() || callFrame->codeBlock()->usesEval()))
-        propertyNames.add(exec->propertyNames().arguments);
-
     {
         ConcurrentJITLocker locker(thisObject->symbolTable()->m_lock);
         SymbolTable::Map::iterator end = thisObject->symbolTable()->end(locker);
         for (SymbolTable::Map::iterator it = thisObject->symbolTable()->begin(locker); it != end; ++it) {
-            if (it->value.getAttributes() & DontEnum && !shouldIncludeDontEnumProperties(mode))
+            if (it->value.getAttributes() & DontEnum && !mode.includeDontEnumProperties())
                 continue;
-            if (!thisObject->isValid(it->value))
+            if (!thisObject->isValid(it->value.scopeOffset()))
                 continue;
-            propertyNames.add(Identifier(exec, it->key.get()));
+            if (it->key->isSymbol() && !mode.includeSymbolProperties())
+                continue;
+            propertyNames.add(Identifier::fromUid(exec, it->key.get()));
         }
     }
     // Skip the JSEnvironmentRecord implementation of getOwnNonIndexPropertyNames
@@ -145,11 +135,13 @@ inline bool JSLexicalEnvironment::symbolTablePutWithAttributes(VM& vm, PropertyN
             return false;
         SymbolTableEntry& entry = iter->value;
         ASSERT(!entry.isNull());
-        if (!isValid(entry))
+        
+        ScopeOffset offset = entry.scopeOffset();
+        if (!isValid(offset))
             return false;
         
         entry.setAttributes(attributes);
-        reg = &registerAt(entry.getIndex());
+        reg = &variableAt(offset);
     }
     reg->set(vm, this, value);
     return true;
@@ -158,15 +150,6 @@ inline bool JSLexicalEnvironment::symbolTablePutWithAttributes(VM& vm, PropertyN
 bool JSLexicalEnvironment::getOwnPropertySlot(JSObject* object, ExecState* exec, PropertyName propertyName, PropertySlot& slot)
 {
     JSLexicalEnvironment* thisObject = jsCast<JSLexicalEnvironment*>(object);
-
-    if (propertyName == exec->propertyNames().arguments) {
-        // Defend against the inspector asking for the arguments object after it has been optimized out.
-        CallFrame* callFrame = CallFrame::create(reinterpret_cast<Register*>(thisObject->m_registers));
-        if (!thisObject->isTornOff() && (callFrame->codeBlock()->usesArguments() || callFrame->codeBlock()->usesEval())) {
-            slot.setCustom(thisObject, DontEnum, argumentsGetter);
-            return true;
-        }
-    }
 
     if (thisObject->symbolTableGet(propertyName, slot))
         return true;
@@ -212,27 +195,6 @@ JSValue JSLexicalEnvironment::toThis(JSCell*, ExecState* exec, ECMAMode ecmaMode
     if (ecmaMode == StrictMode)
         return jsUndefined();
     return exec->globalThisValue();
-}
-
-EncodedJSValue JSLexicalEnvironment::argumentsGetter(ExecState*, JSObject* slotBase, EncodedJSValue, PropertyName)
-{
-    JSLexicalEnvironment* lexicalEnvironment = jsCast<JSLexicalEnvironment*>(slotBase);
-    CallFrame* callFrame = CallFrame::create(reinterpret_cast<Register*>(lexicalEnvironment->m_registers));
-    ASSERT(!lexicalEnvironment->isTornOff() && (callFrame->codeBlock()->usesArguments() || callFrame->codeBlock()->usesEval()));
-    if (lexicalEnvironment->isTornOff() || !(callFrame->codeBlock()->usesArguments() || callFrame->codeBlock()->usesEval()))
-        return JSValue::encode(jsUndefined());
-
-    VirtualRegister argumentsRegister = callFrame->codeBlock()->argumentsRegister();
-    if (JSValue arguments = callFrame->uncheckedR(argumentsRegister.offset()).jsValue())
-        return JSValue::encode(arguments);
-    int realArgumentsRegister = unmodifiedArgumentsRegister(argumentsRegister).offset();
-
-    JSValue arguments = JSValue(Arguments::create(callFrame->vm(), callFrame));
-    callFrame->uncheckedR(argumentsRegister.offset()) = arguments;
-    callFrame->uncheckedR(realArgumentsRegister) = arguments;
-    
-    ASSERT(callFrame->uncheckedR(realArgumentsRegister).jsValue().inherits(Arguments::info()));
-    return JSValue::encode(callFrame->uncheckedR(realArgumentsRegister).jsValue());
 }
 
 } // namespace JSC

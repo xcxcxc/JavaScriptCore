@@ -32,18 +32,18 @@
 
 namespace WebCore {
 
-class BlobDataFileReference : public RefCounted<BlobDataFileReference> {
+class WEBCORE_EXPORT BlobDataFileReference : public RefCounted<BlobDataFileReference> {
 public:
-    static PassRefPtr<BlobDataFileReference> create(const String& path)
+    static Ref<BlobDataFileReference> create(const String& path)
     {
-        return adoptRef(new BlobDataFileReference(path));
+        return adoptRef(*new BlobDataFileReference(path));
     }
 
-    WEBCORE_EXPORT virtual ~BlobDataFileReference();
+    virtual ~BlobDataFileReference();
 
     void startTrackingModifications();
 
-    WEBCORE_EXPORT const String& path();
+    const String& path();
     unsigned long long size();
     double expectedModificationTime();
 
@@ -51,7 +51,7 @@ public:
     virtual void revokeFileAccess();
 
 protected:
-    WEBCORE_EXPORT BlobDataFileReference(const String& path);
+    BlobDataFileReference(const String& path);
 
 private:
 #if ENABLE(FILE_REPLACEMENT)

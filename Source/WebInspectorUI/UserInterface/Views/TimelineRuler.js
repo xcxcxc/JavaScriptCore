@@ -25,7 +25,8 @@
 
 WebInspector.TimelineRuler = function()
 {
-    WebInspector.Object.call(this);
+    // FIXME: Convert this to a WebInspector.Object subclass, and call super().
+    // WebInspector.Object.call(this);
 
     this._element = document.createElement("div");
     this._element.className = WebInspector.TimelineRuler.StyleClassName;
@@ -290,8 +291,7 @@ WebInspector.TimelineRuler.prototype = {
         marker.addEventListener(WebInspector.TimelineMarker.Event.TimeChanged, this._timelineMarkerTimeChanged, this);
 
         var markerElement = document.createElement("div");
-        markerElement.classList.add(WebInspector.TimelineRuler.BaseMarkerElementStyleClassName);
-        markerElement.classList.add(marker.type);
+        markerElement.classList.add(marker.type, WebInspector.TimelineRuler.BaseMarkerElementStyleClassName);
 
         this._markerElementMap.set(marker, markerElement);
 
@@ -348,6 +348,16 @@ WebInspector.TimelineRuler.prototype = {
         if (!this._endTimePinned)
             ++dividerCount;
 
+        var dividerData = {
+            count: dividerCount,
+            firstTime: firstDividerTime,
+            lastTime: lastDividerTime,
+        };
+
+        if (Object.shallowEqual(dividerData, this._currentDividers))
+            return;
+        this._currentDividers = dividerData;
+
         var markerDividers = this._markersElement.querySelectorAll("." + WebInspector.TimelineRuler.DividerElementStyleClassName);
 
         var dividerElement = this._headerElement.firstChild;
@@ -360,7 +370,6 @@ WebInspector.TimelineRuler.prototype = {
 
                 var labelElement = document.createElement("div");
                 labelElement.className = WebInspector.TimelineRuler.DividerLabelElementStyleClassName;
-                dividerElement._labelElement = labelElement;
                 dividerElement.appendChild(labelElement);
             }
 
@@ -392,7 +401,9 @@ WebInspector.TimelineRuler.prototype = {
             this._updatePositionOfElement(dividerElement, newLeftPosition, visibleWidth);
             this._updatePositionOfElement(markerDividerElement, newLeftPosition, visibleWidth);
 
-            dividerElement._labelElement.textContent = isNaN(dividerTime) ? "" : Number.secondsToString(dividerTime - this._zeroTime, true);
+            console.assert(dividerElement.firstChild.classList.contains(WebInspector.TimelineRuler.DividerLabelElementStyleClassName));
+
+            dividerElement.firstChild.textContent = isNaN(dividerTime) ? "" : Number.secondsToString(dividerTime - this._zeroTime, true);
             dividerElement = dividerElement.nextSibling;
         }
 

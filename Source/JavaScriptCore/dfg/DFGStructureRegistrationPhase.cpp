@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,6 +47,7 @@ public:
         // These are pretty dumb, but needed to placate subsequent assertions. We don't actually
         // have to watch these because there is no way to transition away from it, but they are
         // watchable and so we will assert if they aren't watched.
+        registerStructure(m_graph.m_vm.structureStructure.get());
         registerStructure(m_graph.m_vm.stringStructure.get());
         registerStructure(m_graph.m_vm.getterSetterStructure.get());
         
@@ -110,6 +111,7 @@ public:
                     break;
                     
                 case ToString:
+                case CallStringConstructor:
                     registerStructure(m_graph.globalObjectFor(node->origin.semantic)->stringObjectStructure());
                     break;
                     
@@ -117,12 +119,19 @@ public:
                     registerStructure(m_graph.globalObjectFor(node->origin.semantic)->activationStructure());
                     break;
                     
+                case CreateDirectArguments:
+                    registerStructure(m_graph.globalObjectFor(node->origin.semantic)->directArgumentsStructure());
+                    break;
+                    
+                case CreateScopedArguments:
+                    registerStructure(m_graph.globalObjectFor(node->origin.semantic)->scopedArgumentsStructure());
+                    break;
+                    
                 case NewRegexp:
                     registerStructure(m_graph.globalObjectFor(node->origin.semantic)->regExpStructure());
                     break;
                     
-                case NewFunctionExpression:
-                case NewFunctionNoCheck:
+                case NewFunction:
                     registerStructure(m_graph.globalObjectFor(node->origin.semantic)->functionStructure());
                     break;
                     

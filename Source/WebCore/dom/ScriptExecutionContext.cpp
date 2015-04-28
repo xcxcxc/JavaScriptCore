@@ -30,6 +30,8 @@
 
 #include "CachedScript.h"
 #include "DOMTimer.h"
+#include "DatabaseContext.h"
+#include "Document.h"
 #include "ErrorEvent.h"
 #include "MessagePort.h"
 #include "PublicURLManager.h"
@@ -45,10 +47,6 @@
 
 #if PLATFORM(IOS)
 #include "Document.h"
-#endif
-
-#if ENABLE(SQL_DATABASE)
-#include "DatabaseContext.h"
 #endif
 
 using namespace Inspector;
@@ -158,21 +156,25 @@ void ScriptExecutionContext::dispatchMessagePortEvents()
 
 void ScriptExecutionContext::createdMessagePort(MessagePort& messagePort)
 {
-    ASSERT((isDocument() && isMainThread())
-        || (isWorkerGlobalScope() && currentThread() == toWorkerGlobalScope(this)->thread().threadID()));
+    ASSERT((is<Document>(*this) && isMainThread())
+        || (is<WorkerGlobalScope>(*this) && currentThread() == downcast<WorkerGlobalScope>(*this).thread().threadID()));
 
     m_messagePorts.add(&messagePort);
 }
 
 void ScriptExecutionContext::destroyedMessagePort(MessagePort& messagePort)
 {
-    ASSERT((isDocument() && isMainThread())
-        || (isWorkerGlobalScope() && currentThread() == toWorkerGlobalScope(this)->thread().threadID()));
+    ASSERT((is<Document>(*this) && isMainThread())
+        || (is<WorkerGlobalScope>(*this) && currentThread() == downcast<WorkerGlobalScope>(*this).thread().threadID()));
 
     m_messagePorts.remove(&messagePort);
 }
 
-bool ScriptExecutionContext::canSuspendActiveDOMObjects()
+void ScriptExecutionContext::didLoadResourceSynchronously(const ResourceRequest&)
+{
+}
+
+bool ScriptExecutionContext::canSuspendActiveDOMObjectsForPageCache(Vector<ActiveDOMObject*>* unsuspendableObjects)
 {
     checkConsistency();
 
@@ -185,12 +187,16 @@ bool ScriptExecutionContext::canSuspendActiveDOMObjects()
 
     // We assume that m_activeDOMObjects will not change during iteration: canSuspend
     // functions should not add new active DOM objects, nor execute arbitrary JavaScript.
-    // An ASSERT or RELEASE_ASSERT will fire if this happens, but it's important to code
+    // An ASSERT_WITH_SECURITY_IMPLICATION or RELEASE_ASSERT will fire if this happens, but it's important to code
     // canSuspend functions so it will not happen!
+    NoEventDispatchAssertion assertNoEventDispatch;
     for (auto* activeDOMObject : m_activeDOMObjects) {
-        if (!activeDOMObject->canSuspend()) {
+        if (!activeDOMObject->canSuspendForPageCache()) {
             canSuspend = false;
-            break;
+            if (unsuspendableObjects)
+                unsuspendableObjects->append(activeDOMObject);
+            else
+                break;
         }
     }
 
@@ -220,8 +226,9 @@ void ScriptExecutionContext::suspendActiveDOMObjects(ActiveDOMObject::ReasonForS
 
     // We assume that m_activeDOMObjects will not change during iteration: suspend
     // functions should not add new active DOM objects, nor execute arbitrary JavaScript.
-    // An ASSERT or RELEASE_ASSERT will fire if this happens, but it's important to code
+    // An ASSERT_WITH_SECURITY_IMPLICATION or RELEASE_ASSERT will fire if this happens, but it's important to code
     // suspend functions so it will not happen!
+    NoEventDispatchAssertion assertNoEventDispatch;
     for (auto* activeDOMObject : m_activeDOMObjects)
         activeDOMObject->suspend(why);
 
@@ -249,8 +256,9 @@ void ScriptExecutionContext::resumeActiveDOMObjects(ActiveDOMObject::ReasonForSu
 
     // We assume that m_activeDOMObjects will not change during iteration: resume
     // functions should not add new active DOM objects, nor execute arbitrary JavaScript.
-    // An ASSERT or RELEASE_ASSERT will fire if this happens, but it's important to code
+    // An ASSERT_WITH_SECURITY_IMPLICATION or RELEASE_ASSERT will fire if this happens, but it's important to code
     // resume functions so it will not happen!
+    NoEventDispatchAssertion assertNoEventDispatch;
     for (auto* activeDOMObject : m_activeDOMObjects)
         activeDOMObject->resume();
 
@@ -276,8 +284,9 @@ void ScriptExecutionContext::stopActiveDOMObjects()
 
     // We assume that new objects will not be added to m_activeDOMObjects during iteration:
     // stop functions should not add new active DOM objects, nor execute arbitrary JavaScript.
-    // A RELEASE_ASSERT will fire if this happens, but it's important to code stop functions
+    // An ASSERT_WITH_SECURITY_IMPLICATION or RELEASE_ASSERT will fire if this happens, but it's important to code stop functions
     // so it will not happen!
+    NoEventDispatchAssertion assertNoEventDispatch;
     for (auto* activeDOMObject : possibleActiveDOMObjects) {
         // Check if this object was deleted already. If so, just skip it.
         // Calling contains on a possibly-already-deleted object is OK because we guarantee
@@ -318,7 +327,7 @@ void ScriptExecutionContext::didCreateActiveDOMObject(ActiveDOMObject& activeDOM
 
 void ScriptExecutionContext::willDestroyActiveDOMObject(ActiveDOMObject& activeDOMObject)
 {
-    ASSERT(!m_activeDOMObjectRemovalForbidden);
+    ASSERT_WITH_SECURITY_IMPLICATION(!m_activeDOMObjectRemovalForbidden);
     m_activeDOMObjects.remove(&activeDOMObject);
 }
 
@@ -345,25 +354,25 @@ bool ScriptExecutionContext::sanitizeScriptError(String& errorMessage, int& line
     return true;
 }
 
-void ScriptExecutionContext::reportException(const String& errorMessage, int lineNumber, int columnNumber, const String& sourceURL, PassRefPtr<ScriptCallStack> callStack, CachedScript* cachedScript)
+void ScriptExecutionContext::reportException(const String& errorMessage, int lineNumber, int columnNumber, const String& sourceURL, RefPtr<ScriptCallStack>&& callStack, CachedScript* cachedScript)
 {
     if (m_inDispatchErrorEvent) {
         if (!m_pendingExceptions)
             m_pendingExceptions = std::make_unique<Vector<std::unique_ptr<PendingException>>>();
-        m_pendingExceptions->append(std::make_unique<PendingException>(errorMessage, lineNumber, columnNumber, sourceURL, callStack));
+        m_pendingExceptions->append(std::make_unique<PendingException>(errorMessage, lineNumber, columnNumber, sourceURL, callStack.copyRef()));
         return;
     }
 
     // First report the original exception and only then all the nested ones.
     if (!dispatchErrorEvent(errorMessage, lineNumber, columnNumber, sourceURL, cachedScript))
-        logExceptionToConsole(errorMessage, sourceURL, lineNumber, columnNumber, callStack);
+        logExceptionToConsole(errorMessage, sourceURL, lineNumber, columnNumber, callStack.copyRef());
 
     if (!m_pendingExceptions)
         return;
 
     std::unique_ptr<Vector<std::unique_ptr<PendingException>>> pendingExceptions = WTF::move(m_pendingExceptions);
     for (auto& exception : *pendingExceptions)
-        logExceptionToConsole(exception->m_errorMessage, exception->m_sourceURL, exception->m_lineNumber, exception->m_columnNumber, exception->m_callStack);
+        logExceptionToConsole(exception->m_errorMessage, exception->m_sourceURL, exception->m_lineNumber, exception->m_columnNumber, exception->m_callStack.copyRef());
 }
 
 void ScriptExecutionContext::addConsoleMessage(MessageSource source, MessageLevel level, const String& message, const String& sourceURL, unsigned lineNumber, unsigned columnNumber, JSC::ExecState* state, unsigned long requestIdentifier)
@@ -378,8 +387,8 @@ bool ScriptExecutionContext::dispatchErrorEvent(const String& errorMessage, int 
         return false;
 
 #if PLATFORM(IOS)
-    if (target == target->toDOMWindow() && isDocument()) {
-        Settings* settings = toDocument(this)->settings();
+    if (target == target->toDOMWindow() && is<Document>(*this)) {
+        Settings* settings = downcast<Document>(*this).settings();
         if (settings && !settings->shouldDispatchJavaScriptWindowOnErrorEvents())
             return false;
     }
@@ -429,7 +438,7 @@ double ScriptExecutionContext::minimumTimerInterval() const
     // workers, we will have to override it in the appropriate
     // subclass, and provide a way to enumerate a Document's dedicated
     // workers so we can update them all.
-    return Settings::defaultMinDOMTimerInterval();
+    return DOMTimer::defaultMinimumInterval();
 }
 
 void ScriptExecutionContext::didChangeTimerAlignmentInterval()
@@ -440,24 +449,22 @@ void ScriptExecutionContext::didChangeTimerAlignmentInterval()
 
 double ScriptExecutionContext::timerAlignmentInterval() const
 {
-    return Settings::defaultDOMTimerAlignmentInterval();
+    return DOMTimer::defaultAlignmentInterval();
 }
 
 JSC::VM& ScriptExecutionContext::vm()
 {
-     if (isDocument())
+    if (is<Document>(*this))
         return JSDOMWindow::commonVM();
 
-    return toWorkerGlobalScope(*this).script()->vm();
+    return downcast<WorkerGlobalScope>(*this).script()->vm();
 }
 
-#if ENABLE(SQL_DATABASE)
 void ScriptExecutionContext::setDatabaseContext(DatabaseContext* databaseContext)
 {
     ASSERT(!m_databaseContext);
     m_databaseContext = databaseContext;
 }
-#endif
 
 bool ScriptExecutionContext::hasPendingActivity() const
 {

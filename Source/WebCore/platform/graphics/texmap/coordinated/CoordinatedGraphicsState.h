@@ -33,10 +33,10 @@
 #include "FilterOperations.h"
 #include "FloatRect.h"
 #include "FloatSize.h"
-#include "GraphicsLayerAnimation.h"
 #include "IntRect.h"
 #include "IntSize.h"
 #include "SurfaceUpdateInfo.h"
+#include "TextureMapperAnimation.h"
 #include "TransformationMatrix.h"
 
 #if USE(GRAPHICS_SURFACE)
@@ -139,14 +139,14 @@ struct CoordinatedGraphicsLayerState {
     TransformationMatrix transform;
     TransformationMatrix childrenTransform;
     FloatRect contentsRect;
-    FloatPoint contentsTilePhase;
+    FloatSize contentsTilePhase;
     FloatSize contentsTileSize;
     float opacity;
     Color solidColor;
     Color debugBorderColor;
     float debugBorderWidth;
     FilterOperations filters;
-    GraphicsLayerAnimations animations;
+    TextureMapperAnimations animations;
     Vector<uint32_t> children;
     Vector<TileCreationInfo> tilesToCreate;
     Vector<uint32_t> tilesToRemove;

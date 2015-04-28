@@ -55,7 +55,7 @@ void WebApplicationCacheManager::getApplicationCacheOrigins(uint64_t callbackID)
 {
     HashSet<RefPtr<SecurityOrigin>> origins;
 
-    cacheStorage().getOriginsWithCache(origins);
+    ApplicationCacheStorage::singleton().getOriginsWithCache(origins);
 
     Vector<SecurityOriginData> identifiers;
     identifiers.reserveCapacity(origins.size());
@@ -78,21 +78,17 @@ void WebApplicationCacheManager::getApplicationCacheOrigins(uint64_t callbackID)
 
 void WebApplicationCacheManager::deleteEntriesForOrigin(const SecurityOriginData& originData)
 {
-    RefPtr<SecurityOrigin> origin = SecurityOrigin::create(originData.protocol, originData.host, originData.port);
-    if (!origin)
-        return;
-    
-    ApplicationCache::deleteCacheForOrigin(origin.get());
+    ApplicationCacheStorage::singleton().deleteCacheForOrigin(originData.securityOrigin());
 }
 
 void WebApplicationCacheManager::deleteAllEntries()
 {
-    cacheStorage().deleteAllEntries();
+    ApplicationCacheStorage::singleton().deleteAllEntries();
 }
 
 void WebApplicationCacheManager::setAppCacheMaximumSize(uint64_t size)
 {
-    cacheStorage().setMaximumSize(size);
+    ApplicationCacheStorage::singleton().setMaximumSize(size);
 }
 
 } // namespace WebKit

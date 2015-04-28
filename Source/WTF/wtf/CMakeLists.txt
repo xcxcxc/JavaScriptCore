@@ -7,12 +7,10 @@ set(WTF_HEADERS
     BagToHashMap.h
     BitVector.h
     Bitmap.h
-    BoundsCheckedPointer.h
     BumpPointerAllocator.h
     ByteOrder.h
     CompilationThread.h
     Compiler.h
-    Compression.h
     CryptographicUtilities.h
     CryptographicallyRandomNumber.h
     CurrentTime.h
@@ -57,21 +55,15 @@ set(WTF_HEADERS
     NumberOfCores.h
     OSAllocator.h
     OSRandomSource.h
-    OwnPtr.h
-    OwnPtrCommon.h
     PageAllocation.h
-    PageAllocationAligned.h
     PageBlock.h
     PageReservation.h
     ParallelJobs.h
     ParallelJobsGeneric.h
     ParallelJobsLibdispatch.h
     ParallelJobsOpenMP.h
-    PassOwnPtr.h
-    PassRef.h
     PassRefPtr.h
     Platform.h
-    PossiblyNull.h
     PrintStream.h
     ProcessID.h
     RAMSize.h
@@ -82,24 +74,22 @@ set(WTF_HEADERS
     Ref.h
     RefCounted.h
     RefCountedLeakCounter.h
+    RefCounter.h
     RefPtr.h
-    RefPtrHashMap.h
     RetainPtr.h
     RunLoop.h
     SHA1.h
     SaturatedArithmetic.h
     SegmentedVector.h
+    SpinLock.h
     StackBounds.h
     StackStats.h
     StaticConstructors.h
     StdLibExtras.h
+    Stopwatch.h
     StringExtras.h
     StringHasher.h
     StringPrintStream.h
-    TCPackedCache.h
-    TCPageMap.h
-    TCSpinLock.h
-    TCSystemAlloc.h
     ThreadIdentifierDataPthreads.h
     ThreadSafeRefCounted.h
     ThreadSpecific.h
@@ -110,6 +100,7 @@ set(WTF_HEADERS
     Vector.h
     VectorTraits.h
     WTFThreadData.h
+    WorkQueue.h
     WeakPtr.h
     dtoa.h
 
@@ -132,9 +123,11 @@ set(WTF_HEADERS
     text/IntegerToStringConversion.h
     text/LChar.h
     text/StringBuffer.h
+    text/StringCommon.h
     text/StringHash.h
     text/StringImpl.h
     text/StringView.h
+    text/SymbolRegistry.h
     text/WTFString.h
 
     threads/BinarySemaphore.h
@@ -149,7 +142,6 @@ set(WTF_SOURCES
     Atomics.cpp
     BitVector.cpp
     CompilationThread.cpp
-    Compression.cpp
     CryptographicUtilities.cpp
     CryptographicallyRandomNumber.cpp
     CurrentTime.cpp
@@ -168,22 +160,22 @@ set(WTF_SOURCES
     MetaAllocator.cpp
     NumberOfCores.cpp
     OSRandomSource.cpp
-    PageAllocationAligned.cpp
     PageBlock.cpp
     ParallelJobsGeneric.cpp
     PrintStream.cpp
     RAMSize.cpp
     RandomNumber.cpp
     RefCountedLeakCounter.cpp
+    RefCounter.cpp
     RunLoop.cpp
     SHA1.cpp
     SixCharacterHash.cpp
     StackStats.cpp
     StackBounds.cpp
     StringPrintStream.cpp
-    TCSystemAlloc.cpp
     Threading.cpp
     WTFThreadData.cpp
+    WorkQueue.cpp
     dtoa.cpp
 
     dtoa/bignum-dtoa.cc
@@ -202,6 +194,8 @@ set(WTF_SOURCES
     text/StringBuilder.cpp
     text/StringImpl.cpp
     text/StringStatics.cpp
+    text/StringView.cpp
+    text/SymbolRegistry.cpp
     text/WTFString.cpp
 
     threads/BinarySemaphore.cpp
@@ -210,6 +204,7 @@ set(WTF_SOURCES
 )
 
 set(WTF_INCLUDE_DIRECTORIES
+    "${BMALLOC_DIR}"
     "${WTF_DIR}"
     "${WTF_DIR}/wtf"
     "${WTF_DIR}/wtf/dtoa"
@@ -224,6 +219,11 @@ set(WTF_INCLUDE_DIRECTORIES
 set(WTF_LIBRARIES
     ${CMAKE_DL_LIBS}
 )
+
+# FIXME: Port bmalloc to Windows. https://bugs.webkit.org/show_bug.cgi?id=143310
+if (NOT WIN32)
+    list(APPEND WTF_LIBRARIES bmalloc)
+endif ()
 
 list(APPEND WTF_SOURCES
     unicode/icu/CollatorICU.cpp

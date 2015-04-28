@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,7 +28,7 @@
 
 #if ENABLE(DFG_JIT)
 
-#include "DFGArgumentsSimplificationPhase.h"
+#include "DFGArgumentsEliminationPhase.h"
 #include "DFGBackwardsPropagationPhase.h"
 #include "DFGByteCodeParser.h"
 #include "DFGCFAPhase.h"
@@ -47,12 +47,16 @@
 #include "DFGLICMPhase.h"
 #include "DFGLivenessAnalysisPhase.h"
 #include "DFGLoopPreHeaderCreationPhase.h"
+#include "DFGMovHintRemovalPhase.h"
 #include "DFGOSRAvailabilityAnalysisPhase.h"
 #include "DFGOSREntrypointCreationPhase.h"
+#include "DFGObjectAllocationSinkingPhase.h"
 #include "DFGPhantomCanonicalizationPhase.h"
+#include "DFGPhantomInsertionPhase.h"
 #include "DFGPhantomRemovalPhase.h"
 #include "DFGPredictionInjectionPhase.h"
 #include "DFGPredictionPropagationPhase.h"
+#include "DFGPutStackSinkingPhase.h"
 #include "DFGResurrectionForValidationPhase.h"
 #include "DFGSSAConversionPhase.h"
 #include "DFGSSALoweringPhase.h"
@@ -65,6 +69,7 @@
 #include "DFGTypeCheckHoistingPhase.h"
 #include "DFGUnificationPhase.h"
 #include "DFGValidate.h"
+#include "DFGVarargsForwardingPhase.h"
 #include "DFGVirtualRegisterAllocationPhase.h"
 #include "DFGWatchpointCollectionPhase.h"
 #include "Debugger.h"
@@ -85,10 +90,10 @@
 
 namespace JSC { namespace DFG {
 
-static void dumpAndVerifyGraph(Graph& graph, const char* text)
+static void dumpAndVerifyGraph(Graph& graph, const char* text, bool forceDump = false)
 {
     GraphDumpMode modeForFinalValidate = DumpGraph;
-    if (verboseCompilationEnabled(graph.m_plan.mode)) {
+    if (verboseCompilationEnabled(graph.m_plan.mode) || forceDump) {
         dataLog(text, "\n");
         graph.dump();
         modeForFinalValidate = DontDumpGraph;
@@ -149,7 +154,7 @@ void Plan::compileInThread(LongLivedState& longLivedState, ThreadData* threadDat
     double before = 0;
     CString codeBlockName;
     if (reportCompileTimes()) {
-        before = currentTimeMS();
+        before = monotonicallyIncreasingTimeMS();
         codeBlockName = toCString(*codeBlock);
     }
     
@@ -186,10 +191,10 @@ void Plan::compileInThread(LongLivedState& longLivedState, ThreadData* threadDat
 #endif
             break;
         }
-        double now = currentTimeMS();
+        double now = monotonicallyIncreasingTimeMS();
         dataLog("Optimized ", codeBlockName, " using ", mode, " with ", pathName, " into ", finalizer ? finalizer->codeSize() : 0, " bytes in ", now - before, " ms");
         if (path == FTLPath)
-            dataLog(" (DFG: ", beforeFTL - before, ", LLVM: ", now - beforeFTL, ")");
+            dataLog(" (DFG: ", m_timeBeforeFTL - before, ", LLVM: ", now - m_timeBeforeFTL, ")");
         dataLog(".\n");
     }
 }
@@ -205,7 +210,7 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
     Graph dfg(vm, *this, longLivedState);
     
     if (!parse(dfg)) {
-        finalizer = adoptPtr(new FailedFinalizer(*this));
+        finalizer = std::make_unique<FailedFinalizer>(*this);
         return FailPath;
     }
     
@@ -218,6 +223,11 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
     if (validationEnabled())
         validate(dfg);
     
+    if (Options::dumpGraphAfterParsing()) {
+        dataLog("Graph after parsing:\n");
+        dfg.dump();
+    }
+    
     performCPSRethreading(dfg);
     performUnification(dfg);
     performPredictionInjection(dfg);
@@ -227,7 +237,7 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
     if (mode == FTLForOSREntryMode) {
         bool result = performOSREntrypointCreation(dfg);
         if (!result) {
-            finalizer = adoptPtr(new FailedFinalizer(*this));
+            finalizer = std::make_unique<FailedFinalizer>(*this);
             return FailPath;
         }
         performCPSRethreading(dfg);
@@ -255,7 +265,6 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
         
     performStrengthReduction(dfg);
     performLocalCSE(dfg);
-    performArgumentsSimplification(dfg);
     performCPSRethreading(dfg);
     performCFA(dfg);
     performConstantFolding(dfg);
@@ -267,6 +276,28 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
         validate(dfg);
     
     performCPSRethreading(dfg);
+    if (!isFTL(mode)) {
+        // Only run this if we're not FTLing, because currently for a LoadVarargs that is forwardable and
+        // in a non-varargs inlined call frame, this will generate ForwardVarargs while the FTL
+        // ArgumentsEliminationPhase will create a sequence of GetStack+PutStacks. The GetStack+PutStack
+        // sequence then gets sunk, eliminating anything that looks like an escape for subsequent phases,
+        // while the ForwardVarargs doesn't get simplified until later (or not at all) and looks like an
+        // escape for all of the arguments. This then disables object allocation sinking.
+        //
+        // So, for now, we just disable this phase for the FTL.
+        //
+        // If we wanted to enable it, we'd have to do any of the following:
+        // - Enable ForwardVarargs->GetStack+PutStack strength reduction, and have that run before
+        //   PutStack sinking and object allocation sinking.
+        // - Make VarargsForwarding emit a GetLocal+SetLocal sequence, that we can later turn into
+        //   GetStack+PutStack.
+        //
+        // But, it's not super valuable to enable those optimizations, since the FTL
+        // ArgumentsEliminationPhase does everything that this phase does, and it doesn't introduce this
+        // pathology.
+        
+        changed |= performVarargsForwarding(dfg); // Do this after CFG simplification and CPS rethreading.
+    }
     if (changed) {
         performCFA(dfg);
         performConstantFolding(dfg);
@@ -277,6 +308,7 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
     if (validationEnabled()) {
         dfg.m_dominators.computeIfNecessary(dfg);
         dfg.m_naturalLoops.computeIfNecessary(dfg);
+        dfg.m_prePostNumbering.computeIfNecessary(dfg);
     }
 
     switch (mode) {
@@ -289,19 +321,17 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
         performPhantomRemoval(dfg);
         performCPSRethreading(dfg);
         performDCE(dfg);
+        performPhantomInsertion(dfg);
         performStackLayout(dfg);
         performVirtualRegisterAllocation(dfg);
         performWatchpointCollection(dfg);
         dumpAndVerifyGraph(dfg, "Graph after optimization:");
         
         JITCompiler dataFlowJIT(dfg);
-        if (codeBlock->codeType() == FunctionCode) {
+        if (codeBlock->codeType() == FunctionCode)
             dataFlowJIT.compileFunction();
-            dataFlowJIT.linkFunction();
-        } else {
+        else
             dataFlowJIT.compile();
-            dataFlowJIT.link();
-        }
         
         return DFGPath;
     }
@@ -310,7 +340,7 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
     case FTLForOSREntryMode: {
 #if ENABLE(FTL_JIT)
         if (FTL::canCompile(dfg) == FTL::CannotCompile) {
-            finalizer = adoptPtr(new FailedFinalizer(*this));
+            finalizer = std::make_unique<FailedFinalizer>(*this);
             return FailPath;
         }
         
@@ -320,18 +350,37 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
         performCPSRethreading(dfg);
         performSSAConversion(dfg);
         performSSALowering(dfg);
+        
+        // Ideally, these would be run to fixpoint with the object allocation sinking phase.
+        performArgumentsElimination(dfg);
+        performPutStackSinking(dfg);
+        
         performGlobalCSE(dfg);
         performLivenessAnalysis(dfg);
         performCFA(dfg);
         performConstantFolding(dfg);
         performPhantomCanonicalization(dfg); // Reduce the graph size a lot.
-        if (performStrengthReduction(dfg)) {
+        changed = false;
+        changed |= performStrengthReduction(dfg);
+        if (Options::enableObjectAllocationSinking()) {
+            changed |= performCriticalEdgeBreaking(dfg);
+            changed |= performObjectAllocationSinking(dfg);
+        }
+        if (changed) {
             // State-at-tail and state-at-head will be invalid if we did strength reduction since
             // it might increase live ranges.
             performLivenessAnalysis(dfg);
             performCFA(dfg);
+            performConstantFolding(dfg);
         }
+        
+        // Currently, this relies on pre-headers still being valid. That precludes running CFG
+        // simplification before it, unless we re-created the pre-headers. There wouldn't be anything
+        // wrong with running LICM earlier, if we wanted to put other CFG transforms above this point.
+        // Alternatively, we could run loop pre-header creation after SSA conversion - but if we did that
+        // then we'd need to do some simple SSA fix-up.
         performLICM(dfg);
+        
         performPhantomCanonicalization(dfg);
         performIntegerCheckCombining(dfg);
         performGlobalCSE(dfg);
@@ -346,13 +395,22 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
         performCFA(dfg);
         if (Options::validateFTLOSRExitLiveness())
             performResurrectionForValidation(dfg);
-        performDCE(dfg); // We rely on this to convert dead SetLocals into the appropriate hint, and to kill dead code that won't be recognized as dead by LLVM.
+        if (Options::enableMovHintRemoval()) {
+            performMovHintRemoval(dfg);
+            performPhantomCanonicalization(dfg);
+        }
+        performDCE(dfg); // We rely on this to kill dead code that won't be recognized as dead by LLVM.
         performStackLayout(dfg);
         performLivenessAnalysis(dfg);
         performOSRAvailabilityAnalysis(dfg);
         performWatchpointCollection(dfg);
         
-        dumpAndVerifyGraph(dfg, "Graph just before FTL lowering:");
+        if (FTL::canCompile(dfg) == FTL::CannotCompile) {
+            finalizer = std::make_unique<FailedFinalizer>(*this);
+            return FailPath;
+        }
+
+        dumpAndVerifyGraph(dfg, "Graph just before FTL lowering:", shouldShowDisassembly(mode));
         
         bool haveLLVM;
         Safepoint::Result safepointResult;
@@ -364,15 +422,19 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
             return CancelPath;
         
         if (!haveLLVM) {
-            finalizer = adoptPtr(new FailedFinalizer(*this));
+            if (Options::ftlCrashesIfCantInitializeLLVM()) {
+                dataLog("LLVM can't be initialized.\n");
+                CRASH();
+            }
+            finalizer = std::make_unique<FailedFinalizer>(*this);
             return FailPath;
         }
-            
+
         FTL::State state(dfg);
         FTL::lowerDFGToLLVM(state);
         
         if (reportCompileTimes())
-            beforeFTL = currentTimeMS();
+            m_timeBeforeFTL = monotonicallyIncreasingTimeMS();
         
         if (Options::llvmAlwaysFailsBeforeCompile()) {
             FTL::fail(state);
@@ -387,6 +449,11 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
             FTL::fail(state);
             return FTLPath;
         }
+        
+        if (state.allocationFailed) {
+            FTL::fail(state);
+            return FTLPath;
+        }
 
         if (state.jitCode->stackmaps.stackSize() > Options::llvmMaxStackSize()) {
             FTL::fail(state);
@@ -394,6 +461,12 @@ Plan::CompilationPath Plan::compileInThreadImpl(LongLivedState& longLivedState)
         }
 
         FTL::link(state);
+        
+        if (state.allocationFailed) {
+            FTL::fail(state);
+            return FTLPath;
+        }
+        
         return FTLPath;
 #else
         RELEASE_ASSERT_NOT_REACHED();
@@ -513,7 +586,7 @@ void Plan::cancel()
     profiledDFGCodeBlock = nullptr;
     mustHandleValues.clear();
     compilation = nullptr;
-    finalizer.clear();
+    finalizer = nullptr;
     inlineCallFrames = nullptr;
     watchpoints = DesiredWatchpoints();
     identifiers = DesiredIdentifiers();

@@ -1,3 +1,169 @@
+2015-04-28  Ryuan Choi  <ryuan.choi@navercorp.com>
+
+        Add naver to team.html
+        https://bugs.webkit.org/show_bug.cgi?id=144298
+
+        Reviewed by Gyuyoung Kim.
+
+        * team.html:
+
+2015-04-27  Benjamin Poulain  <bpoulain@apple.com>
+
+        Status page: fix the email links
+
+        * status.html:
+
+2015-04-26  Benjamin Poulain  <benjamin@webkit.org>
+
+        Improve the status page
+        https://bugs.webkit.org/show_bug.cgi?id=144248
+
+        Reviewed by Darin Adler.
+
+        * status.html:
+        Lots of minor changes:
+        -Add a page title.
+        -Do not use sync XHR. That was nice for testing but that's eveil
+         and it breaks Firefox.
+        -Start fetching the json files as soon as possible during page load,
+         that server takes forever to respond.
+        -Remove some useless CSS.
+        -Get rid of mustache. That template thing was awesome but it took
+         up to 600ms to fetch the file (plus it is not exactly efficient).
+        -Put both the specifications and the features in the list.
+         They are referencing each other with links. That seems to work pretty well.
+        -Use the keywords for filtering.
+
+2015-04-26  Benjamin Poulain  <benjamin@webkit.org>, Chris Bateman  <chrisb808@gmail.com>
+
+        Start a basic status page on webkit.org
+        https://bugs.webkit.org/show_bug.cgi?id=143940
+
+        Reviewed by Darin Adler.
+
+        * status.html: Added.
+        Nothing fancy, for now just show the "features" list of the two features.json
+
+2015-04-19  Dan Bernstein  <mitz@apple.com>
+
+        Fixed a typo.
+
+        * coding/RefPtr.html:
+
+2015-04-19  Darin Adler  <darin@apple.com>
+
+        Update RefPtr documentation and deprecation
+        https://bugs.webkit.org/show_bug.cgi?id=143936
+
+        Reviewed by Andreas Kling.
+
+        * coding/RefPtr.html: Updated.
+
+2015-03-10  Joseph Pecoraro  <pecoraro@apple.com>
+
+        Fix warning about loading insecure content from secure webkit.org/blog
+        https://bugs.webkit.org/show_bug.cgi?id=142545
+
+        Reviewed by Mark Rowe.
+
+        * blog/wp-content/themes/webkit/footer.php:
+        Use an "https" URL for the subresource, instead of "http".
+
+2015-02-20  Alexey Proskuryakov  <ap@apple.com>
+
+        Remove svn:keywords property.
+
+        As far as I can tell, the property had no effect on any of these files, but also,
+        when it has effect it's likely harmful.
+
+        * demos/srcset/index.html: Removed property svn:keywords.
+        * specs/index.html: Removed property svn:keywords.
+
+2015-02-13  Csaba Osztrogonác  <ossy@webkit.org>
+
+        Unreviewed, remove empty directories.
+
+        * blog/wp-includes/js/codepress: Removed.
+
+2015-02-03  Byungseon Shin  <sun.shin@webkit.org>
+
+        Add LG Electronics to team.html
+        https://bugs.webkit.org/show_bug.cgi?id=141227
+
+        Reviewed by Andreas Kling.
+
+        * team.html:
+
+2015-01-30  Chris Dumez  <cdumez@apple.com>
+
+        Add "Singleton pattern" section to the WebKit coding style
+        https://bugs.webkit.org/show_bug.cgi?id=141040
+
+        Reviewed by Ryosuke Niwa.
+
+        Add "Singleton pattern" section to the WebKit coding style to document
+        what was discussed on webkit-dev:
+        https://lists.webkit.org/pipermail/webkit-dev/2015-January/027199.html
+
+        * coding/coding-style.html:
+
+2015-01-27  Daniel Bates  <dabates@apple.com>
+
+        Update Xcode requirement and add instructions to build, run, and debug WebKit for iOS Simulator
+
+        Reviewed by David Kilzer.
+
+        * building/build.html: Added instructions to build WebKit for iOS Simulator.
+        * building/debug.html: Added some instructions to debug the UIProcess and WebProcess
+        in the iOS Simulator using command line tools. We should look to add Xcode instructions
+        and simplify these steps once we teach debug-safari about the iOS Simulator.
+        * building/run.html: Added remark to run Safari in the iOS Simulator.
+        * building/tools.html: Require Xcode 6.1.1 (for the iOS 8.1 SDK) to build for iOS Simulator.
+        * css/main.css: Define the .ios-instructions class with the same style as other .*-instructions classes.
+
+2014-09-27  Dan Bernstein  <mitz@apple.com>
+
+        WebKit top of tree sources won't build in 10.9 w/ Xcode 6.0.1
+        https://bugs.webkit.org/show_bug.cgi?id=137053
+
+        Reviewed by Mark Rowe.
+
+        * building/build.html: Removed instructions how to work around this bug, now that it’s fixed.
+
+2014-09-26  Alexey Proskuryakov  <ap@apple.com>
+
+        WebKit top of tree sources won't build in 10.9 w/ Xcode 6.0.1
+        https://bugs.webkit.org/show_bug.cgi?id=137053
+
+        Patch by David Gatwood. Reviewed, tweaked and landed by Alexey Proskuryakov.
+
+        Explain that to build from Xcode, one needs to build from command line once first.
+
+        Removed a Windows section that explained how to launch cygwin shell, which was
+        silly given that we then link to a long document explaining further steps.
+
+        * building/build.html:
+
+2014-09-24  Langó László  <llango.u-szeged@partner.samsung.com>
+
+        Update the list of u-szeged contributors.
+
+        Rubber-stamped by Csaba Osztrogonác <ossy@webkit.org>.
+
+        * team.html:
+
+2014-09-18  Dean Jackson  <dino@apple.com>
+
+        Expand the srcset demo to have 3x and 4x images.
+
+        Unreviewed.
+
+        * demos/srcset/image-1x.png:
+        * demos/srcset/image-2x.png:
+        * demos/srcset/image-3x.png: Added.
+        * demos/srcset/image-4x.png: Added.
+        * demos/srcset/index.html:
+
 2014-08-27  Conrad Shultz  <conrad_shultz@apple.com>
 
         webkit.org is inconsistent in uses of "OS X" vs. "Mac OS X"

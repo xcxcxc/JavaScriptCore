@@ -24,6 +24,7 @@
 #include "XMLHttpRequest.h"
 
 #include "Blob.h"
+#include "CachedResourceRequestInitiators.h"
 #include "ContentSecurityPolicy.h"
 #include "CrossOriginAccessControl.h"
 #include "DOMFormData.h"
@@ -43,6 +44,7 @@
 #include "ResourceError.h"
 #include "ResourceRequest.h"
 #include "ScriptController.h"
+#include "SecurityOriginPolicy.h"
 #include "Settings.h"
 #include "SharedBuffer.h"
 #include "TextResourceDecoder.h"
@@ -62,10 +64,6 @@
 #include <wtf/RefCountedLeakCounter.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
-
-#if ENABLE(RESOURCE_TIMING)
-#include "CachedResourceRequestInitiators.h"
-#endif
 
 namespace WebCore {
 
@@ -111,12 +109,11 @@ static void logConsoleError(ScriptExecutionContext* context, const String& messa
     context->addConsoleMessage(MessageSource::JS, MessageLevel::Error, message);
 }
 
-PassRefPtr<XMLHttpRequest> XMLHttpRequest::create(ScriptExecutionContext& context)
+Ref<XMLHttpRequest> XMLHttpRequest::create(ScriptExecutionContext& context)
 {
-    RefPtr<XMLHttpRequest> xmlHttpRequest(adoptRef(new XMLHttpRequest(context)));
+    Ref<XMLHttpRequest> xmlHttpRequest = adoptRef(*new XMLHttpRequest(context));
     xmlHttpRequest->suspendIfNeeded();
-
-    return xmlHttpRequest.release();
+    return xmlHttpRequest;
 }
 
 XMLHttpRequest::XMLHttpRequest(ScriptExecutionContext& context)
@@ -139,6 +136,8 @@ XMLHttpRequest::XMLHttpRequest(ScriptExecutionContext& context)
     , m_progressEventThrottle(this)
     , m_responseTypeCode(ResponseTypeDefault)
     , m_responseCacheIsValid(false)
+    , m_resumeTimer(*this, &XMLHttpRequest::resumeTimerFired)
+    , m_dispatchErrorOnResuming(false)
 {
 #ifndef NDEBUG
     xmlHttpRequestCounter.increment();
@@ -155,7 +154,7 @@ XMLHttpRequest::~XMLHttpRequest()
 Document* XMLHttpRequest::document() const
 {
     ASSERT(scriptExecutionContext());
-    return toDocument(scriptExecutionContext());
+    return downcast<Document>(scriptExecutionContext());
 }
 
 SecurityOrigin* XMLHttpRequest::securityOrigin() const
@@ -206,7 +205,8 @@ Document* XMLHttpRequest::responseXML(ExceptionCode& ec)
         return nullptr;
 
     if (!m_createdDocument) {
-        bool isHTML = equalIgnoringCase(responseMIMEType(), "text/html");
+        String mimeType = responseMIMEType();
+        bool isHTML = equalIgnoringCase(mimeType, "text/html");
 
         // The W3C spec requires the final MIME type to be some valid XML type, or text/html.
         // If it is text/html, then the responseType of "document" must have been supplied explicitly.
@@ -221,7 +221,9 @@ Document* XMLHttpRequest::responseXML(ExceptionCode& ec)
                 m_responseDocument = Document::create(0, m_url);
             // FIXME: Set Last-Modified.
             m_responseDocument->setContent(m_responseBuilder.toStringPreserveCapacity());
-            m_responseDocument->setSecurityOrigin(securityOrigin());
+            m_responseDocument->setSecurityOriginPolicy(scriptExecutionContext()->securityOriginPolicy());
+            m_responseDocument->overrideMIMEType(mimeType);
+
             if (!m_responseDocument->wellFormed())
                 m_responseDocument = 0;
         }
@@ -335,6 +337,14 @@ String XMLHttpRequest::responseType()
     return "";
 }
 
+String XMLHttpRequest::responseURL() const
+{
+    URL responseURL(m_response.url());
+    responseURL.removeFragmentIdentifier();
+
+    return responseURL.string();
+}
+
 void XMLHttpRequest::setLastSendLineAndColumnNumber(unsigned lineNumber, unsigned columnNumber)
 {
     m_lastSendLineNumber = lineNumber;
@@ -361,14 +371,14 @@ void XMLHttpRequest::callReadyStateChangeListener()
     if (!scriptExecutionContext())
         return;
 
-    InspectorInstrumentationCookie cookie = InspectorInstrumentation::willDispatchXHRReadyStateChangeEvent(scriptExecutionContext(), this);
+    InspectorInstrumentationCookie cookie = InspectorInstrumentation::willDispatchXHRReadyStateChangeEvent(scriptExecutionContext(), *this);
 
     if (m_async || (m_state <= OPENED || m_state == DONE))
         m_progressEventThrottle.dispatchReadyStateChangeEvent(Event::create(eventNames().readystatechangeEvent, false, false), m_state == DONE ? FlushProgressEvent : DoNotFlushProgressEvent);
 
     InspectorInstrumentation::didDispatchXHRReadyStateChangeEvent(cookie);
     if (m_state == DONE && !m_error) {
-        InspectorInstrumentationCookie cookie = InspectorInstrumentation::willDispatchXHRLoadEvent(scriptExecutionContext(), this);
+        InspectorInstrumentationCookie cookie = InspectorInstrumentation::willDispatchXHRLoadEvent(scriptExecutionContext(), *this);
         m_progressEventThrottle.dispatchProgressEvent(eventNames().loadEvent);
         InspectorInstrumentation::didDispatchXHRLoadEvent(cookie);
         m_progressEventThrottle.dispatchProgressEvent(eventNames().loadendEvent);
@@ -463,7 +473,9 @@ void XMLHttpRequest::open(const String& method, const URL& url, ExceptionCode& e
 
 void XMLHttpRequest::open(const String& method, const URL& url, bool async, ExceptionCode& ec)
 {
-    internalAbort();
+    if (!internalAbort())
+        return;
+
     State previousState = m_state;
     m_state = UNSENT;
     m_error = false;
@@ -487,10 +499,10 @@ void XMLHttpRequest::open(const String& method, const URL& url, bool async, Exce
 
     // FIXME: Convert this to check the isolated world's Content Security Policy once webkit.org/b/104520 is solved.
     bool shouldBypassMainWorldContentSecurityPolicy = false;
-    if (scriptExecutionContext()->isDocument()) {
-        Document* document = toDocument(scriptExecutionContext());
-        if (document->frame())
-            shouldBypassMainWorldContentSecurityPolicy = document->frame()->script().shouldBypassMainWorldContentSecurityPolicy();
+    if (is<Document>(*scriptExecutionContext())) {
+        Document& document = downcast<Document>(*scriptExecutionContext());
+        if (document.frame())
+            shouldBypassMainWorldContentSecurityPolicy = document.frame()->script().shouldBypassMainWorldContentSecurityPolicy();
     }
     if (!shouldBypassMainWorldContentSecurityPolicy && !scriptExecutionContext()->contentSecurityPolicy()->allowConnectToSource(url)) {
         // FIXME: Should this be throwing an exception?
@@ -706,13 +718,6 @@ void XMLHttpRequest::sendBytesData(const void* data, size_t length, ExceptionCod
     createRequest(ec);
 }
 
-void XMLHttpRequest::sendForInspectorXHRReplay(PassRefPtr<FormData> formData, ExceptionCode& ec)
-{
-    m_requestEntityBody = formData ? formData->deepCopy() : 0;
-    createRequest(ec);
-    m_exceptionCode = ec;
-}
-
 void XMLHttpRequest::createRequest(ExceptionCode& ec)
 {
     // Only GET request is supported for blob URL.
@@ -742,8 +747,6 @@ void XMLHttpRequest::createRequest(ExceptionCode& ec)
     ResourceRequest request(m_url);
     request.setHTTPMethod(m_method);
 
-    InspectorInstrumentation::willLoadXHR(scriptExecutionContext(), this, m_method, m_url, m_async, m_requestEntityBody ? m_requestEntityBody->deepCopy() : 0, m_requestHeaders, m_includeCredentials);
-
     if (m_requestEntityBody) {
         ASSERT(m_method != "GET");
         ASSERT(m_method != "HEAD");
@@ -760,9 +763,7 @@ void XMLHttpRequest::createRequest(ExceptionCode& ec)
     options.setAllowCredentials((m_sameOriginRequest || m_includeCredentials) ? AllowStoredCredentials : DoNotAllowStoredCredentials);
     options.crossOriginRequestPolicy = UseAccessControl;
     options.securityOrigin = securityOrigin();
-#if ENABLE(RESOURCE_TIMING)
     options.initiator = cachedResourceRequestInitiators().xmlhttprequest;
-#endif
 
 #if ENABLE(XHR_TIMEOUT)
     if (m_timeoutMilliseconds)
@@ -805,7 +806,8 @@ void XMLHttpRequest::abort()
 
     bool sendFlag = m_loader;
 
-    internalAbort();
+    if (!internalAbort())
+        return;
 
     clearResponseBuffers();
 
@@ -823,26 +825,33 @@ void XMLHttpRequest::abort()
     dispatchErrorEvents(eventNames().abortEvent);
 }
 
-void XMLHttpRequest::internalAbort()
+bool XMLHttpRequest::internalAbort()
 {
-    bool hadLoader = m_loader;
-
     m_error = true;
 
     // FIXME: when we add the support for multi-part XHR, we will have to think be careful with this initialization.
     m_receivedLength = 0;
 
-    if (hadLoader) {
-        m_loader->cancel();
-        m_loader = 0;
-    }
-
     m_decoder = 0;
 
-    InspectorInstrumentation::didFailXHRLoading(scriptExecutionContext(), this);
+    if (!m_loader)
+        return true;
 
-    if (hadLoader)
-        dropProtection();
+    // Cancelling m_loader may trigger a window.onload callback which can call open() on the same xhr.
+    // This would create internalAbort reentrant call.
+    // m_loader is set to null before being cancelled to exit early in any reentrant internalAbort() call.
+    RefPtr<ThreadableLoader> loader = m_loader.release();
+    loader->cancel();
+
+    // If window.onload callback calls open() and send() on the same xhr, m_loader is now set to a new value.
+    // The function calling internalAbort() should abort to let the open() and send() calls continue properly.
+    // We ask the function calling internalAbort() to exit by returning false.
+    // Save this information to a local variable since we are going to drop protection.
+    bool newLoadStarted = m_loader;
+
+    dropProtection();
+
+    return !newLoadStarted;
 }
 
 void XMLHttpRequest::clearResponse()
@@ -901,7 +910,9 @@ void XMLHttpRequest::dropProtection()
     // report the extra cost at that point.
     JSC::VM& vm = scriptExecutionContext()->vm();
     JSC::JSLockHolder lock(vm);
-    vm.heap.reportExtraMemoryCost(m_responseBuilder.length() * 2);
+    // FIXME: Adopt reportExtraMemoryVisited, and switch to reportExtraMemoryAllocated.
+    // https://bugs.webkit.org/show_bug.cgi?id=142595
+    vm.heap.deprecatedReportExtraMemory(m_responseBuilder.length() * 2);
 
     unsetPendingActivity(this);
 }
@@ -1218,7 +1229,8 @@ void XMLHttpRequest::didTimeout()
 {
     // internalAbort() calls dropProtection(), which may release the last reference.
     Ref<XMLHttpRequest> protect(*this);
-    internalAbort();
+    if (!internalAbort())
+        return;
 
     clearResponse();
     clearRequest();
@@ -1238,19 +1250,54 @@ void XMLHttpRequest::didTimeout()
 }
 #endif
 
-bool XMLHttpRequest::canSuspend() const
+bool XMLHttpRequest::canSuspendForPageCache() const
 {
-    return !m_loader;
+    // If the load event has not fired yet, cancelling the load in suspend() may cause
+    // the load event to be fired and arbitrary JS execution, which would be unsafe.
+    // Therefore, we prevent suspending in this case.
+    return document()->loadEventFinished();
 }
 
-void XMLHttpRequest::suspend(ReasonForSuspension)
+const char* XMLHttpRequest::activeDOMObjectName() const
+{
+    return "XMLHttpRequest";
+}
+
+void XMLHttpRequest::suspend(ReasonForSuspension reason)
 {
     m_progressEventThrottle.suspend();
+
+    if (m_resumeTimer.isActive()) {
+        m_resumeTimer.stop();
+        m_dispatchErrorOnResuming = true;
+    }
+
+    if (reason == ActiveDOMObject::PageCache && m_loader) {
+        // Going into PageCache, abort the request and dispatch a network error on resuming.
+        genericError();
+        m_dispatchErrorOnResuming = true;
+        bool aborted = internalAbort();
+        // It should not be possible to restart the load when aborting in suspend() because
+        // we are not allowed to execute in JS in suspend().
+        ASSERT_UNUSED(aborted, aborted);
+    }
 }
 
 void XMLHttpRequest::resume()
 {
     m_progressEventThrottle.resume();
+
+    // We are not allowed to execute arbitrary JS in resume() so dispatch
+    // the error event in a timer.
+    if (m_dispatchErrorOnResuming && !m_resumeTimer.isActive())
+        m_resumeTimer.startOneShot(0);
+}
+
+void XMLHttpRequest::resumeTimerFired()
+{
+    ASSERT(m_dispatchErrorOnResuming);
+    m_dispatchErrorOnResuming = false;
+    dispatchErrorEvents(eventNames().errorEvent);
 }
 
 void XMLHttpRequest::stop()

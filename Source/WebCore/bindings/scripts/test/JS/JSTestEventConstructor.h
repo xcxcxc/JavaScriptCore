@@ -23,23 +23,25 @@
 
 #include "JSDOMWrapper.h"
 #include "TestEventConstructor.h"
+#include <wtf/NeverDestroyed.h>
 
 namespace WebCore {
 
 class JSDictionary;
 
-class JSTestEventConstructor : public JSDOMWrapper {
+class WEBCORE_EXPORT JSTestEventConstructor : public JSDOMWrapper {
 public:
     typedef JSDOMWrapper Base;
-    static JSTestEventConstructor* create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, PassRefPtr<TestEventConstructor> impl)
+    static JSTestEventConstructor* create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, Ref<TestEventConstructor>&& impl)
     {
-        JSTestEventConstructor* ptr = new (NotNull, JSC::allocateCell<JSTestEventConstructor>(globalObject->vm().heap)) JSTestEventConstructor(structure, globalObject, impl);
+        JSTestEventConstructor* ptr = new (NotNull, JSC::allocateCell<JSTestEventConstructor>(globalObject->vm().heap)) JSTestEventConstructor(structure, globalObject, WTF::move(impl));
         ptr->finishCreation(globalObject->vm());
         return ptr;
     }
 
     static JSC::JSObject* createPrototype(JSC::VM&, JSC::JSGlobalObject*);
     static JSC::JSObject* getPrototype(JSC::VM&, JSC::JSGlobalObject*);
+    static TestEventConstructor* toWrapped(JSC::JSValue);
     static void destroy(JSC::JSCell*);
     ~JSTestEventConstructor();
 
@@ -65,7 +67,7 @@ public:
 private:
     TestEventConstructor* m_impl;
 protected:
-    JSTestEventConstructor(JSC::Structure*, JSDOMGlobalObject*, PassRefPtr<TestEventConstructor>);
+    JSTestEventConstructor(JSC::Structure*, JSDOMGlobalObject*, Ref<TestEventConstructor>&&);
 
     void finishCreation(JSC::VM& vm)
     {
@@ -83,17 +85,12 @@ public:
 
 inline JSC::WeakHandleOwner* wrapperOwner(DOMWrapperWorld&, TestEventConstructor*)
 {
-    DEPRECATED_DEFINE_STATIC_LOCAL(JSTestEventConstructorOwner, jsTestEventConstructorOwner, ());
-    return &jsTestEventConstructorOwner;
-}
-
-inline void* wrapperContext(DOMWrapperWorld& world, TestEventConstructor*)
-{
-    return &world;
+    static NeverDestroyed<JSTestEventConstructorOwner> owner;
+    return &owner.get();
 }
 
 WEBCORE_EXPORT JSC::JSValue toJS(JSC::ExecState*, JSDOMGlobalObject*, TestEventConstructor*);
-WEBCORE_EXPORT TestEventConstructor* toTestEventConstructor(JSC::JSValue);
+inline JSC::JSValue toJS(JSC::ExecState* exec, JSDOMGlobalObject* globalObject, TestEventConstructor& impl) { return toJS(exec, globalObject, &impl); }
 
 bool fillTestEventConstructorInit(TestEventConstructorInit&, JSDictionary&);
 

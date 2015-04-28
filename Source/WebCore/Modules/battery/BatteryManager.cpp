@@ -32,7 +32,7 @@
 
 namespace WebCore {
 
-PassRef<BatteryManager> BatteryManager::create(Navigator* navigator)
+Ref<BatteryManager> BatteryManager::create(Navigator* navigator)
 {
     auto batteryManager = adoptRef(*new BatteryManager(navigator));
     batteryManager.get().suspendIfNeeded();
@@ -86,6 +86,11 @@ void BatteryManager::didChangeBatteryStatus(PassRefPtr<Event> event, PassRefPtr<
 void BatteryManager::updateBatteryStatus(PassRefPtr<BatteryStatus> batteryStatus)
 {
     m_batteryStatus = batteryStatus;
+}
+
+bool BatteryManager::canSuspendForPageCache() const
+{
+    return true;
 }
 
 void BatteryManager::suspend(ReasonForSuspension)

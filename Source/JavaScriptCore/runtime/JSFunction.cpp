@@ -1,7 +1,7 @@
 /*
  *  Copyright (C) 1999-2002 Harri Porten (porten@kde.org)
  *  Copyright (C) 2001 Peter Kelly (pmk@post.com)
- *  Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2015 Apple Inc. All rights reserved.
  *  Copyright (C) 2007 Cameron Zwarich (cwzwarich@uwaterloo.ca)
  *  Copyright (C) 2007 Maks Orlovich
  *
@@ -25,7 +25,7 @@
 #include "config.h"
 #include "JSFunction.h"
 
-#include "Arguments.h"
+#include "ClonedArguments.h"
 #include "CodeBlock.h"
 #include "CommonIdentifiers.h"
 #include "CallFrame.h"
@@ -34,14 +34,13 @@
 #include "GetterSetter.h"
 #include "JSArray.h"
 #include "JSBoundFunction.h"
+#include "JSCInlines.h"
 #include "JSFunctionInlines.h"
 #include "JSGlobalObject.h"
-#include "JSNameScope.h" 
 #include "JSNotAnObject.h"
 #include "Interpreter.h"
 #include "ObjectConstructor.h"
 #include "ObjectPrototype.h"
-#include "JSCInlines.h"
 #include "Parser.h"
 #include "PropertyNameArray.h"
 #include "StackVisitor.h"
@@ -58,6 +57,13 @@ const ClassInfo JSFunction::s_info = { "Function", &Base::s_info, 0, CREATE_METH
 bool JSFunction::isHostFunctionNonInline() const
 {
     return isHostFunction();
+}
+
+JSFunction* JSFunction::create(VM& vm, FunctionExecutable* executable, JSScope* scope)
+{
+    JSFunction* result = createImpl(vm, executable, scope);
+    executable->singletonFunction()->notifyWrite(vm, result, "Allocating a function");
+    return result;
 }
 
 JSFunction* JSFunction::create(VM& vm, JSGlobalObject* globalObject, int length, const String& name, NativeFunction nativeFunction, Intrinsic intrinsic, NativeFunction nativeConstructor)
@@ -79,24 +85,9 @@ JSFunction* JSFunction::create(VM& vm, JSGlobalObject* globalObject, int length,
     return function;
 }
 
-void JSFunction::destroy(JSCell* cell)
-{
-    static_cast<JSFunction*>(cell)->JSFunction::~JSFunction();
-}
-
 JSFunction::JSFunction(VM& vm, JSGlobalObject* globalObject, Structure* structure)
     : Base(vm, globalObject, structure)
     , m_executable()
-    // We initialize blind so that changes to the prototype after function creation but before
-    // the optimizer kicks in don't disable optimizations. Once the optimizer kicks in, the
-    // watchpoint will start watching and any changes will both force deoptimization and disable
-    // future attempts to optimize. This is necessary because we are guaranteed that the
-    // allocation profile is changed exactly once prior to optimizations kicking in. We could be
-    // smarter and count the number of times the prototype is clobbered and only optimize if it
-    // was clobbered exactly once, but that seems like overkill. In almost all cases it will be
-    // clobbered once, and if it's clobbered more than once, that will probably only occur
-    // before we started optimizing, anyway.
-    , m_allocationProfileWatchpoint(ClearWatchpoint)
 {
 }
 
@@ -109,16 +100,6 @@ void JSFunction::finishCreation(VM& vm, NativeExecutable* executable, int length
     putDirect(vm, vm.propertyNames->length, jsNumber(length), DontDelete | ReadOnly | DontEnum);
 }
 
-void JSFunction::addNameScopeIfNeeded(VM& vm)
-{
-    FunctionExecutable* executable = jsCast<FunctionExecutable*>(m_executable.get());
-    if (!functionNameIsInScope(executable->name(), executable->functionMode()))
-        return;
-    if (!functionNameScopeIsDynamic(executable->usesEval(), executable->isStrictMode()))
-        return;
-    setScope(vm, JSNameScope::create(vm, scope()->globalObject(), executable->name(), this, ReadOnly | DontDelete, scope()));
-}
-
 JSFunction* JSFunction::createBuiltinFunction(VM& vm, FunctionExecutable* executable, JSGlobalObject* globalObject)
 {
     JSFunction* function = create(vm, executable, globalObject);
@@ -127,14 +108,32 @@ JSFunction* JSFunction::createBuiltinFunction(VM& vm, FunctionExecutable* execut
     return function;
 }
 
-ObjectAllocationProfile* JSFunction::createAllocationProfile(ExecState* exec, size_t inlineCapacity)
+FunctionRareData* JSFunction::allocateAndInitializeRareData(ExecState* exec, size_t inlineCapacity)
 {
+    ASSERT(!m_rareData);
     VM& vm = exec->vm();
     JSObject* prototype = jsDynamicCast<JSObject*>(get(exec, vm.propertyNames->prototype));
     if (!prototype)
         prototype = globalObject()->objectPrototype();
-    m_allocationProfile.initialize(globalObject()->vm(), this, prototype, inlineCapacity);
-    return &m_allocationProfile;
+    FunctionRareData* rareData = FunctionRareData::create(vm, prototype, inlineCapacity);
+
+    // A DFG compilation thread may be trying to read the rare data
+    // We want to ensure that it sees it properly allocated
+    WTF::storeStoreFence();
+
+    m_rareData.set(vm, this, rareData);
+    return m_rareData.get();
+}
+
+FunctionRareData* JSFunction::initializeRareData(ExecState* exec, size_t inlineCapacity)
+{
+    ASSERT(!!m_rareData);
+    VM& vm = exec->vm();
+    JSObject* prototype = jsDynamicCast<JSObject*>(get(exec, vm.propertyNames->prototype));
+    if (!prototype)
+        prototype = globalObject()->objectPrototype();
+    m_rareData->initialize(globalObject()->vm(), prototype, inlineCapacity);
+    return m_rareData.get();
 }
 
 String JSFunction::name(ExecState* exec)
@@ -180,7 +179,8 @@ void JSFunction::visitChildren(JSCell* cell, SlotVisitor& visitor)
     Base::visitChildren(thisObject, visitor);
 
     visitor.append(&thisObject->m_executable);
-    thisObject->m_allocationProfile.visitAggregate(visitor);
+    if (thisObject->m_rareData)
+        visitor.append(&thisObject->m_rareData);
 }
 
 CallType JSFunction::getCallData(JSCell* cell, CallData& callData)
@@ -380,7 +380,7 @@ bool JSFunction::getOwnPropertySlot(JSObject* object, ExecState* exec, PropertyN
 void JSFunction::getOwnNonIndexPropertyNames(JSObject* object, ExecState* exec, PropertyNameArray& propertyNames, EnumerationMode mode)
 {
     JSFunction* thisObject = jsCast<JSFunction*>(object);
-    if (!thisObject->isHostOrBuiltinFunction() && shouldIncludeDontEnumProperties(mode)) {
+    if (!thisObject->isHostOrBuiltinFunction() && mode.includeDontEnumProperties()) {
         VM& vm = exec->vm();
         // Make sure prototype has been reified.
         PropertySlot slot(thisObject);
@@ -406,9 +406,9 @@ void JSFunction::put(JSCell* cell, ExecState* exec, PropertyName propertyName, J
         // following the rules set out in ECMA-262 8.12.9.
         PropertySlot slot(thisObject);
         thisObject->methodTable(exec->vm())->getOwnPropertySlot(thisObject, exec, propertyName, slot);
-        thisObject->m_allocationProfile.clear();
-        thisObject->m_allocationProfileWatchpoint.fireAll("Store to prototype property of a function");
-        // Don't allow this to be cached, since a [[Put]] must clear m_allocationProfile.
+        if (thisObject->m_rareData)
+            thisObject->m_rareData->clear("Store to prototype property of a function");
+        // Don't allow this to be cached, since a [[Put]] must clear m_rareData.
         PutPropertySlot dontCache(thisObject);
         Base::put(thisObject, exec, propertyName, value, dontCache);
         return;
@@ -453,8 +453,8 @@ bool JSFunction::defineOwnProperty(JSObject* object, ExecState* exec, PropertyNa
         // following the rules set out in ECMA-262 8.12.9.
         PropertySlot slot(thisObject);
         thisObject->methodTable(exec->vm())->getOwnPropertySlot(thisObject, exec, propertyName, slot);
-        thisObject->m_allocationProfile.clear();
-        thisObject->m_allocationProfileWatchpoint.fireAll("Store to prototype property of a function");
+        if (thisObject->m_rareData)
+            thisObject->m_rareData->clear("Store to prototype property of a function");
         return Base::defineOwnProperty(object, exec, propertyName, descriptor, throwException);
     }
 
@@ -514,6 +514,10 @@ bool JSFunction::defineOwnProperty(JSObject* object, ExecState* exec, PropertyNa
 ConstructType JSFunction::getConstructData(JSCell* cell, ConstructData& constructData)
 {
     JSFunction* thisObject = jsCast<JSFunction*>(cell);
+
+    if (thisObject->isBuiltinFunction())
+        return ConstructTypeNone;
+
     if (thisObject->isHostFunction()) {
         constructData.native.function = thisObject->nativeConstructor();
         return ConstructTypeHost;

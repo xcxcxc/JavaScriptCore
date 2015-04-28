@@ -68,7 +68,10 @@ private:
 
 static bool parseScript(VM* vm, const SourceCode& source, ParserError& error)
 {
-    return JSC::parse<JSC::ProgramNode>(vm, source, 0, Identifier(), JSParseNormal, JSParseProgramCode, error);
+    return !!JSC::parse<JSC::ProgramNode>(
+        vm, source, 0, Identifier(), JSParserBuiltinMode::NotBuiltin, 
+        JSParserStrictMode::NotStrict, JSParserCodeType::Program, 
+        error);
 }
 
 extern "C" {
@@ -89,10 +92,10 @@ JSScriptRef JSScriptCreateReferencingImmortalASCIIText(JSContextGroupRef context
     ParserError error;
     if (!parseScript(vm, SourceCode(result), error)) {
         if (errorMessage)
-            *errorMessage = OpaqueJSString::create(error.m_message).leakRef();
+            *errorMessage = OpaqueJSString::create(error.message()).leakRef();
         if (errorLine)
-            *errorLine = error.m_line;
-        return 0;
+            *errorLine = error.line();
+        return nullptr;
     }
 
     return result.release().leakRef();
@@ -110,10 +113,10 @@ JSScriptRef JSScriptCreateFromString(JSContextGroupRef contextGroup, JSStringRef
     ParserError error;
     if (!parseScript(vm, SourceCode(result), error)) {
         if (errorMessage)
-            *errorMessage = OpaqueJSString::create(error.m_message).leakRef();
+            *errorMessage = OpaqueJSString::create(error.message()).leakRef();
         if (errorLine)
-            *errorLine = error.m_line;
-        return 0;
+            *errorLine = error.line();
+        return nullptr;
     }
 
     return result.release().leakRef();

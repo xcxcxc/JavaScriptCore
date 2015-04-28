@@ -53,7 +53,6 @@ using namespace WebCore;
 
 WebVideoFullscreenModelVideoElement::WebVideoFullscreenModelVideoElement()
     : EventListener(EventListener::CPPEventListenerType)
-    , m_isListening(false)
 {
 }
 
@@ -61,10 +60,33 @@ WebVideoFullscreenModelVideoElement::~WebVideoFullscreenModelVideoElement()
 {
 }
 
+void WebVideoFullscreenModelVideoElement::setWebVideoFullscreenInterface(WebVideoFullscreenInterface* interface)
+{
+    if (interface == m_videoFullscreenInterface)
+        return;
+
+    m_videoFullscreenInterface = interface;
+
+    if (m_videoFullscreenInterface) {
+        m_videoFullscreenInterface->resetMediaState();
+        if (m_videoElement)
+            m_videoFullscreenInterface->setVideoDimensions(true, m_videoElement->videoWidth(), m_videoElement->videoHeight());
+    }
+}
+
 void WebVideoFullscreenModelVideoElement::setVideoElement(HTMLVideoElement* videoElement)
 {
     if (m_videoElement == videoElement)
         return;
+
+    if (m_videoFullscreenInterface)
+        m_videoFullscreenInterface->resetMediaState();
+
+    if (m_videoElement && m_videoElement->fullscreenMode())
+        m_videoElement->fullscreenModeChanged(HTMLMediaElement::VideoFullscreenModeNone);
+
+    if (m_videoElement && m_videoElement->videoFullscreenLayer())
+        m_videoElement->setVideoFullscreenLayer(nullptr);
 
     if (m_videoElement && m_isListening) {
         for (auto eventName : observedEventNames())
@@ -83,7 +105,8 @@ void WebVideoFullscreenModelVideoElement::setVideoElement(HTMLVideoElement* vide
 
     updateForEventName(eventNameAll());
 
-    m_videoFullscreenInterface->setVideoDimensions(true, videoElement->videoWidth(), videoElement->videoHeight());
+    if (m_videoFullscreenInterface)
+        m_videoFullscreenInterface->setVideoDimensions(true, videoElement->videoWidth(), videoElement->videoHeight());
 }
 
 void WebVideoFullscreenModelVideoElement::handleEvent(WebCore::ScriptExecutionContext*, WebCore::Event* event)
@@ -116,6 +139,7 @@ void WebVideoFullscreenModelVideoElement::updateForEventName(const WTF::AtomicSt
     if (all
         || eventName == eventNames().timeupdateEvent) {
         m_videoFullscreenInterface->setCurrentTime(m_videoElement->currentTime(), [[NSProcessInfo processInfo] systemUptime]);
+        m_videoFullscreenInterface->setBufferedTime(m_videoElement->maxBufferedTime());
         // FIXME: 130788 - find a better event to update seekable ranges from.
         m_videoFullscreenInterface->setSeekableRanges(*m_videoElement->seekable());
     }
@@ -152,7 +176,8 @@ void WebVideoFullscreenModelVideoElement::setVideoFullscreenLayer(PlatformLayer*
         return;
     
     m_videoFullscreenLayer = videoLayer;
-    [m_videoFullscreenLayer setFrame:m_videoFrame];
+    [m_videoFullscreenLayer setAnchorPoint:CGPointMake(0.5, 0.5)];
+    [m_videoFullscreenLayer setBounds:m_videoFrame];
     
     __block RefPtr<WebVideoFullscreenModelVideoElement> protect(this);
     WebThreadRun(^{
@@ -278,8 +303,14 @@ void WebVideoFullscreenModelVideoElement::requestExitFullscreen()
 void WebVideoFullscreenModelVideoElement::setVideoLayerFrame(FloatRect rect)
 {
     m_videoFrame = rect;
-    [m_videoFullscreenLayer setFrame:CGRect(rect)];
-    m_videoElement->setVideoFullscreenFrame(rect);
+    [m_videoFullscreenLayer setBounds:CGRect(rect)];
+    if (m_videoElement)
+        m_videoElement->setVideoFullscreenFrame(rect);
+}
+
+FloatRect WebVideoFullscreenModelVideoElement::videoLayerFrame() const
+{
+    return m_videoFrame;
 }
 
 void WebVideoFullscreenModelVideoElement::setVideoLayerGravity(WebVideoFullscreenModel::VideoGravity gravity)
@@ -297,9 +328,33 @@ void WebVideoFullscreenModelVideoElement::setVideoLayerGravity(WebVideoFullscree
     m_videoElement->setVideoFullscreenGravity(videoGravity);
 }
 
-void WebVideoFullscreenModelVideoElement::selectAudioMediaOption(uint64_t)
+WebVideoFullscreenModel::VideoGravity WebVideoFullscreenModelVideoElement::videoLayerGravity() const
 {
-    // FIXME: 131236 Implement audio track selection.
+    switch (m_videoElement->videoFullscreenGravity()) {
+    case MediaPlayer::VideoGravityResize:
+        return VideoGravityResize;
+    case MediaPlayer::VideoGravityResizeAspect:
+        return VideoGravityResizeAspect;
+    case MediaPlayer::VideoGravityResizeAspectFill:
+        return VideoGravityResizeAspectFill;
+    }
+
+    ASSERT_NOT_REACHED();
+    return VideoGravityResize;
+}
+
+void WebVideoFullscreenModelVideoElement::selectAudioMediaOption(uint64_t selectedAudioIndex)
+{
+    AudioTrack* selectedAudioTrack = nullptr;
+
+    for (size_t index = 0; index < m_audioTracksForMenu.size(); ++index) {
+        auto& audioTrack = m_audioTracksForMenu[index];
+        audioTrack->setEnabled(index == static_cast<size_t>(selectedAudioIndex));
+        if (audioTrack->enabled())
+            selectedAudioTrack = audioTrack.get();
+    }
+
+    m_videoElement->audioTrackEnabledChanged(selectedAudioTrack);
 }
 
 void WebVideoFullscreenModelVideoElement::selectLegibleMediaOption(uint64_t index)
@@ -308,14 +363,18 @@ void WebVideoFullscreenModelVideoElement::selectLegibleMediaOption(uint64_t inde
     
     if (index < m_legibleTracksForMenu.size())
         textTrack = m_legibleTracksForMenu[static_cast<size_t>(index)].get();
+    else
+        textTrack = TextTrack::captionMenuOffItem();
     
     m_videoElement->setSelectedTextTrack(textTrack);
 }
 
 void WebVideoFullscreenModelVideoElement::updateLegibleOptions()
 {
+    AudioTrackList* audioTrackList = m_videoElement->audioTracks();
     TextTrackList* trackList = m_videoElement->textTracks();
-    if (!trackList || !m_videoElement->document().page() || !m_videoElement->mediaControlsHost())
+
+    if ((!trackList && !audioTrackList) || !m_videoElement->document().page() || !m_videoElement->mediaControlsHost())
         return;
     
     WTF::AtomicString displayMode = m_videoElement->mediaControlsHost()->captionDisplayMode();
@@ -323,6 +382,22 @@ void WebVideoFullscreenModelVideoElement::updateLegibleOptions()
     TextTrack* automaticItem = m_videoElement->mediaControlsHost()->captionMenuAutomaticItem();
     CaptionUserPreferences& captionPreferences = *m_videoElement->document().page()->group().captionPreferences();
     m_legibleTracksForMenu = captionPreferences.sortedTrackListForMenu(trackList);
+
+    m_audioTracksForMenu = captionPreferences.sortedTrackListForMenu(audioTrackList);
+    
+    Vector<String> audioTrackDisplayNames;
+    uint64_t selectedAudioIndex = 0;
+    
+    for (size_t index = 0; index < m_audioTracksForMenu.size(); ++index) {
+        auto& track = m_audioTracksForMenu[index];
+        audioTrackDisplayNames.append(captionPreferences.displayNameForTrack(track.get()));
+        
+        if (track->enabled())
+            selectedAudioIndex = index;
+    }
+    
+    m_videoFullscreenInterface->setAudioMediaSelectionOptions(audioTrackDisplayNames, selectedAudioIndex);
+
     Vector<String> trackDisplayNames;
     uint64_t selectedIndex = 0;
     uint64_t offIndex = 0;
@@ -375,6 +450,16 @@ const AtomicString& WebVideoFullscreenModelVideoElement::eventNameAll()
 {
     static NeverDestroyed<AtomicString> sEventNameAll = "allEvents";
     return sEventNameAll;
+}
+
+void WebVideoFullscreenModelVideoElement::fullscreenModeChanged(HTMLMediaElement::VideoFullscreenMode videoFullscreenMode)
+{
+    __block RefPtr<WebVideoFullscreenModelVideoElement> protect(this);
+    WebThreadRun(^{
+        if (m_videoElement)
+            m_videoElement->fullscreenModeChanged(videoFullscreenMode);
+        protect.clear();
+    });
 }
 
 #endif

@@ -29,7 +29,7 @@
 #include "ContainerNode.h"
 #include "EditingBoundary.h"
 #include "TextAffinity.h"
-#include "TextDirection.h"
+#include "TextFlags.h"
 #include <wtf/Assertions.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
@@ -61,7 +61,7 @@ public:
         PositionIsAfterChildren,
     };
 
-    WEBCORE_EXPORT Position()
+    Position()
         : m_offset(0)
         , m_anchorType(PositionIsOffsetInAnchor)
         , m_isLegacyEditingPosition(false)
@@ -150,7 +150,7 @@ public:
     // Offsets are computed using render text for nodes that have renderers - but note that even when
     // using composed characters, the result may be inside a single user-visible character if a ligature is formed.
     WEBCORE_EXPORT Position previous(PositionMoveType = CodePoint) const;
-    Position next(PositionMoveType = CodePoint) const;
+    WEBCORE_EXPORT Position next(PositionMoveType = CodePoint) const;
     static int uncheckedPreviousOffset(const Node*, int current);
     static int uncheckedPreviousOffsetForBackwardDeletion(const Node*, int current);
     static int uncheckedNextOffset(const Node*, int current);
@@ -202,7 +202,7 @@ public:
     
     void debugPosition(const char* msg = "") const;
 
-#ifndef NDEBUG
+#if ENABLE(TREE_DEBUGGING)
     void formatForDebugger(char* buffer, unsigned length) const;
     void showAnchorTypeAndOffset() const;
     void showTreeForThis() const;
@@ -342,7 +342,7 @@ inline bool offsetIsBeforeLastNodeOffset(int offset, Node* anchorNode)
 
 } // namespace WebCore
 
-#ifndef NDEBUG
+#if ENABLE(TREE_DEBUGGING)
 // Outside the WebCore namespace for ease of invocation from gdb.
 void showTree(const WebCore::Position&);
 void showTree(const WebCore::Position*);

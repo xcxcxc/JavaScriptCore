@@ -39,10 +39,17 @@ public:
         return adoptRef(new PerspectiveTransformOperation(p));
     }
 
+    virtual PassRefPtr<TransformOperation> clone() const override
+    {
+        return adoptRef(new PerspectiveTransformOperation(m_p));
+    }
+
     Length perspective() const { return m_p; }
     
 private:
     virtual bool isIdentity() const override { return !floatValueForLength(m_p, 1); }
+    virtual bool isAffectedByTransformOrigin() const { return !isIdentity(); }
+
     virtual OperationType type() const override { return PERSPECTIVE; }
     virtual bool isSameType(const TransformOperation& o) const override { return o.type() == PERSPECTIVE; }
 
@@ -65,8 +72,8 @@ private:
     Length m_p;
 };
 
-TRANSFORMOPERATION_TYPE_CASTS(PerspectiveTransformOperation, type() == TransformOperation::PERSPECTIVE);
-
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_TRANSFORMOPERATION(WebCore::PerspectiveTransformOperation, type() == WebCore::TransformOperation::PERSPECTIVE)
 
 #endif // PerspectiveTransformOperation_h

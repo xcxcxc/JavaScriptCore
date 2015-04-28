@@ -27,10 +27,9 @@
 
 #if WK_API_ENABLED
 
-typedef NS_OPTIONS(NSUInteger, _WKRenderingProgressEvents) {
-    _WKRenderingProgressEventFirstLayout = 1 << 0,
-    _WKRenderingProgressEventFirstPaintWithSignificantArea = 1 << 2,
-} WK_ENUM_AVAILABLE(10_10, 8_0);
+#import <WebKit/_WKFindOptions.h>
+#import <WebKit/_WKLayoutMode.h>
+#import <WebKit/_WKRenderingProgressEvents.h>
 
 typedef NS_ENUM(NSInteger, _WKPaginationMode) {
     _WKPaginationModeUnpaginated,
@@ -40,24 +39,13 @@ typedef NS_ENUM(NSInteger, _WKPaginationMode) {
     _WKPaginationModeBottomToTop,
 } WK_ENUM_AVAILABLE(10_10, 8_0);
 
-typedef NS_OPTIONS(NSUInteger, _WKFindOptions) {
-    _WKFindOptionsCaseInsensitive = 1 << 0,
-    _WKFindOptionsAtWordStarts = 1 << 1,
-    _WKFindOptionsTreatMedialCapitalAsWordStart = 1 << 2,
-    _WKFindOptionsBackwards = 1 << 3,
-    _WKFindOptionsWrapAround = 1 << 4,
-    _WKFindOptionsShowOverlay = 1 << 5,
-    _WKFindOptionsShowFindIndicator = 1 << 6,
-    _WKFindOptionsShowHighlight = 1 << 7,
-    _WKFindOptionsDetermineMatchIndex = 1 << 8,
-} WK_ENUM_AVAILABLE(10_10, 8_0);
-
 @class WKBrowsingContextHandle;
 @class _WKRemoteObjectRegistry;
 @class _WKSessionState;
 @class _WKWebViewPrintFormatter;
 
 @protocol WKHistoryDelegatePrivate;
+@protocol _WKDiagnosticLoggingDelegate;
 @protocol _WKFindDelegate;
 @protocol _WKFormDelegate;
 
@@ -78,12 +66,14 @@ typedef NS_OPTIONS(NSUInteger, _WKFindOptions) {
 @property (nonatomic, readonly) NSArray *_certificateChain;
 @property (nonatomic, readonly) NSURL *_committedURL;
 @property (nonatomic, readonly) NSString *_MIMEType;
-@property (nonatomic, readonly) NSString *_userAgent;
+@property (nonatomic, readonly) NSString *_userAgent WK_AVAILABLE(WK_MAC_TBA, WK_IOS_TBA);
 
 @property (copy, setter=_setApplicationNameForUserAgent:) NSString *_applicationNameForUserAgent;
 @property (copy, setter=_setCustomUserAgent:) NSString *_customUserAgent;
 
 @property (nonatomic, readonly) pid_t _webProcessIdentifier;
+
+@property (nonatomic, getter=_isEditable, setter=_setEditable:) BOOL _editable WK_AVAILABLE(WK_MAC_TBA, WK_IOS_TBA);
 
 // FIXME: Remove these once nobody is using them.
 @property (nonatomic, readonly) NSData *_sessionStateData;
@@ -102,16 +92,17 @@ typedef NS_OPTIONS(NSUInteger, _WKFindOptions) {
 
 - (void)_close;
 
+@property (nonatomic, setter=_setLayoutMode:) _WKLayoutMode _layoutMode;
+@property (nonatomic, setter=_setFixedLayoutSize:) CGSize _fixedLayoutSize;
+
+@property (nonatomic, setter=_setViewScale:) CGFloat _viewScale;
+
 #if TARGET_OS_IPHONE
 // DERECATED: The setters of the three following function are deprecated, please use overrideLayoutParameters.
 // Define the smallest size a page take with a regular viewport.
-@property (nonatomic, setter=_setMinimumLayoutSizeOverride:) CGSize _minimumLayoutSizeOverride;
-// Define the smallest size a page take with the minmal-ui viewport.
-@property (nonatomic, setter=_setMinimumLayoutSizeOverrideForMinimalUI:) CGSize _minimumLayoutSizeOverrideForMinimalUI;
+@property (nonatomic, readonly) CGSize _minimumLayoutSizeOverride;
 // Define the largest size the unobscured area can get for the current view bounds. This value is used to define viewport units.
-@property (nonatomic, setter=_setMaximumUnobscuredSizeOverride:) CGSize _maximumUnobscuredSizeOverride;
-
-@property (nonatomic, readonly) BOOL _usesMinimalUI;
+@property (nonatomic, readonly) CGSize _maximumUnobscuredSizeOverride;
 
 // Define the inset of the scrollview unusable by the web page.
 @property (nonatomic, setter=_setObscuredInsets:) UIEdgeInsets _obscuredInsets;
@@ -142,7 +133,11 @@ typedef NS_OPTIONS(NSUInteger, _WKFindOptions) {
 
 - (void)_snapshotRect:(CGRect)rectInViewCoordinates intoImageOfWidth:(CGFloat)imageWidth completionHandler:(void(^)(CGImageRef))completionHandler;
 
-- (void)_overrideLayoutParametersWithMinimumLayoutSize:(CGSize)minimumLayoutSize minimumLayoutSizeForMinimalUI:(CGSize)minimumLayoutSizeForMinimalUI maximumUnobscuredSizeOverride:(CGSize)maximumUnobscuredSizeOverride;
+// Deprecated: Use [_overrideLayoutParametersWithMinimumLayoutSize:maximumUnobscuredSizeOverride:] instead.
+// This function is kept for binary compatibility with iOS 8.0, it can be removed after the bincompat window.
+- (void)_overrideLayoutParametersWithMinimumLayoutSize:(CGSize)minimumLayoutSize minimumLayoutSizeForMinimalUI:(CGSize)minimumLayoutSizeForMinimalUI maximumUnobscuredSizeOverride:(CGSize)maximumUnobscuredSizeOverride WK_DEPRECATED(NA, NA, 8_0, WK_IOS_TBA, "use -_overrideLayoutParametersWithMinimumLayoutSize:maximumUnobscuredSizeOverride:");
+
+- (void)_overrideLayoutParametersWithMinimumLayoutSize:(CGSize)minimumLayoutSize maximumUnobscuredSizeOverride:(CGSize)maximumUnobscuredSizeOverride WK_AVAILABLE(NA, WK_IOS_TBA);
 
 - (UIView *)_viewForFindUI;
 
@@ -151,13 +146,23 @@ typedef NS_OPTIONS(NSUInteger, _WKFindOptions) {
 - (void)_killWebContentProcess;
 - (void)_didRelaunchProcess;
 
+// Puts the view into a state where being taken out of the view hierarchy and resigning first responder
+// will not count as becoming inactive and unfocused. The returned block must be called to exit the state.
+- (void (^)(void))_retainActiveFocusedState WK_AVAILABLE(NA, WK_IOS_TBA);
+
+- (void)_becomeFirstResponderWithSelectionMovingForward:(BOOL)selectingForward completionHandler:(void (^)(BOOL didBecomeFirstResponder))completionHandler WK_AVAILABLE(NA, WK_IOS_TBA);
+
 #else
 @property (readonly) NSColor *_pageExtendedBackgroundColor;
 @property (nonatomic, setter=_setDrawsTransparentBackground:) BOOL _drawsTransparentBackground;
 @property (nonatomic, setter=_setTopContentInset:) CGFloat _topContentInset;
+
 #if __MAC_OS_X_VERSION_MIN_REQUIRED >= 101000
 @property (nonatomic, setter=_setAutomaticallyAdjustsContentInsets:) BOOL _automaticallyAdjustsContentInsets;
 #endif
+
+// Default value is 0. A value of 0 means the window's backing scale factor will be used and automatically update when the window moves screens.
+@property (nonatomic, setter=_setOverrideDeviceScaleFactor:) CGFloat _overrideDeviceScaleFactor WK_AVAILABLE(WK_MAC_TBA, NA);
 #endif
 
 - (void)_getMainResourceDataWithCompletionHandler:(void (^)(NSData *, NSError *))completionHandler;
@@ -176,6 +181,7 @@ typedef NS_OPTIONS(NSUInteger, _WKFindOptions) {
 @property (nonatomic, setter=_setTextZoomFactor:) double _textZoomFactor;
 @property (nonatomic, setter=_setPageZoomFactor:) double _pageZoomFactor;
 
+@property (nonatomic, weak, setter=_setDiagnosticLoggingDelegate:) id <_WKDiagnosticLoggingDelegate> _diagnosticLoggingDelegate WK_AVAILABLE(WK_MAC_TBA, WK_IOS_TBA);
 @property (nonatomic, weak, setter=_setFindDelegate:) id <_WKFindDelegate> _findDelegate;
 - (void)_findString:(NSString *)string options:(_WKFindOptions)options maxCount:(NSUInteger)maxCount;
 - (void)_countStringMatches:(NSString *)string options:(_WKFindOptions)options maxCount:(NSUInteger)maxCount;
@@ -184,6 +190,9 @@ typedef NS_OPTIONS(NSUInteger, _WKFindOptions) {
 @property (nonatomic, weak, setter=_setFormDelegate:) id <_WKFormDelegate> _formDelegate;
 
 @property (nonatomic, readonly, getter=_isDisplayingStandaloneImageDocument) BOOL _displayingStandaloneImageDocument;
+
+@property (nonatomic, setter=_setScrollPerformanceDataCollectionEnabled:) BOOL _scrollPerformanceDataCollectionEnabled WK_AVAILABLE(WK_MAC_TBA, WK_IOS_TBA);
+@property (nonatomic, readonly) NSArray *_scrollPerformanceData WK_AVAILABLE(WK_MAC_TBA, WK_IOS_TBA);
 
 @end
 

@@ -122,8 +122,8 @@ def parse_args(args):
             help="Enable Guard Malloc (OS X only)"),
         optparse.make_option("--threaded", action="store_true", default=False,
             help="Run a concurrent JavaScript thread with each test"),
-        optparse.make_option("--webkit-test-runner", "-2", action="store_true",
-            help="Use WebKitTestRunner rather than DumpRenderTree."),
+        optparse.make_option("--dump-render-tree", "-1", action="store_false", default=True, dest="webkit_test_runner",
+            help="Use DumpRenderTree rather than WebKitTestRunner."),
         # FIXME: We should merge this w/ --build-directory and only have one flag.
         optparse.make_option("--root", action="store",
             help="Path to a directory containing the executables needed to run tests."),
@@ -205,9 +205,11 @@ def parse_args(args):
         optparse.make_option("--nocheck-sys-deps", action="store_true",
             default=False,
             help="Don't check the system dependencies (themes)"),
-        optparse.make_option("--nojava", action="store_true",
+        optparse.make_option("--java", action="store_true",
             default=False,
-            help="Don't build java support files"),
+            help="Build java support files"),
+        optparse.make_option("--layout-tests-directory", action="store", default=None,
+            help="Override the default layout test directory.", dest="layout_tests_dir")
     ]))
 
     option_group_definitions.append(("Testing Options", [
@@ -223,7 +225,7 @@ def parse_args(args):
             help="Do everything but actually run the tests or upload results."),
         optparse.make_option("--wrapper",
             help="wrapper command to insert before invocations of "
-                 "DumpRenderTree; option is split on whitespace before "
+                 "DumpRenderTree or WebKitTestRunner; option is split on whitespace before "
                  "running. (Example: --wrapper='valgrind --smc-check=all')"),
         optparse.make_option("-i", "--ignore-tests", action="append", default=[],
             help="directories or test to ignore (may specify multiple times)"),
@@ -295,6 +297,10 @@ def parse_args(args):
                             "configurations. Does not run any tests.")),
     ]))
 
+    option_group_definitions.append(("Web Platform Test Server Options", [
+        optparse.make_option("--wptserver-doc-root", type="string", help=("Set web platform server document root, relative to LayoutTests directory")),
+    ]))
+
     # FIXME: Move these into json_results_generator.py
     option_group_definitions.append(("Result JSON Options", [
         optparse.make_option("--master-name", help="The name of the buildbot master."),
@@ -314,6 +320,8 @@ def parse_args(args):
             help=("The name of an additional subversion or git checkout")),
         optparse.make_option("--additional-repository-path",
             help=("The path to an additional subversion or git checkout (requires --additional-repository-name)")),
+        optparse.make_option("--allowed-host", type="string", action="append", default=[],
+            help=("If specified, tests are allowed to make requests to the specified hostname."))
     ]))
 
     option_parser = optparse.OptionParser()
@@ -331,9 +339,6 @@ def _set_up_derived_options(port, options):
     if not options.child_processes:
         options.child_processes = os.environ.get("WEBKIT_TEST_CHILD_PROCESSES",
                                                  str(port.default_child_processes()))
-    if not options.max_locked_shards:
-        options.max_locked_shards = int(os.environ.get("WEBKIT_TEST_MAX_LOCKED_SHARDS",
-                                                       str(port.default_max_locked_shards())))
 
     if not options.configuration:
         options.configuration = port.default_configuration()
@@ -390,14 +395,6 @@ def _set_up_derived_options(port, options):
     # The GTK+ and EFL ports only support WebKit2 so they always use WKTR.
     if options.platform == "gtk" or options.platform == "efl":
         options.webkit_test_runner = True
-
-    if options.platform == 'ios-simulator':
-        from webkitpy import xcode
-        if options.runtime is None:
-            options.runtime = xcode.simulator.get_latest_runtime()['identifier']
-        if options.device_type is None:
-            device_types = xcode.simulator.get_device_types()
-            options.device_type = device_types['iPhone 5'] if options.architecture == 'x86' else device_types['iPhone 5s']
 
 
 def run(port, options, args, logging_stream):

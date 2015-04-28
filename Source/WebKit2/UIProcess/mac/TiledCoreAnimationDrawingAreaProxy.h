@@ -56,7 +56,7 @@ private:
 
     // Message handlers.
     virtual void didUpdateGeometry() override;
-    virtual void intrinsicContentSizeDidChange(const WebCore::IntSize& newIntrinsicContentSize) override;
+    virtual void intrinsicContentSizeDidChange(const WebCore::IntSize&) override;
 
     void sendUpdateGeometry();
 
@@ -71,9 +71,9 @@ private:
     WebCore::IntSize m_lastSentMinimumLayoutSize;
 };
 
-DRAWING_AREA_PROXY_TYPE_CASTS(TiledCoreAnimationDrawingAreaProxy, type() == DrawingAreaTypeTiledCoreAnimation);
-
 } // namespace WebKit
+
+SPECIALIZE_TYPE_TRAITS_DRAWING_AREA_PROXY(TiledCoreAnimationDrawingAreaProxy, DrawingAreaTypeTiledCoreAnimation)
 
 #endif // !PLATFORM(IOS)
 

@@ -30,7 +30,6 @@
 
 #include "ScrollingStateTree.h"
 #include "TextStream.h"
-#include <wtf/OwnPtr.h>
 
 namespace WebCore {
 
@@ -46,7 +45,6 @@ ScrollingStateFrameScrollingNode::ScrollingStateFrameScrollingNode(ScrollingStat
     , m_horizontalScrollbarPainter(0)
 #endif
     , m_frameScaleFactor(1)
-    , m_wheelEventHandlerCount(0)
     , m_synchronousScrollingReasons(0)
     , m_behaviorForFixed(StickToDocumentBounds)
     , m_headerHeight(0)
@@ -64,7 +62,6 @@ ScrollingStateFrameScrollingNode::ScrollingStateFrameScrollingNode(const Scrolli
 #endif
     , m_nonFastScrollableRegion(stateNode.nonFastScrollableRegion())
     , m_frameScaleFactor(stateNode.frameScaleFactor())
-    , m_wheelEventHandlerCount(stateNode.wheelEventHandlerCount())
     , m_synchronousScrollingReasons(stateNode.synchronousScrollingReasons())
     , m_behaviorForFixed(stateNode.scrollBehaviorForFixedElements())
     , m_headerHeight(stateNode.headerHeight())
@@ -118,15 +115,6 @@ void ScrollingStateFrameScrollingNode::setNonFastScrollableRegion(const Region& 
 
     m_nonFastScrollableRegion = nonFastScrollableRegion;
     setPropertyChanged(NonFastScrollableRegion);
-}
-
-void ScrollingStateFrameScrollingNode::setWheelEventHandlerCount(unsigned wheelEventHandlerCount)
-{
-    if (m_wheelEventHandlerCount == wheelEventHandlerCount)
-        return;
-
-    m_wheelEventHandlerCount = wheelEventHandlerCount;
-    setPropertyChanged(WheelEventHandlerCount);
 }
 
 void ScrollingStateFrameScrollingNode::setSynchronousScrollingReasons(SynchronousScrollingReasons reasons)

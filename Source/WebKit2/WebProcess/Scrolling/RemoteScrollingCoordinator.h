@@ -61,14 +61,14 @@ private:
     virtual bool isRemoteScrollingCoordinator() const override { return true; }
     
     // ScrollingCoordinator
-    virtual bool coordinatesScrollingForFrameView(WebCore::FrameView*) const override;
+    virtual bool coordinatesScrollingForFrameView(const WebCore::FrameView&) const override;
     virtual void scheduleTreeStateCommit() override;
 
     virtual bool isRubberBandInProgress() const override;
     virtual void setScrollPinningBehavior(WebCore::ScrollPinningBehavior) override;
 
     // IPC::MessageReceiver
-    virtual void didReceiveMessage(IPC::Connection*, IPC::MessageDecoder&) override;
+    virtual void didReceiveMessage(IPC::Connection&, IPC::MessageDecoder&) override;
     
     // Respond to UI process changes.
     void scrollPositionChangedForNode(WebCore::ScrollingNodeID, const WebCore::FloatPoint& scrollPosition, bool syncLayerPosition);
@@ -76,9 +76,9 @@ private:
     WebPage* m_webPage;
 };
 
-SCROLLING_COORDINATOR_TYPE_CASTS(RemoteScrollingCoordinator, isRemoteScrollingCoordinator());
-
 } // namespace WebKit
+
+SPECIALIZE_TYPE_TRAITS_SCROLLING_COORDINATOR(WebKit::RemoteScrollingCoordinator, isRemoteScrollingCoordinator());
 
 #endif // ENABLE(ASYNC_SCROLLING)
 

@@ -31,8 +31,11 @@
 #if ENABLE(EXECUTABLE_ALLOCATOR_FIXED)
 
 #include "CodeProfiling.h"
+#include "ExecutableAllocationFuzz.h"
 #include <errno.h>
+#if !PLATFORM(WIN)
 #include <unistd.h>
+#endif
 #include <wtf/MetaAllocator.h>
 #include <wtf/PageReservation.h>
 #include <wtf/VMTags.h>
@@ -43,11 +46,6 @@
 
 #if OS(LINUX)
 #include <stdio.h>
-#endif
-
-#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED < 1090
-// MADV_FREE_REUSABLE does not work for JIT memory on older OSes so use MADV_FREE in that case.
-#define WTF_USE_MADV_FREE_FOR_JIT_MEMORY 1
 #endif
 
 using namespace WTF;
@@ -161,15 +159,24 @@ double ExecutableAllocator::memoryPressureMultiplier(size_t addedMemoryUsage)
     return result;
 }
 
-PassRefPtr<ExecutableMemoryHandle> ExecutableAllocator::allocate(VM& vm, size_t sizeInBytes, void* ownerUID, JITCompilationEffort effort)
+PassRefPtr<ExecutableMemoryHandle> ExecutableAllocator::allocate(VM&, size_t sizeInBytes, void* ownerUID, JITCompilationEffort effort)
 {
+    if (effort != JITCompilationCanFail && Options::reportMustSucceedExecutableAllocations()) {
+        dataLog("Allocating ", sizeInBytes, " bytes of executable memory with JITCompilationMustSucceed.\n");
+        WTFReportBacktrace();
+    }
+    
+    if (effort == JITCompilationCanFail
+        && doExecutableAllocationFuzzingIfEnabled() == PretendToFailExecutableAllocation)
+        return nullptr;
+    
     RefPtr<ExecutableMemoryHandle> result = allocator->allocate(sizeInBytes, ownerUID);
     if (!result) {
-        if (effort == JITCompilationCanFail)
-            return result;
-        releaseExecutableMemory(vm);
-        result = allocator->allocate(sizeInBytes, ownerUID);
-        RELEASE_ASSERT(result);
+        if (effort != JITCompilationCanFail) {
+            dataLog("Ran out of executable memory while allocating ", sizeInBytes, " bytes.\n");
+            CRASH();
+        }
+        return nullptr;
     }
     return result.release();
 }

@@ -27,16 +27,21 @@
 
 namespace JSC {
 
+EncodedJSValue JSC_HOST_CALL objectConstructorGetOwnPropertyDescriptor(ExecState*);
+EncodedJSValue JSC_HOST_CALL objectConstructorGetOwnPropertySymbols(ExecState*);
+EncodedJSValue JSC_HOST_CALL objectConstructorKeys(ExecState*);
+
 class ObjectPrototype;
 
 class ObjectConstructor : public InternalFunction {
 public:
     typedef InternalFunction Base;
+    static const unsigned StructureFlags = Base::StructureFlags | OverridesGetOwnPropertySlot;
 
-    static ObjectConstructor* create(VM& vm, Structure* structure, ObjectPrototype* objectPrototype)
+    static ObjectConstructor* create(VM& vm, JSGlobalObject* globalObject, Structure* structure, ObjectPrototype* objectPrototype)
     {
         ObjectConstructor* constructor = new (NotNull, allocateCell<ObjectConstructor>(vm.heap)) ObjectConstructor(vm, structure);
-        constructor->finishCreation(vm, objectPrototype);
+        constructor->finishCreation(vm, globalObject, objectPrototype);
         return constructor;
     }
 
@@ -49,9 +54,10 @@ public:
         return Structure::create(vm, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), info());
     }
 
+    JSFunction* addDefineProperty(ExecState*, JSGlobalObject*);
+
 protected:
-    void finishCreation(VM&, ObjectPrototype*);
-    static const unsigned StructureFlags = OverridesGetOwnPropertySlot | InternalFunction::StructureFlags;
+    void finishCreation(VM&, JSGlobalObject*, ObjectPrototype*);
 
 private:
     ObjectConstructor(VM&, Structure*);

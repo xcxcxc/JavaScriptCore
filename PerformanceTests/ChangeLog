@@ -1,3 +1,361 @@
+2015-04-21  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Add JetStream to PerformanceTests
+        https://bugs.webkit.org/show_bug.cgi?id=144024
+
+        Rubber-stamped by Filip Pizlo.
+
+        * JetStream: Added.
+        * JetStream/JetStream-Logo.png: Added.
+        * JetStream/JetStream-Logo@2x.png: Added.
+        * JetStream/JetStream.css: Added.
+        * JetStream/JetStreamDriver.js: Added.
+        * JetStream/LICENSE.txt: Added.
+        * JetStream/LLVM-test-suite-LICENSE.txt: Added.
+        * JetStream/Octane: Added.
+        * JetStream/Octane/base.js: Added.
+        * JetStream/Octane/code-load.js: Added.
+        * JetStream/Octane2: Added.
+        * JetStream/Octane2/base.js: Added.
+        * JetStream/Octane2/box2d.js: Added.
+        * JetStream/Octane2/code-load.js: Added.
+        * JetStream/Octane2/crypto.js: Added.
+        * JetStream/Octane2/deltablue.js: Added.
+        * JetStream/Octane2/earley-boyer.js: Added.
+        * JetStream/Octane2/gbemu-part1.js: Added.
+        * JetStream/Octane2/gbemu-part2.js: Added.
+        * JetStream/Octane2/mandreel.js: Added.
+        * JetStream/Octane2/navier-stokes.js: Added.
+        * JetStream/Octane2/pdfjs.js: Added.
+        * JetStream/Octane2/raytrace.js: Added.
+        * JetStream/Octane2/regexp.js: Added.
+        * JetStream/Octane2/richards.js: Added.
+        * JetStream/Octane2/run.js: Added.
+        * JetStream/Octane2/splay.js: Added.
+        * JetStream/Octane2/typescript-compiler.js: Added.
+        * JetStream/Octane2/typescript-input.js: Added.
+        * JetStream/Octane2/typescript.js: Added.
+        * JetStream/Octane2/zlib-data.js: Added.
+        * JetStream/Octane2/zlib.js: Added.
+        * JetStream/Octane2Setup.js: Added.
+        * JetStream/OctaneSetup.js: Added.
+        * JetStream/README: Added.
+        * JetStream/Reference.js: Added.
+        * JetStream/SimpleSetup.js: Added.
+        * JetStream/SunSpiderSetup.js: Added.
+        * JetStream/Swoosh.png: Added.
+        * JetStream/Swoosh@2x.png: Added.
+        * JetStream/TestingSetup.js: Added.
+        * JetStream/create.rb: Added.
+        * JetStream/docs: Added.
+        * JetStream/docs/JetStreamBlogPost.html: Added.
+        * JetStream/in-depth-TEMPLATE.html: Added.
+        * JetStream/index-TEMPLATE.html: Added.
+        * JetStream/simple: Added.
+        * JetStream/simple/bigfib.cpp: Added.
+        * JetStream/simple/bigfib.cpp.js: Added.
+        * JetStream/simple/container.cpp: Added.
+        * JetStream/simple/container.cpp.js: Added.
+        * JetStream/simple/dry.c: Added.
+        * JetStream/simple/dry.c.js: Added.
+        * JetStream/simple/float-mm.c: Added.
+        * JetStream/simple/float-mm.c.js: Added.
+        * JetStream/simple/gcc-loops.cpp: Added.
+        * JetStream/simple/gcc-loops.cpp.js: Added.
+        * JetStream/simple/hash-map.js: Added.
+        * JetStream/simple/n-body.c: Added.
+        * JetStream/simple/n-body.c.js: Added.
+        * JetStream/simple/quicksort.c: Added.
+        * JetStream/simple/quicksort.c.js: Added.
+        * JetStream/simple/towers.c: Added.
+        * JetStream/simple/towers.c.js: Added.
+        * JetStream/sunspider: Added.
+        * JetStream/sunspider/3d-cube.js: Added.
+        * JetStream/sunspider/3d-raytrace.js: Added.
+        * JetStream/sunspider/base64.js: Added.
+        * JetStream/sunspider/cordic.js: Added.
+        * JetStream/sunspider/crypto-aes.js: Added.
+        * JetStream/sunspider/crypto-md5.js: Added.
+        * JetStream/sunspider/crypto-sha1.js: Added.
+        * JetStream/sunspider/date-format-tofte.js: Added.
+        * JetStream/sunspider/date-format-xparb.js: Added.
+        * JetStream/sunspider/n-body.js: Added.
+        * JetStream/sunspider/regex-dna.js: Added.
+        * JetStream/sunspider/tagcloud.js: Added.
+
+2015-04-14  Said Abou-Hallawa  <sabouhallawa@apple.com>
+
+        textPath layout performance improvement.
+        https://bugs.webkit.org/show_bug.cgi?id=141570.
+
+        Reviewed by Darin Adler.
+
+        Cut down the time spent in traversing the path for text by 50%. Instead
+        of traversing the path twice at a certain length: one time for the position
+        and the second time for the angle, we can merge these two passes into one.
+
+        * SVG/TextOnPathSimple.html: Added.
+        * SVG/resources/TextOnPathSimple.svg: Added.
+
+2015-04-13  Zalan Bujtas  <zalan@apple.com>
+
+        Clear up the test content when test is done.
+
+        Unreviewed fix.
+
+        * Layout/simple-line-layout-innertext.html:
+
+2015-04-09  Zalan Bujtas  <zalan@apple.com>
+
+        Simple line layout(regression): Calling innerText on RenderFlow with multiple children is slow.
+        https://bugs.webkit.org/show_bug.cgi?id=143554
+
+        Reviewed by Antti Koivisto.
+
+        Initialize render flow's segments only when the render flow changes in TextIterator.
+        The included performance test shows 6x speedup. (from ~10 runs/sec to ~60 runs/sec)
+
+        * Layout/simple-line-layout-innertext.html: Added.
+
+2015-03-09  Chris Dumez  <cdumez@apple.com>
+
+        [CG] Have Canvas use the IOSurfacePool
+        https://bugs.webkit.org/show_bug.cgi?id=142417
+        <rdar://problem/20044440>
+
+        Reviewed by Darin Adler.
+
+        Lower the number of different canvas sizes from 1000 to 100 so that
+        the test does not require such a huge cache size. With 100, we now
+        get over 90% cache hit rate with the default IOSurfacePool size.
+
+        * Canvas/reuse.html:
+
+2015-01-28  Said Abou-Hallawa  <sabouhallawa@apple.com>
+
+        Poor performance on IE's Chalkboard benchmark.
+        https://bugs.webkit.org/show_bug.cgi?id=140753.
+
+        Reviewed by Zalan Bujtas.
+
+        * SVG/UnderTheSeeBenchmark.html: Added
+        * SVG/WorldcupBenchmark.html: Added.
+        * SVG/resources/RenderAnimator.css: Added.
+        * SVG/resources/RenderAnimator.js: Added.
+        These are benchmarks for the SVG rendering. Mainly we want to measure how fast
+        the SVG rendering will be when only a small part of it is drawn.
+        
+2015-01-21  Geoffrey Garen  <ggaren@apple.com>
+
+        bmalloc: support aligned allocation
+        https://bugs.webkit.org/show_bug.cgi?id=140732
+
+        Reviewed by Andreas Kling.
+
+        * MallocBench/MallocBench.xcodeproj/project.pbxproj:
+        * MallocBench/MallocBench/Benchmark.cpp:
+        * MallocBench/MallocBench/memalign.cpp:
+        (test):
+        (benchmark_memalign): Added a test for specific interesting memalign values.
+
+        * MallocBench/MallocBench/stress_aligned.cpp: Added.
+        (benchmark_stress_aligned):
+        * MallocBench/MallocBench/stress_aligned.h: Added. Added a stress test
+        for arbitrary memalign values.
+
+2015-01-16  Geoffrey Garen  <ggaren@apple.com>
+
+        bmalloc: added the tiniest bit of testing for aligned allocation
+        https://bugs.webkit.org/show_bug.cgi?id=140573
+
+        Reviewed by Andreas Kling.
+
+        Just good enoug to catch two bugs in a preliminary implementation.
+
+        * MallocBench/MallocBench.xcodeproj/project.pbxproj:
+        * MallocBench/MallocBench/Benchmark.cpp:
+        * MallocBench/MallocBench/mbmalloc.cpp:
+        * MallocBench/MallocBench/mbmalloc.h:
+        * MallocBench/MallocBench/memalign.cpp: Added.
+        (benchmark_memalign):
+        * MallocBench/MallocBench/memalign.h: Added.
+
+2014-12-09  Myles C. Maxfield  <mmaxfield@apple.com>
+
+        Add performance test related to font fallback
+        https://bugs.webkit.org/show_bug.cgi?id=139332
+
+        Reviewed by Simon Fraser.
+
+        * Layout/font-fallback.html: Added.
+        * Layout/resources/font-fallback.html: Added.
+
+2014-12-08  Dean Jackson  <dino@apple.com>
+
+        [Apple] Use Accelerate framework to speed-up FEGaussianBlur
+        https://bugs.webkit.org/show_bug.cgi?id=139310
+
+        Reviewed by Simon Fraser.
+
+        Add an interactive performance test that measures the speed of a set
+        of blur operations on a generated images.
+
+        * Interactive/blur-filter-timing.html: Added.
+
+2014-11-13  Zalan Bujtas  <zalan@apple.com>
+
+        Simple line layout: Add performance test case to measure line layout speed of monolithic text content.
+        https://bugs.webkit.org/show_bug.cgi?id=138699
+
+        Reviewed by Antti Koivisto.
+
+        * Layout/line-layout-long-long-text.html: Added.
+
+2014-10-22  Zalan Bujtas  <zalan@apple.com>
+
+        Speed up line parsing for simple line layout (part I)
+        https://bugs.webkit.org/show_bug.cgi?id=137275
+
+        Reviewed by Antti Koivisto.
+
+        Extend simple line layout performance test with a few more cases.
+        Now we've got:
+        <div center
+        <div right
+        <div justify
+        <div white-space: pre (new)
+        <div overflow-wrap: break-word (new)
+        <pre
+        <pre white-space: pre-wrap
+        <pre white-space: pre-line (new)
+        <pre white-space: nowrap (new)
+        <pre white-space: pre-wrap overflow-wrap: break-word
+        <div + embedded <span etc.
+        <div + br
+
+        * Layout/line-layout-simple.html:
+
+2014-10-15  Andrei Bucur  <abucur@adobe.com>
+
+        [Multicol] Start adding performance tests for the multi-column implementation
+        https://bugs.webkit.org/show_bug.cgi?id=137687
+
+        Reviewed by Mihnea Ovidenie.
+
+        This patch creates a Multicol folder inside the Layout performance tests suite. It adds only two tests
+        as described below.
+
+        The tests are skipped until the implementation stabilizes.
+
+        * Layout/Multicol/MulticolManyColumns.html: Added.
+        This test verifies the performance of the multi-column implementation with two nested multi-column
+        containers, the first having 20 columns and the second 10 columns.
+
+        * Layout/Multicol/MulticolNested.html: Added.
+        This test verifies the performance of nesting multi-column containers in the presence
+        of floats.
+
+        * Layout/Multicol/resources/multicol-content-many-columns.html: Added.
+        * Layout/Multicol/resources/multicol-content-nested.html: Added.
+        * Skipped: Skip the Multicol folder for now.
+
+2014-09-29  Filip Pizlo  <fpizlo@apple.com>
+
+        It should be fun and easy to run every possible JavaScript benchmark from the command line
+        https://bugs.webkit.org/show_bug.cgi?id=137245
+
+        Reviewed by Oliver Hunt.
+        
+        This adds the scaffolding for running Octane version 2 inside run-jsc-benchmarks.
+        In the future we should just land Octane2 in this directory, and run-jsc-benchmarks
+        should be changed to point directly at this directory instead of requiring the
+        Octane path to be configured as part of the configuration file.
+
+        * Octane: Added.
+        * Octane/wrappers: Added.
+        * Octane/wrappers/jsc-box2d.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-boyer.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-closure.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-decrypt.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-deltablue.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-earley.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-encrypt.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-gbemu.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-jquery.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-mandreel.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-navier-stokes.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-pdfjs.js: Added.
+        (jscSetUp.PdfJS_window.console.log):
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-raytrace.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-regexp.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-richards.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-splay.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-typescript.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+        * Octane/wrappers/jsc-zlib.js: Added.
+        (jscSetUp):
+        (jscTearDown):
+        (jscRun):
+
+2014-09-28  Sungmann Cho  <sungmann.cho@navercorp.com>
+
+        Fix some minor typos: psuedo -> pseudo
+        https://bugs.webkit.org/show_bug.cgi?id=137192
+
+        Reviewed by Alexey Proskuryakov.
+
+        * Speedometer/resources/todomvc/architecture-examples/emberjs/bower_components/handlebars/handlebars.js:
+
 2014-09-11  Geoffrey Garen  <ggaren@apple.com>
 
         Some MallocBench refinements

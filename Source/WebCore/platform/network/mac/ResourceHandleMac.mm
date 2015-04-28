@@ -75,7 +75,7 @@ CFDictionaryRef _CFURLConnectionCopyTimingData(CFURLConnectionRef);
 #endif
 
 #if PLATFORM(IOS)
-#import "CFURLRequestSPI.h"
+#import "CFNetworkSPI.h"
 #import "RuntimeApplicationChecksIOS.h"
 #import "WebCoreThreadRun.h"
 
@@ -105,7 +105,6 @@ static void applyBasicAuthorizationHeader(ResourceRequest& request, const Creden
     request.setHTTPHeaderField(HTTPHeaderName::Authorization, authenticationHeader);
 }
 
-#if !PLATFORM(IOS)
 static NSOperationQueue *operationQueueForAsyncClients()
 {
     static NSOperationQueue *queue;
@@ -116,7 +115,6 @@ static NSOperationQueue *operationQueueForAsyncClients()
     }
     return queue;
 }
-#endif
 
 ResourceHandleInternal::~ResourceHandleInternal()
 {
@@ -208,11 +206,9 @@ void ResourceHandle::createNSURLConnection(id delegate, bool shouldUseCredential
         [streamProperties setObject:@TRUE forKey:@"_WebKitSynchronousRequest"];
     }
 
-#if PLATFORM(IOS) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
     RetainPtr<CFDataRef> sourceApplicationAuditData = d->m_context->sourceApplicationAuditData();
     if (sourceApplicationAuditData)
         [streamProperties setObject:(NSData *)sourceApplicationAuditData.get() forKey:@"kCFStreamPropertySourceApplication"];
-#endif
 
 #if PLATFORM(IOS)
     NSMutableDictionary *propertyDictionary = [NSMutableDictionary dictionaryWithDictionary:connectionProperties];
@@ -244,8 +240,6 @@ bool ResourceHandle::start()
     // FIXME: Do not use the sync version of shouldUseCredentialStorage when the client returns true from usesAsyncCallbacks.
     bool shouldUseCredentialStorage = !client() || client()->shouldUseCredentialStorage(this);
 
-    d->m_needsSiteSpecificQuirks = d->m_context->needsSiteSpecificQuirks();
-
 #if !PLATFORM(IOS)
     createNSURLConnection(
         ResourceHandle::makeDelegate(shouldUseCredentialStorage),
@@ -261,11 +255,6 @@ bool ResourceHandle::start()
         (NSDictionary *)client()->connectionProperties(this).get());
 #endif
 
-#if PLATFORM(IOS)
-    NSURLConnection *urlConnection = connection();
-    [urlConnection scheduleInRunLoop:WebThreadNSRunLoop() forMode:NSDefaultRunLoopMode];
-    [urlConnection start];
-#else
     bool scheduled = false;
     if (SchedulePairHashSet* scheduledPairs = d->m_context->scheduledRunLoopPairs()) {
         SchedulePairHashSet::iterator end = scheduledPairs->end();
@@ -282,6 +271,12 @@ bool ResourceHandle::start()
         [connection() setDelegateQueue:operationQueueForAsyncClients()];
         scheduled = true;
     }
+#if PLATFORM(IOS)
+    else {
+        [connection() scheduleInRunLoop:WebThreadNSRunLoop() forMode:NSDefaultRunLoopMode];
+        scheduled = true;
+    }
+#endif
 
     // Start the connection if we did schedule with at least one runloop.
     // We can't start the connection until we have one runloop scheduled.
@@ -289,7 +284,6 @@ bool ResourceHandle::start()
         [connection() start];
     else
         d->m_startWhenScheduled = true;
-#endif
 
     LOG(Network, "Handle %p starting connection %p for %@", this, connection(), firstRequest().nsURLRequest(DoNotUpdateHTTPBody));
     
@@ -383,11 +377,6 @@ NSURLConnection *ResourceHandle::connection() const
     return d->m_connection.get();
 }
     
-bool ResourceHandle::loadsBlocked()
-{
-    return false;
-}
-
 CFStringRef ResourceHandle::synchronousLoadRunLoopMode()
 {
     return CFSTR("WebCoreSynchronousLoaderRunLoopMode");
@@ -399,10 +388,10 @@ void ResourceHandle::platformLoadResourceSynchronously(NetworkingContext* contex
 
     ASSERT(!request.isEmpty());
     
-    OwnPtr<SynchronousLoaderClient> client = SynchronousLoaderClient::create();
-    client->setAllowStoredCredentials(storedCredentials == AllowStoredCredentials);
+    SynchronousLoaderClient client;
+    client.setAllowStoredCredentials(storedCredentials == AllowStoredCredentials);
 
-    RefPtr<ResourceHandle> handle = adoptRef(new ResourceHandle(context, request, client.get(), false /*defersLoading*/, true /*shouldContentSniff*/));
+    RefPtr<ResourceHandle> handle = adoptRef(new ResourceHandle(context, request, &client, false /*defersLoading*/, true /*shouldContentSniff*/));
 
     handle->d->m_storageSession = context->storageSession().platformSession();
 
@@ -430,17 +419,17 @@ void ResourceHandle::platformLoadResourceSynchronously(NetworkingContext* contex
     [handle->connection() scheduleInRunLoop:[NSRunLoop currentRunLoop] forMode:(NSString *)synchronousLoadRunLoopMode()];
     [handle->connection() start];
     
-    while (!client->isDone())
+    while (!client.isDone())
         [[NSRunLoop currentRunLoop] runMode:(NSString *)synchronousLoadRunLoopMode() beforeDate:[NSDate distantFuture]];
 
-    error = client->error();
+    error = client.error();
     
     [handle->connection() cancel];
 
     if (error.isNull())
-        response = client->response();
+        response = client.response();
 
-    data.swap(client->mutableData());
+    data.swap(client.mutableData());
 }
 
 void ResourceHandle::willSendRequest(ResourceRequest& request, const ResourceResponse& redirectResponse)
@@ -473,10 +462,10 @@ void ResourceHandle::willSendRequest(ResourceRequest& request, const ResourceRes
     request.removeCredentials();
 
     if (!protocolHostAndPortAreEqual(request.url(), redirectResponse.url())) {
-        // If the network layer carries over authentication headers from the original request
-        // in a cross-origin redirect, we want to clear those headers here.
-        // As of Lion, CFNetwork no longer does this.
+        // The network layer might carry over some headers from the original request that
+        // we want to strip here because the redirect is cross-origin.
         request.clearHTTPAuthorization();
+        request.clearHTTPOrigin();
     } else {
         // Only consider applying authentication credentials if this is actually a redirect and the redirect
         // URL didn't include credentials of its own.

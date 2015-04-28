@@ -26,6 +26,7 @@
 #ifndef FrameSelection_h
 #define FrameSelection_h
 
+#include "AXTextStateChangeIntent.h"
 #include "EditingStyle.h"
 #include "IntRect.h"
 #include "LayoutRect.h"
@@ -46,6 +47,7 @@ class Frame;
 class GraphicsContext;
 class HTMLFormElement;
 class MutableStyleProperties;
+class RenderBlock;
 class RenderObject;
 class RenderView;
 class Settings;
@@ -92,7 +94,7 @@ class DragCaretController : private CaretBase {
 public:
     DragCaretController();
 
-    RenderObject* caretRenderer() const;
+    RenderBlock* caretRenderer() const;
     void paintDragCaret(Frame*, GraphicsContext*, const LayoutPoint&, const LayoutRect& clipRect) const;
 
     bool isContentEditable() const { return m_position.rootEditableElement(); }
@@ -101,9 +103,9 @@ public:
     bool hasCaret() const { return m_position.isNotNull(); }
     const VisiblePosition& caretPosition() { return m_position; }
     void setCaretPosition(const VisiblePosition&);
-    WEBCORE_EXPORT void clear() { setCaretPosition(VisiblePosition()); }
+    void clear() { setCaretPosition(VisiblePosition()); }
 
-    void nodeWillBeRemoved(Node*);
+    void nodeWillBeRemoved(Node&);
 
 private:
     VisiblePosition m_position;
@@ -136,14 +138,14 @@ public:
     WEBCORE_EXPORT Element* rootEditableElementOrDocumentElement() const;
      
     void moveTo(const Range*);
-    void moveTo(const VisiblePosition&, EUserTriggered = NotUserTriggered, CursorAlignOnScroll = AlignCursorOnScrollIfNeeded);
+    WEBCORE_EXPORT void moveTo(const VisiblePosition&, EUserTriggered = NotUserTriggered, CursorAlignOnScroll = AlignCursorOnScrollIfNeeded);
     WEBCORE_EXPORT void moveTo(const VisiblePosition&, const VisiblePosition&, EUserTriggered = NotUserTriggered);
     void moveTo(const Position&, EAffinity, EUserTriggered = NotUserTriggered);
     void moveTo(const Position&, const Position&, EAffinity, EUserTriggered = NotUserTriggered);
     void moveWithoutValidationTo(const Position&, const Position&, bool selectionHasDirection, bool shouldSetFocus);
 
     const VisibleSelection& selection() const { return m_selection; }
-    WEBCORE_EXPORT void setSelection(const VisibleSelection&, SetSelectionOptions = defaultSetSelectionOptions(), CursorAlignOnScroll = AlignCursorOnScrollIfNeeded, TextGranularity = CharacterGranularity);
+    WEBCORE_EXPORT void setSelection(const VisibleSelection&, SetSelectionOptions = defaultSetSelectionOptions(), AXTextStateChangeIntent = AXTextStateChangeIntent(), CursorAlignOnScroll = AlignCursorOnScrollIfNeeded, TextGranularity = CharacterGranularity);
     WEBCORE_EXPORT bool setSelectedRange(Range*, EAffinity, bool closeTyping);
     WEBCORE_EXPORT void selectAll();
     WEBCORE_EXPORT void clear();
@@ -169,7 +171,7 @@ public:
     void setExtent(const Position&, EAffinity, EUserTriggered = NotUserTriggered);
 
     // Return the renderer that is responsible for painting the caret (in the selection start node)
-    RenderObject* caretRendererWithoutUpdatingLayout() const;
+    RenderBlock* caretRendererWithoutUpdatingLayout() const;
 
     // Bounds of (possibly transformed) caret in absolute coords
     WEBCORE_EXPORT IntRect absoluteCaretBounds();
@@ -187,7 +189,7 @@ public:
 
     void debugRenderer(RenderObject*, bool selected) const;
 
-    void nodeWillBeRemoved(Node*);
+    void nodeWillBeRemoved(Node&);
     void textWasReplaced(CharacterData*, unsigned offset, unsigned oldLength, unsigned newLength);
 
     void setCaretVisible(bool caretIsVisible) { setCaretVisibility(caretIsVisible ? Visible : Hidden); }
@@ -206,7 +208,7 @@ public:
     // Painting.
     WEBCORE_EXPORT void updateAppearance();
 
-#ifndef NDEBUG
+#if ENABLE(TREE_DEBUGGING)
     void formatForDebugger(char* buffer, unsigned length) const;
     void showTreeForThis() const;
 #endif
@@ -271,12 +273,12 @@ public:
 private:
     enum EPositionType { START, END, BASE, EXTENT };
 
-    void updateAndRevealSelection();
+    void updateAndRevealSelection(const AXTextStateChangeIntent&);
     void updateDataDetectorsForSelection();
 
     bool setSelectionWithoutUpdatingAppearance(const VisibleSelection&, SetSelectionOptions, CursorAlignOnScroll, TextGranularity);
 
-    void respondToNodeModification(Node*, bool baseRemoved, bool extentRemoved, bool startRemoved, bool endRemoved);
+    void respondToNodeModification(Node&, bool baseRemoved, bool extentRemoved, bool startRemoved, bool endRemoved);
     TextDirection directionOfEnclosingBlock();
     TextDirection directionOfSelection();
 
@@ -296,10 +298,11 @@ private:
 
     LayoutUnit lineDirectionPointForBlockDirectionNavigation(EPositionType);
 
+    AXTextStateChangeIntent textSelectionIntent(EAlteration, SelectionDirection, TextGranularity);
 #if HAVE(ACCESSIBILITY)
-    void notifyAccessibilityForSelectionChange();
+    void notifyAccessibilityForSelectionChange(const AXTextStateChangeIntent&);
 #else
-    void notifyAccessibilityForSelectionChange() { }
+    void notifyAccessibilityForSelectionChange(const AXTextStateChangeIntent&) { }
 #endif
 
     void updateSelectionCachesIfSelectionIsInsideTextFormControl(EUserTriggered);
@@ -309,7 +312,7 @@ private:
     void setFocusedElementIfNeeded();
     void focusedOrActiveStateChanged();
 
-    void caretBlinkTimerFired(Timer<FrameSelection>&);
+    void caretBlinkTimerFired();
 
     void setCaretVisibility(CaretVisibility);
     bool recomputeCaretRect();
@@ -329,7 +332,7 @@ private:
 
     RefPtr<EditingStyle> m_typingStyle;
 
-    Timer<FrameSelection> m_caretBlinkTimer;
+    Timer m_caretBlinkTimer;
     // The painted bounds of the caret in absolute coordinates
     IntRect m_absCaretBounds;
     bool m_absCaretBoundsDirty : 1;
@@ -366,7 +369,7 @@ inline void FrameSelection::setTypingStyle(PassRefPtr<EditingStyle> style)
 
 #if !(PLATFORM(COCOA) || PLATFORM(GTK) || PLATFORM(EFL))
 #if HAVE(ACCESSIBILITY)
-inline void FrameSelection::notifyAccessibilityForSelectionChange()
+inline void FrameSelection::notifyAccessibilityForSelectionChange(const AXTextStateChangeIntent&)
 {
 }
 #endif
@@ -374,7 +377,7 @@ inline void FrameSelection::notifyAccessibilityForSelectionChange()
 
 } // namespace WebCore
 
-#ifndef NDEBUG
+#if ENABLE(TREE_DEBUGGING)
 // Outside the WebCore namespace for ease of invocation from gdb.
 void showTree(const WebCore::FrameSelection&);
 void showTree(const WebCore::FrameSelection*);

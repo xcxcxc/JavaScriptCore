@@ -31,6 +31,7 @@
 #include "ActiveDOMObject.h"
 #include "EventListener.h"
 #include "EventTarget.h"
+#include "Timer.h"
 #include "VoidCallback.h"
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
@@ -44,23 +45,17 @@ class CSSFontFaceSource;
 class Dictionary;
 class Document;
 class Event;
-class Font;
+class FontCascade;
 class LoadFontCallback;
 class ScriptExecutionContext;
 
-class FontLoader : public RefCounted<FontLoader>, public ActiveDOMObject, public EventTarget {
+class FontLoader final : public RefCounted<FontLoader>, public ActiveDOMObject, public EventTarget {
 public:
-    static PassRefPtr<FontLoader> create(Document* document)
+    static Ref<FontLoader> create(Document* document)
     {
-        return adoptRef<FontLoader>(new FontLoader(document));
+        return adoptRef<FontLoader>(*new FontLoader(document));
     }
     virtual ~FontLoader();
-
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(loading);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(loadingdone);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(loadstart);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(load);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(error);
 
     bool checkFont(const String&, const String&);
     void loadFont(const Dictionary&);
@@ -68,10 +63,10 @@ public:
 
     void notifyWhenFontsReady(PassRefPtr<VoidCallback>);
 
-    bool loading() const { return m_numLoadingFromCSS > 0; }
+    bool loading() const { return m_numLoadingFromCSS > 0 || m_numLoadingFromJS > 0; }
 
-    virtual ScriptExecutionContext* scriptExecutionContext() const;
-    virtual EventTargetInterface eventTargetInterface() const;
+    virtual ScriptExecutionContext* scriptExecutionContext() const override;
+    virtual EventTargetInterface eventTargetInterface() const override;
 
     using RefCounted<FontLoader>::ref;
     using RefCounted<FontLoader>::deref;
@@ -84,8 +79,6 @@ public:
     void loadError(CSSFontFaceRule*, CSSFontFaceSource*);
     void loadingDone();
 
-    virtual bool canSuspend() const override { return !m_numLoadingFromCSS && !m_numLoadingFromJS; }
-
 private:
     FontLoader(Document*);
 
@@ -94,9 +87,14 @@ private:
     virtual EventTargetData* eventTargetData() override;
     virtual EventTargetData& ensureEventTargetData() override;
 
+    // ActiveDOMObject API.
+    const char* activeDOMObjectName() const override;
+    bool canSuspendForPageCache() const override;
+
+    void pendingEventsTimerFired() { firePendingEvents(); }
     void scheduleEvent(PassRefPtr<Event>);
     void firePendingEvents();
-    bool resolveFontStyle(const String&, Font&);
+    bool resolveFontStyle(const String&, FontCascade&);
 
     Document* m_document;
     EventTargetData m_eventTargetData;
@@ -105,6 +103,7 @@ private:
     Vector<RefPtr<Event>> m_pendingEvents;
     Vector<RefPtr<VoidCallback>> m_callbacks;
     RefPtr<Event> m_loadingDoneEvent;
+    Timer m_pendingEventsTimer;
 };
 
 } // namespace WebCore

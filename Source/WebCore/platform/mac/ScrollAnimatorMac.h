@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2010, 2011, 2014-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,7 +32,6 @@
 #include "FloatPoint.h"
 #include "FloatSize.h"
 #include "ScrollAnimator.h"
-#include "ScrollElasticityController.h"
 #include "Timer.h"
 #include <wtf/RetainPtr.h>
 
@@ -42,18 +41,14 @@ OBJC_CLASS WebScrollbarPainterDelegate;
 
 typedef id ScrollbarPainterController;
 
-#if !ENABLE(RUBBER_BANDING)
-class ScrollElasticityControllerClient { };
-#endif
-
 namespace WebCore {
 
 class Scrollbar;
 
-class ScrollAnimatorMac : public ScrollAnimator, private ScrollElasticityControllerClient {
+class ScrollAnimatorMac : public ScrollAnimator {
 
 public:
-    ScrollAnimatorMac(ScrollableArea*);
+    ScrollAnimatorMac(ScrollableArea&);
     virtual ~ScrollAnimatorMac();
 
     void immediateScrollToPointForScrollAnimation(const FloatPoint& newPosition);
@@ -78,11 +73,11 @@ private:
     RetainPtr<WebScrollbarPainterDelegate> m_horizontalScrollbarPainterDelegate;
     RetainPtr<WebScrollbarPainterDelegate> m_verticalScrollbarPainterDelegate;
 
-    void initialScrollbarPaintTimerFired(Timer<ScrollAnimatorMac>&);
-    Timer<ScrollAnimatorMac> m_initialScrollbarPaintTimer;
+    void initialScrollbarPaintTimerFired();
+    Timer m_initialScrollbarPaintTimer;
 
-    void sendContentAreaScrolledTimerFired(Timer<ScrollAnimatorMac>&);
-    Timer<ScrollAnimatorMac> m_sendContentAreaScrolledTimer;
+    void sendContentAreaScrolledTimerFired();
+    Timer m_sendContentAreaScrolledTimer;
     FloatSize m_contentAreaScrolledTimerScrollDelta;
 
     virtual bool scroll(ScrollbarOrientation, ScrollGranularity, float step, float multiplier);
@@ -139,7 +134,7 @@ private:
     virtual bool isRubberBandInProgress() const override;
 
 #if ENABLE(RUBBER_BANDING)
-    /// ScrollElasticityControllerClient member functions.
+    /// ScrollControllerClient member functions.
     virtual IntSize stretchAmount() override;
     virtual bool allowsHorizontalStretching(const PlatformWheelEvent&) override;
     virtual bool allowsVerticalStretching(const PlatformWheelEvent&) override;
@@ -150,17 +145,9 @@ private:
     virtual WebCore::IntPoint absoluteScrollPosition() override;
     virtual void immediateScrollByWithoutContentEdgeConstraints(const FloatSize&) override;
     virtual void immediateScrollBy(const FloatSize&) override;
-    virtual void startSnapRubberbandTimer() override;
-    virtual void stopSnapRubberbandTimer() override;
     virtual void adjustScrollPositionToBoundsIfNecessary() override;
 
-    bool pinnedInDirection(float deltaX, float deltaY);
-    void snapRubberBandTimerFired(Timer<ScrollAnimatorMac>&);
-
     bool isAlreadyPinnedInDirectionOfGesture(const PlatformWheelEvent&, ScrollEventAxis);
-
-    ScrollElasticityController m_scrollElasticityController;
-    Timer<ScrollAnimatorMac> m_snapRubberBandTimer;
 #endif
 
     bool m_haveScrolledSincePageLoad;

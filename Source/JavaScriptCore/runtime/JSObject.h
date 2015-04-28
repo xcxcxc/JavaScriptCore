@@ -100,6 +100,7 @@ public:
     JS_EXPORT_PRIVATE static void copyBackingStore(JSCell*, CopyVisitor&, CopyToken);
 
     JS_EXPORT_PRIVATE static String className(const JSObject*);
+    JS_EXPORT_PRIVATE static String calculatedClassName(JSObject*);
 
     JSValue prototype() const;
     JS_EXPORT_PRIVATE void setPrototype(VM&, JSValue prototype);
@@ -363,10 +364,15 @@ public:
             RELEASE_ASSERT_NOT_REACHED();
         }
     }
-        
+
     void initializeIndex(VM& vm, unsigned i, JSValue v)
     {
-        switch (indexingType()) {
+        initializeIndex(vm, i, v, indexingType());
+    }
+
+    void initializeIndex(VM& vm, unsigned i, JSValue v, IndexingType indexingType)
+    {
+        switch (indexingType) {
         case ALL_UNDECIDED_INDEXING_TYPES: {
             setIndexQuicklyToUndecided(vm, i, v);
             break;
@@ -592,6 +598,8 @@ public:
     bool isVariableObject() const;
     bool isStaticScopeObject() const;
     bool isNameScopeObject() const;
+    bool isCatchScopeObject() const;
+    bool isFunctionNameScopeObject() const;
     bool isActivationObject() const;
     bool isErrorInstance() const;
     bool isWithScope() const;
@@ -724,8 +732,6 @@ protected:
     {
         Base::finishCreation(vm);
         ASSERT(inherits(info()));
-        ASSERT(!structure()->outOfLineCapacity());
-        ASSERT(structure()->isEmpty());
         ASSERT(prototype().isNull() || Heap::heap(this) == Heap::heap(prototype()));
         ASSERT(structure()->isObject());
         ASSERT(classInfo());
@@ -782,23 +788,19 @@ protected:
     ContiguousJSValues convertUndecidedToInt32(VM&);
     ContiguousDoubles convertUndecidedToDouble(VM&);
     ContiguousJSValues convertUndecidedToContiguous(VM&);
-    ArrayStorage* convertUndecidedToArrayStorage(VM&, NonPropertyTransition, unsigned neededLength);
     ArrayStorage* convertUndecidedToArrayStorage(VM&, NonPropertyTransition);
     ArrayStorage* convertUndecidedToArrayStorage(VM&);
         
     ContiguousDoubles convertInt32ToDouble(VM&);
     ContiguousJSValues convertInt32ToContiguous(VM&);
-    ArrayStorage* convertInt32ToArrayStorage(VM&, NonPropertyTransition, unsigned neededLength);
     ArrayStorage* convertInt32ToArrayStorage(VM&, NonPropertyTransition);
     ArrayStorage* convertInt32ToArrayStorage(VM&);
     
     ContiguousJSValues convertDoubleToContiguous(VM&);
     ContiguousJSValues rageConvertDoubleToContiguous(VM&);
-    ArrayStorage* convertDoubleToArrayStorage(VM&, NonPropertyTransition, unsigned neededLength);
     ArrayStorage* convertDoubleToArrayStorage(VM&, NonPropertyTransition);
     ArrayStorage* convertDoubleToArrayStorage(VM&);
         
-    ArrayStorage* convertContiguousToArrayStorage(VM&, NonPropertyTransition, unsigned neededLength);
     ArrayStorage* convertContiguousToArrayStorage(VM&, NonPropertyTransition);
     ArrayStorage* convertContiguousToArrayStorage(VM&);
 
@@ -1034,6 +1036,7 @@ class JSFinalObject : public JSObject {
 
 public:
     typedef JSObject Base;
+    static const unsigned StructureFlags = Base::StructureFlags;
 
     static size_t allocationSize(size_t inlineCapacity)
     {
@@ -1052,7 +1055,7 @@ public:
         return (maxSize - allocationSize(0)) / sizeof(WriteBarrier<Unknown>);
     }
 
-    static JSFinalObject* create(ExecState*, Structure*);
+    static JSFinalObject* create(ExecState*, Structure*, Butterfly* = nullptr);
     static JSFinalObject* create(VM&, Structure*);
     static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype, unsigned inlineCapacity)
     {
@@ -1076,15 +1079,14 @@ protected:
 private:
     friend class LLIntOffsetsExtractor;
 
-    explicit JSFinalObject(VM& vm, Structure* structure)
-        : JSObject(vm, structure)
+    explicit JSFinalObject(VM& vm, Structure* structure, Butterfly* butterfly = nullptr)
+        : JSObject(vm, structure, butterfly)
     {
     }
-
-    static const unsigned StructureFlags = JSObject::StructureFlags;
 };
 
-inline JSFinalObject* JSFinalObject::create(ExecState* exec, Structure* structure)
+inline JSFinalObject* JSFinalObject::create(
+    ExecState* exec, Structure* structure, Butterfly* butterfly)
 {
     JSFinalObject* finalObject = new (
         NotNull, 
@@ -1092,7 +1094,7 @@ inline JSFinalObject* JSFinalObject::create(ExecState* exec, Structure* structur
             *exec->heap(),
             allocationSize(structure->inlineCapacity())
         )
-    ) JSFinalObject(exec->vm(), structure);
+    ) JSFinalObject(exec->vm(), structure, butterfly);
     finalObject->finishCreation(exec->vm());
     return finalObject;
 }
@@ -1134,7 +1136,6 @@ inline bool JSObject::isStaticScopeObject() const
     JSType type = this->type();
     return type == NameScopeObjectType || type == ActivationObjectType;
 }
-
 
 inline bool JSObject::isNameScopeObject() const
 {
@@ -1249,9 +1250,8 @@ ALWAYS_INLINE bool JSObject::getOwnPropertySlot(JSObject* object, ExecState* exe
     Structure& structure = *object->structure(vm);
     if (object->inlineGetOwnPropertySlot(vm, structure, propertyName, slot))
         return true;
-    unsigned index = propertyName.asIndex();
-    if (index != PropertyName::NotAnIndex)
-        return getOwnPropertySlotByIndex(object, exec, index, slot);
+    if (Optional<uint32_t> index = parseIndex(propertyName))
+        return getOwnPropertySlotByIndex(object, exec, index.value(), slot);
     return false;
 }
 
@@ -1279,9 +1279,8 @@ ALWAYS_INLINE bool JSObject::getPropertySlot(ExecState* exec, PropertyName prope
         object = asObject(prototype);
     }
 
-    unsigned index = propertyName.asIndex();
-    if (index != PropertyName::NotAnIndex)
-        return getPropertySlot(exec, index, slot);
+    if (Optional<uint32_t> index = parseIndex(propertyName))
+        return getPropertySlot(exec, index.value(), slot);
     return false;
 }
 
@@ -1325,7 +1324,7 @@ inline bool JSObject::putDirectInternal(VM& vm, PropertyName propertyName, JSVal
     ASSERT(value);
     ASSERT(value.isGetterSetter() == !!(attributes & Accessor));
     ASSERT(!Heap::heap(value) || Heap::heap(value) == Heap::heap(this));
-    ASSERT(propertyName.asIndex() == PropertyName::NotAnIndex);
+    ASSERT(!parseIndex(propertyName));
 
     Structure* structure = this->structure(vm);
     if (structure->isDictionary()) {
@@ -1557,7 +1556,7 @@ COMPILE_ASSERT(!(sizeof(JSObject) % sizeof(WriteBarrierBase<Unknown>)), JSObject
 
 ALWAYS_INLINE Identifier makeIdentifier(VM& vm, const char* name)
 {
-    return Identifier(&vm, name);
+    return Identifier::fromString(&vm, name);
 }
 
 ALWAYS_INLINE Identifier makeIdentifier(VM&, const Identifier& name)

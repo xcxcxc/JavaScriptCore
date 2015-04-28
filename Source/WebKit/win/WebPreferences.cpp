@@ -23,7 +23,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#include "config.h"
 #include "WebKit.h"
 #include "WebKitDLL.h"
 #include "WebPreferences.h"
@@ -34,12 +33,13 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <WebCore/COMPtr.h>
 #include <WebCore/FileSystem.h>
-#include <WebCore/Font.h>
+#include <WebCore/FontCascade.h>
 #include <WebCore/LocalizedStrings.h>
 #include <limits>
 #include <shlobj.h>
 #include <wchar.h>
 #include <wtf/HashMap.h>
+#include <wtf/NeverDestroyed.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringHash.h>
@@ -101,7 +101,11 @@ static bool booleanValueForPreferencesValue(CFPropertyListRef value)
 
 static CFDictionaryRef defaultSettings;
 
-static HashMap<WTF::String, COMPtr<WebPreferences> > webPreferencesInstances;
+static HashMap<WTF::String, COMPtr<WebPreferences>>& webPreferencesInstances()
+{
+    static NeverDestroyed<HashMap<WTF::String, COMPtr<WebPreferences>>> webPreferencesInstances;
+    return webPreferencesInstances;
+}
 
 WebPreferences* WebPreferences::sharedStandardPreferences()
 {
@@ -122,13 +126,13 @@ WebPreferences::WebPreferences()
     , m_numWebViews(0)
 {
     gClassCount++;
-    gClassNameCount.add("WebPreferences");
+    gClassNameCount().add("WebPreferences");
 }
 
 WebPreferences::~WebPreferences()
 {
     gClassCount--;
-    gClassNameCount.remove("WebPreferences");
+    gClassNameCount().remove("WebPreferences");
 }
 
 WebPreferences* WebPreferences::createInstance()
@@ -157,7 +161,7 @@ WebPreferences* WebPreferences::getInstanceForIdentifier(BSTR identifier)
     if (identifierString.isEmpty())
         return sharedStandardPreferences();
 
-    return webPreferencesInstances.get(identifierString).get();
+    return webPreferencesInstances().get(identifierString);
 }
 
 void WebPreferences::setInstance(WebPreferences* instance, BSTR identifier)
@@ -167,20 +171,20 @@ void WebPreferences::setInstance(WebPreferences* instance, BSTR identifier)
     WTF::String identifierString(identifier, SysStringLen(identifier));
     if (identifierString.isEmpty())
         return;
-    webPreferencesInstances.add(identifierString, instance);
+    webPreferencesInstances().add(identifierString, instance);
 }
 
 void WebPreferences::removeReferenceForIdentifier(BSTR identifier)
 {
-    if (!identifier || webPreferencesInstances.isEmpty())
+    if (!identifier || webPreferencesInstances().isEmpty())
         return;
 
     WTF::String identifierString(identifier, SysStringLen(identifier));
     if (identifierString.isEmpty())
         return;
-    WebPreferences* webPreference = webPreferencesInstances.get(identifierString).get();
+    WebPreferences* webPreference = webPreferencesInstances().get(identifierString);
     if (webPreference && webPreference->m_refCount == 1)
-        webPreferencesInstances.remove(identifierString);
+        webPreferencesInstances().remove(identifierString);
 }
 
 void WebPreferences::initializeDefaultSettings()
@@ -211,6 +215,7 @@ void WebPreferences::initializeDefaultSettings()
     CFDictionaryAddValue(defaults, CFSTR(WebKitTextAreasAreResizablePreferenceKey), kCFBooleanFalse);
     CFDictionaryAddValue(defaults, CFSTR(WebKitJavaEnabledPreferenceKey), kCFBooleanTrue);
     CFDictionaryAddValue(defaults, CFSTR(WebKitJavaScriptEnabledPreferenceKey), kCFBooleanTrue);
+    CFDictionaryAddValue(defaults, CFSTR(WebKitJavaScriptRuntimeFlagsPreferenceKey), CFSTR("0"));
     CFDictionaryAddValue(defaults, CFSTR(WebKitWebSecurityEnabledPreferenceKey), kCFBooleanTrue);
     CFDictionaryAddValue(defaults, CFSTR(WebKitAllowUniversalAccessFromFileURLsPreferenceKey), kCFBooleanFalse);
     CFDictionaryAddValue(defaults, CFSTR(WebKitAllowFileAccessFromFileURLsPreferenceKey), kCFBooleanTrue);
@@ -260,7 +265,6 @@ void WebPreferences::initializeDefaultSettings()
     CFDictionaryAddValue(defaults, CFSTR(WebKitCacheModelPreferenceKey), cacheModelRef.get());
 
     CFDictionaryAddValue(defaults, CFSTR(WebKitAuthorAndUserStylesEnabledPreferenceKey), kCFBooleanTrue);
-    CFDictionaryAddValue(defaults, CFSTR(WebKitApplicationChromeModePreferenceKey), kCFBooleanFalse);
 
     CFDictionaryAddValue(defaults, CFSTR(WebKitOfflineWebApplicationCacheEnabledPreferenceKey), kCFBooleanFalse);
 
@@ -820,7 +824,21 @@ HRESULT STDMETHODCALLTYPE WebPreferences::setJavaScriptEnabled(
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE WebPreferences::isWebSecurityEnabled( 
+HRESULT STDMETHODCALLTYPE WebPreferences::javaScriptRuntimeFlags(
+    /* [retval][out] */ unsigned* flags)
+{
+    *flags = static_cast<unsigned>(integerValueForKey(WebKitJavaScriptRuntimeFlagsPreferenceKey));
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE WebPreferences::setJavaScriptRuntimeFlags(
+    /* [in] */ unsigned flags)
+{
+    setIntegerValue(WebKitJavaScriptRuntimeFlagsPreferenceKey, static_cast<int>(flags));
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE WebPreferences::isWebSecurityEnabled(
     /* [retval][out] */ BOOL* enabled)
 {
     *enabled = boolValueForKey(WebKitWebSecurityEnabledPreferenceKey);
@@ -1275,18 +1293,6 @@ HRESULT WebPreferences::setMockScrollbarsEnabled(BOOL enabled)
     return S_OK;
 }
 
-HRESULT WebPreferences::screenFontSubstitutionEnabled(BOOL* enabled)
-{
-    *enabled = boolValueForKey(WebKitScreenFontSubstitutionEnabledPreferenceKey);
-    return S_OK;
-}
-
-HRESULT WebPreferences::setScreenFontSubstitutionEnabled(BOOL enabled)
-{
-    setBoolValue(WebKitScreenFontSubstitutionEnabledPreferenceKey, enabled);
-    return S_OK;
-}
-
 HRESULT STDMETHODCALLTYPE WebPreferences::hyperlinkAuditingEnabled(
     /* [in] */ BOOL* enabled)
 {
@@ -1406,18 +1412,6 @@ HRESULT WebPreferences::unused4()
     return E_FAIL;
 }
 
-HRESULT WebPreferences::shouldPaintNativeControls(BOOL* shouldPaint)
-{
-    *shouldPaint = boolValueForKey(WebKitPaintNativeControlsPreferenceKey);
-    return S_OK;
-}
-
-HRESULT WebPreferences::setShouldPaintNativeControls(BOOL shouldPaint)
-{
-    setBoolValue(WebKitPaintNativeControlsPreferenceKey, shouldPaint);
-    return S_OK;
-}
-
 HRESULT WebPreferences::setDeveloperExtrasEnabled(BOOL enabled)
 {
     setBoolValue(WebKitDeveloperExtrasEnabledPreferenceKey, enabled);
@@ -1468,15 +1462,13 @@ HRESULT STDMETHODCALLTYPE WebPreferences::authorAndUserStylesEnabled(BOOL* enabl
     return S_OK;
 }
 
-HRESULT WebPreferences::inApplicationChromeMode(BOOL* enabled)
+HRESULT WebPreferences::inApplicationChromeMode(BOOL*)
 {
-    *enabled = boolValueForKey(WebKitApplicationChromeModePreferenceKey);
     return S_OK;
 }
-    
-HRESULT WebPreferences::setApplicationChromeMode(BOOL enabled)
+
+HRESULT WebPreferences::setApplicationChromeMode(BOOL)
 {
-    setBoolValue(WebKitApplicationChromeModePreferenceKey, enabled);
     return S_OK;
 }
 

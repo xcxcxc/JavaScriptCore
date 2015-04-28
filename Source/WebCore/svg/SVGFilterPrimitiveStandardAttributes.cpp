@@ -22,11 +22,9 @@
 #include "config.h"
 #include "SVGFilterPrimitiveStandardAttributes.h"
 
-#include "Attribute.h"
 #include "FilterEffect.h"
 #include "RenderSVGResourceFilterPrimitive.h"
 #include "SVGElement.h"
-#include "SVGElementInstance.h"
 #include "SVGFilterBuilder.h"
 #include "SVGLength.h"
 #include "SVGNames.h"
@@ -80,9 +78,7 @@ void SVGFilterPrimitiveStandardAttributes::parseAttribute(const QualifiedName& n
 {
     SVGParsingError parseError = NoError;
 
-    if (!isSupportedAttribute(name))
-        SVGElement::parseAttribute(name, value);
-    else if (name == SVGNames::xAttr)
+    if (name == SVGNames::xAttr)
         setXBaseValue(SVGLength::construct(LengthModeWidth, value, parseError));
     else if (name == SVGNames::yAttr)
         setYBaseValue(SVGLength::construct(LengthModeHeight, value, parseError));
@@ -92,10 +88,10 @@ void SVGFilterPrimitiveStandardAttributes::parseAttribute(const QualifiedName& n
         setHeightBaseValue(SVGLength::construct(LengthModeHeight, value, parseError));
     else if (name == SVGNames::resultAttr)
         setResultBaseValue(value);
-    else
-        ASSERT_NOT_REACHED();
 
     reportAttributeParsingError(parseError, name, value);
+
+    SVGElement::parseAttribute(name, value);
 }
 
 bool SVGFilterPrimitiveStandardAttributes::setFilterEffectAttribute(FilterEffect*, const QualifiedName&)
@@ -112,7 +108,7 @@ void SVGFilterPrimitiveStandardAttributes::svgAttributeChanged(const QualifiedNa
         return;
     }
 
-    SVGElementInstance::InvalidationGuard invalidationGuard(this);    
+    InstanceInvalidationGuard guard(*this);
     invalidate();
 }
 
@@ -141,7 +137,7 @@ void SVGFilterPrimitiveStandardAttributes::setStandardAttributes(FilterEffect* f
         filterEffect->setHasHeight(true);
 }
 
-RenderPtr<RenderElement> SVGFilterPrimitiveStandardAttributes::createElementRenderer(PassRef<RenderStyle> style)
+RenderPtr<RenderElement> SVGFilterPrimitiveStandardAttributes::createElementRenderer(Ref<RenderStyle>&& style, const RenderTreePosition&)
 {
     return createRenderer<RenderSVGResourceFilterPrimitive>(*this, WTF::move(style));
 }

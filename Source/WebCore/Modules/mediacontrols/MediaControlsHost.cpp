@@ -38,6 +38,7 @@
 #include "PageGroup.h"
 #include "TextTrack.h"
 #include "TextTrackList.h"
+#include "UUID.h"
 #include <runtime/JSCJSValueInlines.h>
 
 namespace WebCore {
@@ -88,7 +89,33 @@ Vector<RefPtr<TextTrack>> MediaControlsHost::sortedTrackListForMenu(TextTrackLis
     return captionPreferences->sortedTrackListForMenu(trackList);
 }
 
+Vector<RefPtr<AudioTrack>> MediaControlsHost::sortedTrackListForMenu(AudioTrackList* trackList)
+{
+    if (!trackList)
+        return Vector<RefPtr<AudioTrack>>();
+
+    Page* page = m_mediaElement->document().page();
+    if (!page)
+        return Vector<RefPtr<AudioTrack>>();
+
+    CaptionUserPreferences* captionPreferences = page->group().captionPreferences();
+    return captionPreferences->sortedTrackListForMenu(trackList);
+}
+
 String MediaControlsHost::displayNameForTrack(TextTrack* track)
+{
+    if (!track)
+        return emptyString();
+
+    Page* page = m_mediaElement->document().page();
+    if (!page)
+        return emptyString();
+
+    CaptionUserPreferences* captionPreferences = page->group().captionPreferences();
+    return captionPreferences->displayNameForTrack(track);
+}
+
+String MediaControlsHost::displayNameForTrack(AudioTrack* track)
 {
     if (!track)
         return emptyString();
@@ -161,7 +188,14 @@ void MediaControlsHost::exitedFullscreen()
     if (m_textTrackContainer)
         m_textTrackContainer->exitedFullscreen();
 }
-
+    
+void MediaControlsHost::enterFullscreenOptimized()
+{
+#if PLATFORM(IOS)
+    m_mediaElement->enterFullscreenOptimized();
+#endif
+}
+    
 void MediaControlsHost::updateCaptionDisplaySizes()
 {
     if (m_textTrackContainer)
@@ -185,7 +219,7 @@ bool MediaControlsHost::userGestureRequired() const
 
 String MediaControlsHost::externalDeviceDisplayName() const
 {
-#if ENABLE(IOS_AIRPLAY)
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
     MediaPlayer* player = m_mediaElement->player();
     if (!player) {
         LOG(Media, "MediaControlsHost::externalDeviceDisplayName - returning \"\" because player is NULL");
@@ -206,7 +240,7 @@ String MediaControlsHost::externalDeviceType() const
     DEPRECATED_DEFINE_STATIC_LOCAL(String, none, (ASCIILiteral("none")));
     String type = none;
     
-#if ENABLE(IOS_AIRPLAY)
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
     DEPRECATED_DEFINE_STATIC_LOCAL(String, airplay, (ASCIILiteral("airplay")));
     DEPRECATED_DEFINE_STATIC_LOCAL(String, tvout, (ASCIILiteral("tvout")));
     
@@ -242,6 +276,26 @@ bool MediaControlsHost::controlsDependOnPageScaleFactor() const
 void MediaControlsHost::setControlsDependOnPageScaleFactor(bool value)
 {
     m_mediaElement->setMediaControlsDependOnPageScaleFactor(value);
+}
+
+String MediaControlsHost::mediaUIImageData(const String& partID) const
+{
+#if PLATFORM(IOS)
+    if (partID == "optimized-fullscreen-button")
+        return wkGetMediaUIImageData(wkMediaUIPartOptimizedFullscreenButton);
+
+    if (partID == "optimized-fullscreen-placeholder")
+        return wkGetMediaUIImageData(wkMediaUIPartOptimizedFullscreenPlaceholder);
+#else
+    UNUSED_PARAM(partID);
+#endif
+
+    return emptyString();
+}
+
+String MediaControlsHost::generateUUID() const
+{
+    return createCanonicalUUIDString();
 }
 
 }

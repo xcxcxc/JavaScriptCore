@@ -72,7 +72,8 @@ void WebBackForwardList::pageClosed()
             ASSERT(m_entries[i]);
             if (!m_entries[i])
                 continue;
-            m_page->backForwardRemovedItem(m_entries[i]->itemID());
+
+            didRemoveItem(*m_entries[i]);
         }
     }
 
@@ -91,11 +92,13 @@ void WebBackForwardList::addItem(WebBackForwardListItem* newItem)
     Vector<RefPtr<WebBackForwardListItem>> removedItems;
     
     if (m_hasCurrentIndex) {
+        m_page->recordNavigationSnapshot();
+
         // Toss everything in the forward list.
         unsigned targetSize = m_currentIndex + 1;
         removedItems.reserveCapacity(m_entries.size() - targetSize);
         while (m_entries.size() > targetSize) {
-            m_page->backForwardRemovedItem(m_entries.last()->itemID());
+            didRemoveItem(*m_entries.last());
             removedItems.append(m_entries.last().release());
             m_entries.removeLast();
         }
@@ -103,7 +106,7 @@ void WebBackForwardList::addItem(WebBackForwardListItem* newItem)
         // Toss the first item if the list is getting too big, as long as we're not using it
         // (or even if we are, if we only want 1 entry).
         if (m_entries.size() == m_capacity && (m_currentIndex || m_capacity == 1)) {
-            m_page->backForwardRemovedItem(m_entries[0]->itemID());
+            didRemoveItem(*m_entries[0]);
             removedItems.append(m_entries[0].release());
             m_entries.remove(0);
 
@@ -122,7 +125,7 @@ void WebBackForwardList::addItem(WebBackForwardListItem* newItem)
             ASSERT(m_entries[i]);
             if (!m_entries[i])
                 continue;
-            m_page->backForwardRemovedItem(m_entries[i]->itemID());
+            didRemoveItem(*m_entries[i]);
             removedItems.append(m_entries[i].release());
         }
         m_entries.clear();
@@ -176,8 +179,10 @@ void WebBackForwardList::goToItem(WebBackForwardListItem* item)
     // item should remain in the list.
     WebBackForwardListItem* currentItem = m_entries[m_currentIndex].get();
     bool shouldKeepCurrentItem = true;
-    if (currentItem != item)
+    if (currentItem != item) {
+        m_page->recordNavigationSnapshot();
         shouldKeepCurrentItem = m_page->shouldKeepCurrentBackForwardListItemInList(m_entries[m_currentIndex].get());
+    }
 
     // If the client said to remove the current item, remove it and then update the target index.
     Vector<RefPtr<WebBackForwardListItem>> removedItems;
@@ -245,17 +250,17 @@ int WebBackForwardList::forwardListCount() const
     return m_page && m_hasCurrentIndex ? m_entries.size() - (m_currentIndex + 1) : 0;
 }
 
-PassRefPtr<API::Array> WebBackForwardList::backList() const
+Ref<API::Array> WebBackForwardList::backList() const
 {
     return backListAsAPIArrayWithLimit(backListCount());
 }
 
-PassRefPtr<API::Array> WebBackForwardList::forwardList() const
+Ref<API::Array> WebBackForwardList::forwardList() const
 {
     return forwardListAsAPIArrayWithLimit(forwardListCount());
 }
 
-PassRefPtr<API::Array> WebBackForwardList::backListAsAPIArrayWithLimit(unsigned limit) const
+Ref<API::Array> WebBackForwardList::backListAsAPIArrayWithLimit(unsigned limit) const
 {
     ASSERT(!m_hasCurrentIndex || m_currentIndex < m_entries.size());
 
@@ -279,7 +284,7 @@ PassRefPtr<API::Array> WebBackForwardList::backListAsAPIArrayWithLimit(unsigned 
     return API::Array::create(WTF::move(vector));
 }
 
-PassRefPtr<API::Array> WebBackForwardList::forwardListAsAPIArrayWithLimit(unsigned limit) const
+Ref<API::Array> WebBackForwardList::forwardListAsAPIArrayWithLimit(unsigned limit) const
 {
     ASSERT(!m_hasCurrentIndex || m_currentIndex < m_entries.size());
 
@@ -314,7 +319,7 @@ void WebBackForwardList::removeAllItems()
         if (!entry)
             continue;
 
-        m_page->backForwardRemovedItem(entry->itemID());
+        didRemoveItem(*entry);
         removedItems.append(WTF::move(entry));
     }
 
@@ -344,7 +349,7 @@ void WebBackForwardList::clear()
             if (!m_entries[i])
                 continue;
 
-            m_page->backForwardRemovedItem(m_entries[i]->itemID());
+            didRemoveItem(*m_entries[i]);
             removedItems.append(m_entries[i].release());
         }
 
@@ -358,7 +363,7 @@ void WebBackForwardList::clear()
     for (size_t i = 0; i < size; ++i) {
         ASSERT(m_entries[i]);
         if (m_entries[i] && m_entries[i] != currentItem)
-            m_page->backForwardRemovedItem(m_entries[i]->itemID());
+            didRemoveItem(*m_entries[i]);
     }
 
     removedItems.reserveCapacity(size - 1);
@@ -427,6 +432,15 @@ Vector<BackForwardListItemState> WebBackForwardList::itemStates() const
         itemStates.uncheckedAppend(entry->itemState());
 
     return itemStates;
+}
+
+void WebBackForwardList::didRemoveItem(WebBackForwardListItem& backForwardListItem)
+{
+    m_page->backForwardRemovedItem(backForwardListItem.itemID());
+
+#if PLATFORM(COCOA)
+    backForwardListItem.setSnapshot(nullptr);
+#endif
 }
 
 } // namespace WebKit

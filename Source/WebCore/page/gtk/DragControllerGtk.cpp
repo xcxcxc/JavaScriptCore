@@ -81,12 +81,10 @@ void DragController::declareAndWriteDragImage(DataTransfer& dataTransfer, Elemen
     frame->editor().writeImageToPasteboard(dataTransfer.pasteboard(), element, url, label);
 }
 
-PassRefPtr<DocumentFragment> DragController::createFragmentFromDragData(DragData& dragData, Frame& frame, Range&, bool /*allowPlainText*/, bool& /*chosePlainText*/)
+#if ENABLE(ATTACHMENT_ELEMENT)
+void DragController::declareAndWriteAttachment(DataTransfer&, Element&, const URL&)
 {
-    if (!dragData.platformData()->hasMarkup() || !frame.document())
-        return nullptr;
-
-    return createFragmentFromMarkup(*frame.document(), dragData.platformData()->markup(), "");
 }
+#endif
 
 }

@@ -32,8 +32,8 @@
 
 #include "ActiveDOMObject.h"
 #include "EventTarget.h"
-#include "MediaStreamSource.h"
 #include "MediaStreamTrackPrivate.h"
+#include "RealtimeMediaSource.h"
 #include "ScriptWrappable.h"
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
@@ -49,7 +49,7 @@ class MediaStreamTrackSourcesCallback;
 class MediaStreamCapabilities;
 class MediaTrackConstraints;
 
-class MediaStreamTrack : public RefCounted<MediaStreamTrack>, public ScriptWrappable, public ActiveDOMObject, public EventTargetWithInlineData, public MediaStreamTrackPrivateClient {
+class MediaStreamTrack final : public RefCounted<MediaStreamTrack>, public ScriptWrappable, public ActiveDOMObject, public EventTargetWithInlineData, public MediaStreamTrackPrivateClient {
 public:
     class Observer {
     public:
@@ -57,9 +57,11 @@ public:
         virtual void trackDidEnd() = 0;
     };
 
+    static RefPtr<MediaStreamTrack> create(ScriptExecutionContext&, MediaStreamTrackPrivate&);
+    static RefPtr<MediaStreamTrack> create(MediaStreamTrack&);
     virtual ~MediaStreamTrack();
 
-    virtual const AtomicString& kind() const = 0;
+    const AtomicString& kind() const;
     const String& id() const;
     const String& label() const;
 
@@ -84,13 +86,7 @@ public:
     RefPtr<MediaStreamTrack> clone();
     void stopProducingData();
 
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(mute);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(unmute);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(started);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(ended);
-    DEFINE_ATTRIBUTE_EVENT_LISTENER(overconstrained);
-
-    MediaStreamSource* source() const { return m_privateTrack->source(); }
+    RealtimeMediaSource* source() const { return m_privateTrack->source(); }
     MediaStreamTrackPrivate& privateTrack() { return m_privateTrack.get(); }
 
     bool ended() const;
@@ -105,21 +101,20 @@ public:
     using RefCounted<MediaStreamTrack>::ref;
     using RefCounted<MediaStreamTrack>::deref;
 
-protected:
-    explicit MediaStreamTrack(MediaStreamTrack&);
-    MediaStreamTrack(ScriptExecutionContext&, MediaStreamTrackPrivate&, const Dictionary*);
-
-    void setSource(PassRefPtr<MediaStreamSource>);
-
 private:
+    MediaStreamTrack(ScriptExecutionContext&, MediaStreamTrackPrivate&);
+    explicit MediaStreamTrack(MediaStreamTrack&);
+
+    void setSource(PassRefPtr<RealtimeMediaSource>);
 
     void configureTrackRendering();
     void trackDidEnd();
     void scheduleEventDispatch(PassRefPtr<Event>);
-    void dispatchQueuedEvents();
 
-    // ActiveDOMObject
-    virtual void stop() override final;
+    // ActiveDOMObject API.
+    void stop() override final;
+    const char* activeDOMObjectName() const override final;
+    bool canSuspendForPageCache() const override final;
 
     // EventTarget
     virtual void refEventTarget() override final { ref(); }

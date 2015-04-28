@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 
 #if ENABLE(DFG_JIT)
 
+#include "DFGClobberize.h"
 #include "DFGGraph.h"
 #include "DFGNode.h"
 #include "Operations.h"
@@ -36,7 +37,7 @@ namespace JSC { namespace DFG {
 
 bool doesGC(Graph& graph, Node* node)
 {
-    if (graph.clobbersWorld(node))
+    if (clobbersHeap(graph, node))
         return true;
     
     // Now consider nodes that don't clobber the world but that still may GC. This includes all
@@ -48,13 +49,12 @@ bool doesGC(Graph& graph, Node* node)
     case Int52Constant:
     case Identity:
     case GetCallee:
+    case GetArgumentCount:
     case GetLocal:
     case SetLocal:
     case MovHint:
     case ZombieHint:
-    case GetArgument:
     case Phantom:
-    case HardPhantom:
     case Upsilon:
     case Phi:
     case Flush:
@@ -71,6 +71,7 @@ bool doesGC(Graph& graph, Node* node)
     case UInt32ToNumber:
     case DoubleAsInt32:
     case ArithAdd:
+    case ArithClz32:
     case ArithSub:
     case ArithNegate:
     case ArithMul:
@@ -80,10 +81,12 @@ bool doesGC(Graph& graph, Node* node)
     case ArithAbs:
     case ArithMin:
     case ArithMax:
+    case ArithPow:
     case ArithSqrt:
     case ArithFRound:
     case ArithSin:
     case ArithCos:
+    case ArithLog:
     case ValueAdd:
     case GetById:
     case GetByIdFlush:
@@ -95,17 +98,14 @@ bool doesGC(Graph& graph, Node* node)
     case GetButterfly:
     case CheckArray:
     case GetScope:
-    case GetMyScope:
     case SkipScope:
-    case GetClosureRegisters:
     case GetClosureVar:
     case PutClosureVar:
     case GetGlobalVar:
     case PutGlobalVar:
-    case VariableWatchpoint:
     case VarInjectionWatchpoint:
     case CheckCell:
-    case AllocationProfileWatchpoint:
+    case CheckNotEmpty:
     case RegExpExec:
     case RegExpTest:
     case CompareLess:
@@ -117,13 +117,18 @@ bool doesGC(Graph& graph, Node* node)
     case CompareStrictEq:
     case Call:
     case Construct:
+    case CallVarargs:
+    case ConstructVarargs:
+    case LoadVarargs:
+    case CallForwardVarargs:
+    case ConstructForwardVarargs:
     case NativeCall:
     case NativeConstruct:
-    case ProfiledCall:
-    case ProfiledConstruct:
     case Breakpoint:
     case ProfileWillCall:
     case ProfileDidCall:
+    case ProfileType:
+    case ProfileControlFlow:
     case CheckHasInstance:
     case InstanceOf:
     case IsUndefined:
@@ -131,20 +136,14 @@ bool doesGC(Graph& graph, Node* node)
     case IsNumber:
     case IsString:
     case IsObject:
+    case IsObjectOrNull:
     case IsFunction:
     case TypeOf:
     case LogicalNot:
     case ToPrimitive:
     case ToString:
+    case CallStringConstructor:
     case In:
-    case TearOffActivation:
-    case PhantomArguments:
-    case TearOffArguments:
-    case GetMyArgumentsLength:
-    case GetMyArgumentByVal:
-    case GetMyArgumentsLengthSafe:
-    case GetMyArgumentByValSafe:
-    case CheckArgumentsNotCreated:
     case Jump:
     case Branch:
     case Switch:
@@ -164,8 +163,6 @@ bool doesGC(Graph& graph, Node* node)
     case StoreBarrierWithNullCheck:
     case InvalidationPoint:
     case NotifyWrite:
-    case FunctionReentryWatchpoint:
-    case TypedArrayWatchpoint:
     case CheckInBounds:
     case ConstantStoragePointer:
     case Check:
@@ -199,10 +196,25 @@ bool doesGC(Graph& graph, Node* node)
     case BooleanToNumber:
     case CheckBadCell:
     case BottomValue:
+    case PhantomNewObject:
+    case PhantomNewFunction:
+    case PhantomDirectArguments:
+    case PhantomClonedArguments:
+    case GetMyArgumentByVal:
+    case ForwardVarargs:
+    case PutHint:
+    case CheckStructureImmediate:
+    case PutStack:
+    case KillStack:
+    case GetStack:
+    case GetFromArguments:
+    case PutToArguments:
         return false;
 
     case CreateActivation:
-    case CreateArguments:
+    case CreateDirectArguments:
+    case CreateScopedArguments:
+    case CreateClonedArguments:
     case ToThis:
     case CreateThis:
     case AllocatePropertyStorage:
@@ -216,15 +228,14 @@ bool doesGC(Graph& graph, Node* node)
     case NewRegexp:
     case NewStringObject:
     case MakeRope:
-    case NewFunctionNoCheck:
     case NewFunction:
-    case NewFunctionExpression:
     case NewTypedArray:
     case ThrowReferenceError:
-    case GetStructurePropertyEnumerator:
-    case GetGenericPropertyEnumerator:
-    case GetEnumeratorPname:
+    case GetPropertyEnumerator:
+    case GetEnumeratorStructurePname:
+    case GetEnumeratorGenericPname:
     case ToIndexString:
+    case MaterializeNewObject:
         return true;
         
     case MultiPutByOffset:

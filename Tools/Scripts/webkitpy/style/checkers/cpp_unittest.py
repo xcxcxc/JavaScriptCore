@@ -39,7 +39,7 @@ import codecs
 import os
 import random
 import re
-import unittest2 as unittest
+import unittest
 import cpp as cpp_style
 from cpp import CppChecker
 from ..filter import FilterConfiguration
@@ -1651,6 +1651,11 @@ class CppStyleTest(CppStyleTestBase):
             '{\n'
             '}\n',
             '')
+        self.assert_multi_line_lint(
+            'int foo() const override\n'
+            '{\n'
+            '}\n',
+            '')
 
     def test_mismatching_spaces_in_parens(self):
         self.assert_lint('if (foo ) {', 'Extra space before ) in if'
@@ -2547,6 +2552,7 @@ class CppStyleTest(CppStyleTestBase):
         self.assert_lint('AnEnum a : 30;', errmsg)
         self.assert_lint('mutable AnEnum a : 14;', errmsg)
         self.assert_lint('const AnEnum a : 6;', errmsg)
+        self.assert_lint('bool a : 1;', '')
 
     # Integral bitfields must be declared with either signed or unsigned keyword.
     def test_plain_integral_bitfields(self):
@@ -2557,7 +2563,7 @@ class CppStyleTest(CppStyleTestBase):
         self.assert_lint('const char a : 6;', errmsg)
         self.assert_lint('long int a : 30;', errmsg)
         self.assert_lint('int a = 1 ? 0 : 30;', '')
-
+        self.assert_lint('bool a : 1;', '')
 
 class CleansedLinesTest(unittest.TestCase):
     def test_init(self):
@@ -2629,11 +2635,11 @@ class OrderOfIncludesTest(CppStyleTestBase):
 
     def test_check_next_include_order__no_config(self):
         self.assertEqual('Header file should not contain WebCore config.h.',
-                         self.include_state.check_next_include_order(cpp_style._CONFIG_HEADER, True, True))
+                         self.include_state.check_next_include_order(cpp_style._CONFIG_HEADER, 'Foo.h', True, True))
 
     def test_check_next_include_order__no_self(self):
         self.assertEqual('Header file should not contain itself.',
-                         self.include_state.check_next_include_order(cpp_style._PRIMARY_HEADER, True, True))
+                         self.include_state.check_next_include_order(cpp_style._PRIMARY_HEADER, 'Foo.h', True, True))
         # Test actual code to make sure that header types are correctly assigned.
         self.assert_language_rules_check('Foo.h',
                                          '#include "Foo.h"\n',
@@ -2645,22 +2651,22 @@ class OrderOfIncludesTest(CppStyleTestBase):
 
     def test_check_next_include_order__likely_then_config(self):
         self.assertEqual('Found header this file implements before WebCore config.h.',
-                         self.include_state.check_next_include_order(cpp_style._PRIMARY_HEADER, False, True))
+                         self.include_state.check_next_include_order(cpp_style._PRIMARY_HEADER, 'Foo.cpp', False, True))
         self.assertEqual('Found WebCore config.h after a header this file implements.',
-                         self.include_state.check_next_include_order(cpp_style._CONFIG_HEADER, False, True))
+                         self.include_state.check_next_include_order(cpp_style._CONFIG_HEADER, 'Foo.cpp', False, True))
 
     def test_check_next_include_order__other_then_config(self):
         self.assertEqual('Found other header before WebCore config.h.',
-                         self.include_state.check_next_include_order(cpp_style._OTHER_HEADER, False, True))
+                         self.include_state.check_next_include_order(cpp_style._OTHER_HEADER, 'Foo.cpp', False, True))
         self.assertEqual('Found WebCore config.h after other header.',
-                         self.include_state.check_next_include_order(cpp_style._CONFIG_HEADER, False, True))
+                         self.include_state.check_next_include_order(cpp_style._CONFIG_HEADER, 'Foo.cpp', False, True))
 
     def test_check_next_include_order__config_then_other_then_likely(self):
-        self.assertEqual('', self.include_state.check_next_include_order(cpp_style._CONFIG_HEADER, False, True))
+        self.assertEqual('', self.include_state.check_next_include_order(cpp_style._CONFIG_HEADER, 'Foo.cpp', False, True))
         self.assertEqual('Found other header before a header this file implements.',
-                         self.include_state.check_next_include_order(cpp_style._OTHER_HEADER, False, True))
+                         self.include_state.check_next_include_order(cpp_style._OTHER_HEADER, 'Foo.cpp', False, True))
         self.assertEqual('Found header this file implements after other header.',
-                         self.include_state.check_next_include_order(cpp_style._PRIMARY_HEADER, False, True))
+                         self.include_state.check_next_include_order(cpp_style._PRIMARY_HEADER, 'Foo.cpp', False, True))
 
     def test_check_alphabetical_include_order(self):
         self.assert_language_rules_check('foo.h',
@@ -2813,6 +2819,12 @@ class OrderOfIncludesTest(CppStyleTestBase):
                                          'Found other header before a header this file implements. '
                                          'Should be: config.h, primary header, blank line, and then '
                                          'alphabetically sorted.  [build/include_order] [4]')
+        # *SoftLink.cpp files should not include their headers -> no error.
+        self.assert_language_rules_check('FooSoftLink.cpp',
+                                         '#include "config.h"\n'
+                                         '\n'
+                                         '#include "SoftLinking.h"\n',
+                                         '')
         # Having include for existing primary header -> no error.
         self.assert_language_rules_check('foo.cpp',
                                          '#include "config.h"\n'
@@ -2847,6 +2859,74 @@ class OrderOfIncludesTest(CppStyleTestBase):
                                          '\n'
                                          '#include "a.h"\n',
                                          'Bad include order. Mixing system and custom headers.  [build/include_order] [4]')
+
+        # *SoftLink.h header should never be included in other header files.
+        self.assert_language_rules_check('foo.h',
+                                         '#include "Bar.h"\n'
+                                         '\n'
+                                         '#include "FrameworkSoftLink.h"\n',
+                                         '*SoftLink.h header should never be included in a header.  [build/include_order] [4]')
+
+        # Complain about *SoftLink.h headers that are not last.
+        self.assert_language_rules_check('Foo.cpp',
+                                         '#include "config.h"\n'
+                                         '#include "Foo.h"\n'
+                                         '\n'
+                                         '#include "ALocalHeader.h"\n'
+                                         '#include "FrameworkSoftLink.h"\n'
+                                         '#include <Framework/Bar.h>\n',
+                                         '*SoftLink.h header should be included after all other headers.  [build/include_order] [4]')
+
+        self.assert_language_rules_check('Foo.cpp',
+                                         '#include "config.h"\n'
+                                         '#include "Foo.h"\n'
+                                         '\n'
+                                         '#include "ALocalHeader.h"\n'
+                                         '#include <Framework/Bar.h>\n'
+                                         '\n'
+                                         '#include "FrameworkSoftLink.h"\n'
+                                         '\n'
+                                         '#if PLATFORM(FOO)\n'
+                                         '#include "FooPlatform.h"\n'
+                                         '#endif // PLATFORM(FOO)\n',
+                                         '*SoftLink.h header should be included after all other headers.  [build/include_order] [4]')
+
+        # Don't complain about *SoftLink.h headers that are last.
+        self.assert_language_rules_check('Foo.cpp',
+                                         '#include "config.h"\n'
+                                         '#include "Foo.h"\n'
+                                         '\n'
+                                         '#include "ALocalHeader.h"\n'
+                                         '#include <Framework/Bar.h>\n'
+                                         '\n'
+                                         '#if PLATFORM(FOO)\n'
+                                         '#include "FooPlatform.h"\n'
+                                         '#endif // PLATFORM(FOO)\n'
+                                         '\n'
+                                         '#include "FrameworkSoftLink.h"\n',
+                                         '')
+
+        self.assert_language_rules_check('Foo.cpp',
+                                         '#include "config.h"\n'
+                                         '#include "Foo.h"\n'
+                                         '\n'
+                                         '#include "ALocalHeader.h"\n'
+                                         '#include <Framework/Bar.h>\n'
+                                         '\n'
+                                         '#if PLATFORM(FOO)\n'
+                                         '#include "FooPlatform.h"\n'
+                                         '#endif // PLATFORM(FOO)\n'
+                                         '\n'
+                                         '#include "FrameworkASoftLink.h"\n'
+                                         '#include "FrameworkBSoftLink.h"\n',
+                                         '')
+
+        self.assert_language_rules_check('Foo.cpp',
+                                         '#include "config.h"\n'
+                                         '#include <Framework/Bar.h>\n'
+                                         '\n'
+                                         '#include "FrameworkSoftLink.h"\n',
+                                         '')
 
     def test_check_wtf_includes(self):
         self.assert_language_rules_check('foo.cpp',
@@ -2907,6 +2987,10 @@ class OrderOfIncludesTest(CppStyleTestBase):
                          classify_include('foo.cpp',
                                           'public/foop.h',
                                           True, include_state))
+        self.assertEqual(cpp_style._SOFT_LINK_HEADER,
+                         classify_include('foo.cpp',
+                                          'BarSoftLink.h',
+                                          False, include_state))
         # Tricky example where both includes might be classified as primary.
         self.assert_language_rules_check('ScrollbarThemeWince.cpp',
                                          '#include "config.h"\n'
@@ -4088,14 +4172,14 @@ class WebKitStyleTest(CppStyleTestBase):
             '}\n',
             '')
         self.assert_multi_line_lint(
-            '#define TEST_ASSERT(expression) do { if (!(expression)) { TestsController::shared().testFailed(__FILE__, __LINE__, #expression); return; } } while (0)\n',
+            '#define TEST_ASSERT(expression) do { if (!(expression)) { TestsController::singleton().testFailed(__FILE__, __LINE__, #expression); return; } } while (0)\n',
             '')
         self.assert_multi_line_lint(
-            '#define TEST_ASSERT(expression) do { if ( !(expression)) { TestsController::shared().testFailed(__FILE__, __LINE__, #expression); return; } } while (0)\n',
+            '#define TEST_ASSERT(expression) do { if ( !(expression)) { TestsController::singleton().testFailed(__FILE__, __LINE__, #expression); return; } } while (0)\n',
             'Extra space after ( in if  [whitespace/parens] [5]')
         # FIXME: currently we only check first conditional, so we cannot detect errors in next ones.
         # self.assert_multi_line_lint(
-        #     '#define TEST_ASSERT(expression) do { if (!(expression)) { TestsController::shared().testFailed(__FILE__, __LINE__, #expression); return; } } while (0 )\n',
+        #     '#define TEST_ASSERT(expression) do { if (!(expression)) { TestsController::singleton().testFailed(__FILE__, __LINE__, #expression); return; } } while (0 )\n',
         #     'Mismatching spaces inside () in if  [whitespace/parens] [5]')
         self.assert_multi_line_lint(
             'WTF_MAKE_NONCOPYABLE(ClassName); WTF_MAKE_FAST_ALLOCATED;\n',
@@ -5087,6 +5171,12 @@ class WebKitStyleTest(CppStyleTestBase):
         self.assert_lint('MyClass::MyClass(Document* doc) : MySuperClass() { }',
         'Should be indented on a separate line, with the colon or comma first on that line.'
         '  [whitespace/indent] [4]')
+        self.assert_multi_line_lint((
+            'MyClass::MyClass(Document* doc)\n'
+            '    : m_myMember(b ? bar() : baz())\n'
+            '    , MySuperClass()\n'
+            '    , m_doc(0)\n'
+            '{ }'), '')
         self.assert_multi_line_lint('''\
         MyClass::MyClass(Document* doc) : MySuperClass()
         { }''',

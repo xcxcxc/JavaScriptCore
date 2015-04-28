@@ -37,7 +37,6 @@
 #include "PlatformLayer.h"
 #include <runtime/Uint8ClampedArray.h>
 #include <wtf/Forward.h>
-#include <wtf/OwnPtr.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/Vector.h>
 
@@ -95,7 +94,7 @@ public:
 
     WEBCORE_EXPORT GraphicsContext* context() const;
 
-    WEBCORE_EXPORT PassRefPtr<Image> copyImage(BackingStoreCopy = CopyBackingStore, ScaleBehavior = Scaled) const;
+    WEBCORE_EXPORT RefPtr<Image> copyImage(BackingStoreCopy = CopyBackingStore, ScaleBehavior = Scaled) const;
     // Give hints on the faster copyImage Mode, return DontCopyBackingStore if it supports the DontCopyBackingStore behavior
     // or return CopyBackingStore if it doesn't.  
     static BackingStoreCopy fastCopyImageMode();
@@ -115,7 +114,7 @@ public:
     void transformColorSpace(ColorSpace srcColorSpace, ColorSpace dstColorSpace);
     void platformTransformColorSpace(const Vector<int>&);
 #else
-    AffineTransform baseTransform() const { return AffineTransform(1, 0, 0, -1, 0, m_data.m_backingStoreSize.height()); }
+    AffineTransform baseTransform() const { return AffineTransform(1, 0, 0, -1, 0, m_data.backingStoreSize.height()); }
 #endif
     PlatformLayer* platformLayer() const;
 
@@ -153,7 +152,6 @@ private:
     IntSize m_size;
     IntSize m_logicalSize;
     float m_resolutionScale;
-    OwnPtr<GraphicsContext> m_context;
     FloatSize m_space;
 
     // This constructor will place its success into the given out-variable

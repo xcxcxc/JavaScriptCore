@@ -33,6 +33,7 @@
 #include "XMLDocumentParserScope.h"
 #include "XSLImportRule.h"
 #include "XSLTProcessor.h"
+#include <JavaScriptCore/Profile.h>
 #include <libxml/uri.h>
 #include <libxslt/xsltutils.h>
 
@@ -127,8 +128,8 @@ CachedResourceLoader* XSLStyleSheet::cachedResourceLoader()
 {
     Document* document = ownerDocument();
     if (!document)
-        return 0;
-    return document->cachedResourceLoader();
+        return nullptr;
+    return &document->cachedResourceLoader();
 }
 
 bool XSLStyleSheet::parseString(const String& string)

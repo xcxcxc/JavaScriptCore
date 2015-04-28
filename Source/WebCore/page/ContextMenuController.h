@@ -30,7 +30,6 @@
 
 #include "ContextMenuContext.h"
 #include <wtf/Noncopyable.h>
-#include <wtf/OwnPtr.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 
@@ -48,6 +47,9 @@ class ContextMenuController {
 public:
     ContextMenuController(Page&, ContextMenuClient&);
     ~ContextMenuController();
+
+    Page& page() { return m_page; }
+    ContextMenuClient& client() { return m_client; }
 
     ContextMenu* contextMenu() const { return m_contextMenu.get(); }
     WEBCORE_EXPORT void clearContextMenu();
@@ -74,7 +76,7 @@ public:
 #endif
 
 private:
-    PassOwnPtr<ContextMenu> maybeCreateContextMenu(Event*);
+    std::unique_ptr<ContextMenu> maybeCreateContextMenu(Event*);
     void showContextMenu(Event*);
     
     void appendItem(ContextMenuItem&, ContextMenu* parentMenu);
@@ -93,7 +95,7 @@ private:
 
     Page& m_page;
     ContextMenuClient& m_client;
-    OwnPtr<ContextMenu> m_contextMenu;
+    std::unique_ptr<ContextMenu> m_contextMenu;
     RefPtr<ContextMenuProvider> m_menuProvider;
     ContextMenuContext m_context;
 };

@@ -96,7 +96,7 @@ SOFT_LINK_CONSTANT(MobileCoreServices, kUTTypeRTF, CFStringRef)
 namespace WebCore {
 
 // FIXME: Does this need to be declared in the header file?
-NSString *WebArchivePboardType = @"Apple Web Archive pasteboard type";
+WEBCORE_EXPORT NSString *WebArchivePboardType = @"Apple Web Archive pasteboard type";
 
 // Making this non-inline so that WebKit 2's decoding doesn't have to include SharedBuffer.h.
 PasteboardWebContent::PasteboardWebContent()
@@ -121,14 +121,14 @@ Pasteboard::Pasteboard()
 {
 }
 
-PassOwnPtr<Pasteboard> Pasteboard::createForCopyAndPaste()
+std::unique_ptr<Pasteboard> Pasteboard::createForCopyAndPaste()
 {
-    return adoptPtr(new Pasteboard);
+    return std::make_unique<Pasteboard>();
 }
 
-PassOwnPtr<Pasteboard> Pasteboard::createPrivate()
+std::unique_ptr<Pasteboard> Pasteboard::createPrivate()
 {
-    return adoptPtr(new Pasteboard);
+    return std::make_unique<Pasteboard>();
 }
 
 void Pasteboard::write(const PasteboardWebContent& content)
@@ -169,6 +169,8 @@ void Pasteboard::read(PasteboardPlainText& text)
 {
     PasteboardStrategy& strategy = *platformStrategies()->pasteboardStrategy();
     text.text = strategy.readStringFromPasteboard(0, kUTTypeText);
+    if (text.text.isEmpty())
+        text.text = strategy.readStringFromPasteboard(0, kUTTypeURL);
 }
 
 static NSArray* supportedImageTypes()

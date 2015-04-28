@@ -1,30 +1,29 @@
 /*
- * Copyright (C) 2007 Apple Inc. All rights reserved.
+ * Copyright (C) 2007, 2008, 2011-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
  * are met:
- *
  * 1.  Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer. 
+ *     notice, this list of conditions and the following disclaimer.
  * 2.  Redistributions in binary form must reproduce the above copyright
  *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution. 
- * 3.  Neither the name of Apple Inc. ("Apple") nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission. 
+ *     documentation and/or other materials provided with the distribution.
  *
- * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
+ * THIS SOFTWARE IS PROVIDED BY APPLE INC. AND ITS CONTRIBUTORS ``AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL APPLE OR ITS CONTRIBUTORS BE LIABLE FOR ANY
+ * DISCLAIMED. IN NO EVENT SHALL APPLE INC. OR ITS CONTRIBUTORS BE LIABLE FOR ANY
  * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
  * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
+
+#ifndef SoftLinking_h
+#define SoftLinking_h
 
 #import <wtf/Assertions.h>
 #import <dlfcn.h>
@@ -32,6 +31,8 @@
 #if PLATFORM(IOS)
 #import <objc/runtime.h>
 #endif
+
+#pragma mark - Soft-link macros for use within a single source file
 
 #define SOFT_LINK_LIBRARY(lib) \
     static void* lib##Library() \
@@ -95,6 +96,9 @@
     }
 
 #define SOFT_LINK(framework, functionName, resultType, parameterDeclarations, parameterNames) \
+    WTF_EXTERN_C_BEGIN \
+    resultType functionName parameterDeclarations; \
+    WTF_EXTERN_C_END \
     static resultType init##functionName parameterDeclarations; \
     static resultType (*softLink##functionName) parameterDeclarations = init##functionName; \
     \
@@ -103,14 +107,17 @@
         softLink##functionName = (resultType (*) parameterDeclarations) dlsym(framework##Library(), #functionName); \
         ASSERT_WITH_MESSAGE(softLink##functionName, "%s", dlerror()); \
         return softLink##functionName parameterNames; \
-    }\
+    } \
     \
     inline resultType functionName parameterDeclarations \
-    {\
+    { \
         return softLink##functionName parameterNames; \
     }
 
 #define SOFT_LINK_MAY_FAIL(framework, functionName, resultType, parameterDeclarations, parameterNames) \
+    WTF_EXTERN_C_BEGIN \
+    resultType functionName parameterDeclarations; \
+    WTF_EXTERN_C_END \
     static resultType (*softLink##functionName) parameterDeclarations = 0; \
     \
     static bool init##functionName() \
@@ -126,7 +133,7 @@
         return loaded; \
     } \
     \
-    resultType functionName parameterDeclarations \
+    __attribute__((visibility("hidden"))) resultType functionName parameterDeclarations \
     { \
         ASSERT(softLink##functionName); \
         return softLink##functionName parameterNames; \
@@ -134,6 +141,9 @@
 
 /* callingConvention is unused on Mac but is here to keep the macro prototype the same between Mac and Windows. */
 #define SOFT_LINK_OPTIONAL(framework, functionName, resultType, callingConvention, parameterDeclarations) \
+    WTF_EXTERN_C_BEGIN \
+    resultType functionName parameterDeclarations; \
+    WTF_EXTERN_C_END \
     typedef resultType (*functionName##PtrType) parameterDeclarations; \
     \
     static functionName##PtrType functionName##Ptr() \
@@ -143,6 +153,7 @@
     }
 
 #define SOFT_LINK_CLASS(framework, className) \
+    @class className; \
     static Class init##className(); \
     static Class (*get##className##Class)() = init##className; \
     static Class class##className; \
@@ -150,7 +161,7 @@
     static Class className##Function() \
     { \
         return class##className; \
-    }\
+    } \
     \
     static Class init##className() \
     { \
@@ -159,9 +170,17 @@
         ASSERT(class##className); \
         get##className##Class = className##Function; \
         return class##className; \
-    }
+    } \
+    _Pragma("clang diagnostic push") \
+    _Pragma("clang diagnostic ignored \"-Wunused-function\"") \
+    static className *alloc##className##Instance() \
+    { \
+        return [get##className##Class() alloc]; \
+    } \
+    _Pragma("clang diagnostic pop")
 
 #define SOFT_LINK_CLASS_OPTIONAL(framework, className) \
+    @class className; \
     static Class init##className(); \
     static Class (*get##className##Class)() = init##className; \
     static Class class##className; \
@@ -169,7 +188,7 @@
     static Class className##Function() \
     { \
         return class##className; \
-    }\
+    } \
     \
     static Class init##className() \
     { \
@@ -177,7 +196,14 @@
         class##className = objc_getClass(#className); \
         get##className##Class = className##Function; \
         return class##className; \
-    }
+    } \
+    _Pragma("clang diagnostic push") \
+    _Pragma("clang diagnostic ignored \"-Wunused-function\"") \
+    static className *alloc##className##Instance() \
+    { \
+        return [get##className##Class() alloc]; \
+    } \
+    _Pragma("clang diagnostic pop")
 
 #define SOFT_LINK_POINTER(framework, name, type) \
     static type init##name(); \
@@ -187,7 +213,7 @@
     static type name##Function() \
     { \
         return pointer##name; \
-    }\
+    } \
     \
     static type init##name() \
     { \
@@ -206,7 +232,7 @@
     static type name##Function() \
     { \
         return pointer##name; \
-    }\
+    } \
     \
     static type init##name() \
     { \
@@ -225,7 +251,7 @@
     static type name##Function() \
     { \
         return constant##name; \
-    }\
+    } \
     \
     static type init##name() \
     { \
@@ -236,7 +262,6 @@
         return constant##name; \
     }
 
-#if PLATFORM(IOS)
 #define SOFT_LINK_CONSTANT_MAY_FAIL(framework, name, type) \
     static bool init##name(); \
     static type (*get##name)() = 0; \
@@ -245,7 +270,7 @@
     static type name##Function() \
     { \
         return constant##name; \
-    }\
+    } \
     \
     static bool canLoad##name() \
     { \
@@ -263,4 +288,90 @@
         get##name = name##Function; \
         return true; \
     }
-#endif
+
+#pragma mark - Soft-link macros for sharing across multiple source files
+
+// See Source/WebCore/platform/cf/CoreMediaSoftLink.{cpp,h} for an example implementation.
+
+#define SOFT_LINK_FRAMEWORK_FOR_HEADER(functionNamespace, framework) \
+    namespace functionNamespace { \
+    extern void* framework##Library(bool isOptional = false); \
+    bool is##framework##FrameworkAvailable(); \
+    inline bool is##framework##FrameworkAvailable() { \
+        return framework##Library(true) != nullptr; \
+    } \
+    }
+
+#define SOFT_LINK_FRAMEWORK_FOR_SOURCE(functionNamespace, framework) \
+    namespace functionNamespace { \
+    void* framework##Library(bool isOptional = false); \
+    void* framework##Library(bool isOptional) \
+    { \
+        static void* frameworkLibrary; \
+        static dispatch_once_t once; \
+        dispatch_once(&once, ^{ \
+            frameworkLibrary = dlopen("/System/Library/Frameworks/" #framework ".framework/" #framework, RTLD_NOW); \
+        }); \
+        ASSERT_WITH_MESSAGE_UNUSED(isOptional, isOptional || frameworkLibrary, "%s", dlerror()); \
+        return frameworkLibrary; \
+    } \
+    }
+
+#define SOFT_LINK_CONSTANT_FOR_HEADER(functionNamespace, framework, variableName, variableType) \
+    WTF_EXTERN_C_BEGIN \
+    extern const variableType variableName; \
+    WTF_EXTERN_C_END \
+    namespace functionNamespace { \
+    variableType get_##framework##_##variableName(); \
+    }
+
+#define SOFT_LINK_CONSTANT_FOR_SOURCE(functionNamespace, framework, variableName, variableType) \
+    WTF_EXTERN_C_BEGIN \
+    extern const variableType variableName; \
+    WTF_EXTERN_C_END \
+    namespace functionNamespace { \
+    variableType get_##framework##_##variableName(); \
+    variableType get_##framework##_##variableName() \
+    { \
+        static variableType constant##framework##variableName; \
+        static dispatch_once_t once; \
+        dispatch_once(&once, ^{ \
+            void* constant = dlsym(framework##Library(), #variableName); \
+            RELEASE_ASSERT_WITH_MESSAGE(constant, "%s", dlerror()); \
+            constant##framework##variableName = *static_cast<variableType*>(constant); \
+        }); \
+        return constant##framework##variableName; \
+    } \
+    }
+
+#define SOFT_LINK_FUNCTION_FOR_HEADER(functionNamespace, framework, functionName, resultType, parameterDeclarations, parameterNames) \
+    WTF_EXTERN_C_BEGIN \
+    resultType functionName parameterDeclarations; \
+    WTF_EXTERN_C_END \
+    namespace functionNamespace { \
+    extern resultType (*softLink##framework##functionName) parameterDeclarations; \
+    inline resultType softLink_##framework##_##functionName parameterDeclarations \
+    { \
+        return softLink##framework##functionName parameterNames; \
+    } \
+    }
+
+#define SOFT_LINK_FUNCTION_FOR_SOURCE(functionNamespace, framework, functionName, resultType, parameterDeclarations, parameterNames) \
+    WTF_EXTERN_C_BEGIN \
+    resultType functionName parameterDeclarations; \
+    WTF_EXTERN_C_END \
+    namespace functionNamespace { \
+    static resultType init##framework##functionName parameterDeclarations; \
+    resultType (*softLink##framework##functionName) parameterDeclarations = init##framework##functionName; \
+    static resultType init##framework##functionName parameterDeclarations \
+    { \
+        static dispatch_once_t once; \
+        dispatch_once(&once, ^{ \
+            softLink##framework##functionName = (resultType (*) parameterDeclarations) dlsym(framework##Library(), #functionName); \
+            RELEASE_ASSERT_WITH_MESSAGE(softLink##framework##functionName, "%s", dlerror()); \
+        }); \
+        return softLink##framework##functionName parameterNames; \
+    } \
+    }
+
+#endif // SoftLinking_h

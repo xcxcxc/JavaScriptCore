@@ -121,7 +121,7 @@ void XMLDocumentParser::append(PassRefPtr<StringImpl> inputSource)
 
     doWrite(source.toString());
 
-    // After parsing, go ahead and dispatch image beforeload events.
+    // After parsing, dispatch image beforeload events.
     ImageLoader::dispatchPendingBeforeLoadEvents();
 }
 
@@ -261,6 +261,8 @@ bool XMLDocumentParser::isWaitingForScripts() const
 
 void XMLDocumentParser::pauseParsing()
 {
+    ASSERT(!m_parserPaused);
+
     if (m_parsingFragment)
         return;
 

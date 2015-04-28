@@ -66,7 +66,7 @@ struct RenderFlexibleBox::Violation {
 };
 
 
-RenderFlexibleBox::RenderFlexibleBox(Element& element, PassRef<RenderStyle> style)
+RenderFlexibleBox::RenderFlexibleBox(Element& element, Ref<RenderStyle>&& style)
     : RenderBlock(element, WTF::move(style), 0)
     , m_orderIterator(*this)
     , m_numberOfInFlowChildrenOnFirstLine(-1)
@@ -74,7 +74,7 @@ RenderFlexibleBox::RenderFlexibleBox(Element& element, PassRef<RenderStyle> styl
     setChildrenInline(false); // All of our children must be block-level.
 }
 
-RenderFlexibleBox::RenderFlexibleBox(Document& document, PassRef<RenderStyle> style)
+RenderFlexibleBox::RenderFlexibleBox(Document& document, Ref<RenderStyle>&& style)
     : RenderBlock(document, WTF::move(style), 0)
     , m_orderIterator(*this)
     , m_numberOfInFlowChildrenOnFirstLine(-1)
@@ -169,24 +169,22 @@ static int synthesizedBaselineFromContentBox(const RenderBox& box, LineDirection
 
 int RenderFlexibleBox::baselinePosition(FontBaseline, bool, LineDirectionMode direction, LinePositionMode) const
 {
-    int baseline = firstLineBaseline();
-    if (baseline == -1)
-        baseline = synthesizedBaselineFromContentBox(*this, direction);
+    int baseline = firstLineBaseline().valueOr(synthesizedBaselineFromContentBox(*this, direction));
 
     int marginAscent = direction == HorizontalLine ? marginTop() : marginRight();
     return baseline + marginAscent;
 }
 
-int RenderFlexibleBox::firstLineBaseline() const
+Optional<int> RenderFlexibleBox::firstLineBaseline() const
 {
     if (isWritingModeRoot() || m_numberOfInFlowChildrenOnFirstLine <= 0)
-        return -1;
-    RenderBox* baselineChild = 0;
+        return Optional<int>();
+    RenderBox* baselineChild = nullptr;
     int childNumber = 0;
     for (RenderBox* child = m_orderIterator.first(); child; child = m_orderIterator.next()) {
         if (child->isOutOfFlowPositioned())
             continue;
-        if (alignmentForChild(*child) == AlignBaseline && !hasAutoMarginsInCrossAxis(*child)) {
+        if (alignmentForChild(*child) == ItemPositionBaseline && !hasAutoMarginsInCrossAxis(*child)) {
             baselineChild = child;
             break;
         }
@@ -199,52 +197,43 @@ int RenderFlexibleBox::firstLineBaseline() const
     }
 
     if (!baselineChild)
-        return -1;
+        return Optional<int>();
 
     if (!isColumnFlow() && hasOrthogonalFlow(*baselineChild))
-        return crossAxisExtentForChild(*baselineChild) + baselineChild->logicalTop();
+        return Optional<int>(crossAxisExtentForChild(*baselineChild) + baselineChild->logicalTop());
     if (isColumnFlow() && !hasOrthogonalFlow(*baselineChild))
-        return mainAxisExtentForChild(*baselineChild) + baselineChild->logicalTop();
+        return Optional<int>(mainAxisExtentForChild(*baselineChild) + baselineChild->logicalTop());
 
-    int baseline = baselineChild->firstLineBaseline();
-    if (baseline == -1) {
+    Optional<int> baseline = baselineChild->firstLineBaseline();
+    if (!baseline) {
         // FIXME: We should pass |direction| into firstLineBoxBaseline and stop bailing out if we're a writing mode root.
         // This would also fix some cases where the flexbox is orthogonal to its container.
         LineDirectionMode direction = isHorizontalWritingMode() ? HorizontalLine : VerticalLine;
-        return synthesizedBaselineFromContentBox(*baselineChild, direction) + baselineChild->logicalTop();
+        return Optional<int>(synthesizedBaselineFromContentBox(*baselineChild, direction) + baselineChild->logicalTop());
     }
 
-    return baseline + baselineChild->logicalTop();
+    return Optional<int>(baseline.value() + baselineChild->logicalTop());
 }
 
-int RenderFlexibleBox::inlineBlockBaseline(LineDirectionMode direction) const
+Optional<int> RenderFlexibleBox::inlineBlockBaseline(LineDirectionMode direction) const
 {
-    int baseline = firstLineBaseline();
-    if (baseline != -1)
+    if (Optional<int> baseline = firstLineBaseline())
         return baseline;
 
     int marginAscent = direction == HorizontalLine ? marginTop() : marginRight();
     return synthesizedBaselineFromContentBox(*this, direction) + marginAscent;
 }
 
-static EAlignItems resolveAlignment(const RenderStyle* parentStyle, const RenderStyle* childStyle)
-{
-    EAlignItems align = childStyle->alignSelf();
-    if (align == AlignAuto)
-        align = parentStyle->alignItems();
-    return align;
-}
-
 void RenderFlexibleBox::styleDidChange(StyleDifference diff, const RenderStyle* oldStyle)
 {
     RenderBlock::styleDidChange(diff, oldStyle);
 
-    if (oldStyle && oldStyle->alignItems() == AlignStretch && diff == StyleDifferenceLayout) {
+    if (oldStyle && (oldStyle->alignItems() == ItemPositionStretch || oldStyle->alignItems() == ItemPositionAuto) && diff == StyleDifferenceLayout) {
         // Flex items that were previously stretching need to be relayed out so we can compute new available cross axis space.
         // This is only necessary for stretching since other alignment values don't change the size of the box.
         for (RenderBox* child = firstChildBox(); child; child = child->nextSiblingBox()) {
-            EAlignItems previousAlignment = resolveAlignment(oldStyle, &child->style());
-            if (previousAlignment == AlignStretch && previousAlignment != resolveAlignment(&style(), &child->style()))
+            ItemPosition previousAlignment = RenderStyle::resolveAlignment(*oldStyle, child->style(), ItemPositionStretch);
+            if (previousAlignment == ItemPositionStretch && previousAlignment != RenderStyle::resolveAlignment(style(), child->style(), ItemPositionStretch))
                 child->setChildNeedsLayout(MarkOnlyThis);
         }
     }
@@ -336,7 +325,7 @@ void RenderFlexibleBox::repaintChildrenDuringLayoutIfMoved(const ChildFrameRects
 void RenderFlexibleBox::paintChildren(PaintInfo& paintInfo, const LayoutPoint& paintOffset, PaintInfo& paintInfoForChild, bool usePrintRect)
 {
     for (RenderBox* child = m_orderIterator.first(); child; child = m_orderIterator.next()) {
-        if (!paintChild(*child, paintInfo, paintOffset, paintInfoForChild, usePrintRect))
+        if (!paintChild(*child, paintInfo, paintOffset, paintInfoForChild, usePrintRect, PaintAsInlineBlock))
             return;
     }
 }
@@ -468,7 +457,7 @@ LayoutUnit RenderFlexibleBox::computeMainAxisExtentForChild(RenderBox& child, Si
     if (isColumnFlow())
         return child.computeContentLogicalHeight(size);
     // FIXME: Figure out how this should work for regions and pass in the appropriate values.
-    RenderRegion* region = 0;
+    RenderRegion* region = nullptr;
     return child.computeLogicalWidthInRegionUsing(sizeType, size, contentLogicalWidth(), this, region) - child.borderAndPaddingLogicalWidth();
 }
 
@@ -663,7 +652,7 @@ LayoutUnit RenderFlexibleBox::mainAxisScrollbarExtentForChild(RenderBox& child) 
 
 LayoutUnit RenderFlexibleBox::preferredMainAxisContentExtentForChild(RenderBox& child, bool hasInfiniteLineLength)
 {
-    bool hasOverrideSize = child.hasOverrideWidth() || child.hasOverrideHeight();
+    bool hasOverrideSize = child.hasOverrideLogicalContentWidth() || child.hasOverrideLogicalContentHeight();
     if (hasOverrideSize)
         child.clearOverrideSize();
 
@@ -818,9 +807,7 @@ bool RenderFlexibleBox::updateAutoMarginsInCrossAxis(RenderBox& child, LayoutUni
 
 LayoutUnit RenderFlexibleBox::marginBoxAscentForChild(RenderBox& child)
 {
-    LayoutUnit ascent = child.firstLineBaseline();
-    if (ascent == -1)
-        ascent = crossAxisExtentForChild(child);
+    LayoutUnit ascent = child.firstLineBaseline().valueOr(crossAxisExtentForChild(child));
     return ascent + flowAwareMarginBeforeForChild(child);
 }
 
@@ -1023,18 +1010,18 @@ void RenderFlexibleBox::prepareChildForPositionedLayout(RenderBox& child, Layout
     }
 }
 
-EAlignItems RenderFlexibleBox::alignmentForChild(RenderBox& child) const
+ItemPosition RenderFlexibleBox::alignmentForChild(RenderBox& child) const
 {
-    EAlignItems align = resolveAlignment(&style(), &child.style());
+    ItemPosition align = RenderStyle::resolveAlignment(style(), child.style(), ItemPositionStretch);
 
-    if (align == AlignBaseline && hasOrthogonalFlow(child))
-        align = AlignFlexStart;
+    if (align == ItemPositionBaseline && hasOrthogonalFlow(child))
+        align = ItemPositionFlexStart;
 
     if (style().flexWrap() == FlexWrapReverse) {
-        if (align == AlignFlexStart)
-            align = AlignFlexEnd;
-        else if (align == AlignFlexEnd)
-            align = AlignFlexStart;
+        if (align == ItemPositionFlexStart)
+            align = ItemPositionFlexEnd;
+        else if (align == ItemPositionFlexEnd)
+            align = ItemPositionFlexStart;
     }
 
     return align;
@@ -1053,7 +1040,7 @@ size_t RenderFlexibleBox::numberOfInFlowPositionedChildren(const OrderedFlexItem
 
 bool RenderFlexibleBox::needToStretchChild(RenderBox& child)
 {
-    if (alignmentForChild(child) != AlignStretch)
+    if (alignmentForChild(child) != ItemPositionStretch)
         return false;
 
     Length crossAxisLength = isHorizontalFlow() ? child.style().height() : child.style().width();
@@ -1104,7 +1091,7 @@ void RenderFlexibleBox::layoutAndPlaceChildren(LayoutUnit& crossAxisOffset, cons
         updateAutoMarginsInMainAxis(child, autoMarginOffset);
 
         LayoutUnit childCrossAxisMarginBoxExtent;
-        if (alignmentForChild(child) == AlignBaseline && !hasAutoMarginsInCrossAxis(child)) {
+        if (alignmentForChild(child) == ItemPositionBaseline && !hasAutoMarginsInCrossAxis(child)) {
             LayoutUnit ascent = marginBoxAscentForChild(child);
             LayoutUnit descent = (crossAxisMarginExtentForChild(child) + crossAxisExtentForChild(child)) - ascent;
 
@@ -1265,25 +1252,30 @@ void RenderFlexibleBox::alignChildren(const Vector<LineContext>& lineContexts)
                 continue;
 
             switch (alignmentForChild(*child)) {
-            case AlignAuto:
+            case ItemPositionAuto:
                 ASSERT_NOT_REACHED();
                 break;
-            case AlignStretch: {
+            case ItemPositionStart:
+                // FIXME: https://webkit.org/b/135460 - The extended grammar is not supported
+                // yet for FlexibleBox.
+                // Defaulting to Stretch for now, as it what most of FlexBox based renders
+                // expect as default.
+            case ItemPositionStretch: {
                 applyStretchAlignmentToChild(*child, lineCrossAxisExtent);
                 // Since wrap-reverse flips cross start and cross end, strech children should be aligned with the cross end.
                 if (style().flexWrap() == FlexWrapReverse)
                     adjustAlignmentForChild(*child, availableAlignmentSpaceForChild(lineCrossAxisExtent, *child));
                 break;
             }
-            case AlignFlexStart:
+            case ItemPositionFlexStart:
                 break;
-            case AlignFlexEnd:
+            case ItemPositionFlexEnd:
                 adjustAlignmentForChild(*child, availableAlignmentSpaceForChild(lineCrossAxisExtent, *child));
                 break;
-            case AlignCenter:
+            case ItemPositionCenter:
                 adjustAlignmentForChild(*child, availableAlignmentSpaceForChild(lineCrossAxisExtent, *child) / 2);
                 break;
-            case AlignBaseline: {
+            case ItemPositionBaseline: {
                 // FIXME: If we get here in columns, we want the use the descent, except we currently can't get the ascent/descent of orthogonal children.
                 // https://bugs.webkit.org/show_bug.cgi?id=98076
                 LayoutUnit ascent = marginBoxAscentForChild(*child);
@@ -1294,6 +1286,17 @@ void RenderFlexibleBox::alignChildren(const Vector<LineContext>& lineContexts)
                     minMarginAfterBaseline = std::min(minMarginAfterBaseline, availableAlignmentSpaceForChild(lineCrossAxisExtent, *child) - startOffset);
                 break;
             }
+            case ItemPositionLastBaseline:
+            case ItemPositionSelfStart:
+            case ItemPositionSelfEnd:
+            case ItemPositionEnd:
+            case ItemPositionLeft:
+            case ItemPositionRight:
+                // FIXME: https://webkit.org/b/135460 - The extended grammar is not supported
+                // yet for FlexibleBox.
+            default:
+                ASSERT_NOT_REACHED();
+                break;
             }
         }
         minMarginAfterBaselines.append(minMarginAfterBaseline);
@@ -1309,7 +1312,7 @@ void RenderFlexibleBox::alignChildren(const Vector<LineContext>& lineContexts)
         LayoutUnit minMarginAfterBaseline = minMarginAfterBaselines[lineNumber];
         for (size_t childNumber = 0; childNumber < lineContexts[lineNumber].numberOfChildren; ++childNumber, child = m_orderIterator.next()) {
             ASSERT(child);
-            if (alignmentForChild(*child) == AlignBaseline && !hasAutoMarginsInCrossAxis(*child) && minMarginAfterBaseline)
+            if (alignmentForChild(*child) == ItemPositionBaseline && !hasAutoMarginsInCrossAxis(*child) && minMarginAfterBaseline)
                 adjustAlignmentForChild(*child, minMarginAfterBaseline);
         }
     }

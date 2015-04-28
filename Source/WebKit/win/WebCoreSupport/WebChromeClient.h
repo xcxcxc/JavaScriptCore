@@ -112,14 +112,10 @@ public:
 
     virtual void print(WebCore::Frame*);
 
-#if ENABLE(SQL_DATABASE)
     virtual void exceededDatabaseQuota(WebCore::Frame*, const WTF::String&, WebCore::DatabaseDetails);
-#endif
 
     virtual void reachedMaxAppCacheSize(int64_t spaceNeeded);
     virtual void reachedApplicationCacheOriginQuota(WebCore::SecurityOrigin*, int64_t totalSpaceNeeded);
-
-    virtual void populateVisitedLinks();
 
     virtual void runOpenPanel(WebCore::Frame*, PassRefPtr<WebCore::FileChooser>);
     virtual void loadIconForFiles(const Vector<WTF::String>&, WebCore::FileIconLoader*);
@@ -130,6 +126,7 @@ public:
 
     // Pass 0 as the GraphicsLayer to detatch the root layer.
     virtual void attachRootGraphicsLayer(WebCore::Frame*, WebCore::GraphicsLayer*);
+    virtual void attachViewOverlayGraphicsLayer(WebCore::Frame*, WebCore::GraphicsLayer*) override;
     // Sets a flag to specify that the next time content is drawn to the window,
     // the changes appear on the screen in synchrony with updates to GraphicsLayers.
     virtual void setNeedsOneShotDrawingSynchronization() { }
@@ -149,8 +146,8 @@ public:
 
 #if ENABLE(VIDEO)
     virtual bool supportsVideoFullscreen();
-    virtual void enterVideoFullscreenForVideoElement(WebCore::HTMLVideoElement*);
-    virtual void exitVideoFullscreen();
+    virtual void enterVideoFullscreenForVideoElement(WebCore::HTMLVideoElement&);
+    virtual void exitVideoFullscreenForVideoElement(WebCore::HTMLVideoElement&);
 #endif
 
 #if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
@@ -169,7 +166,7 @@ public:
     virtual void exitFullScreenForElement(WebCore::Element*);
 #endif
 
-    virtual void numWheelEventHandlersChanged(unsigned) { }
+    virtual void wheelEventHandlersChanged(bool) override { }
 
     WebView* webView() { return m_webView; }
 
@@ -182,6 +179,6 @@ private:
     WebView* m_webView;
 
 #if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
-    OwnPtr<WebDesktopNotificationsDelegate> m_notificationsDelegate;
+    std::unique_ptr<WebDesktopNotificationsDelegate> m_notificationsDelegate;
 #endif
 };

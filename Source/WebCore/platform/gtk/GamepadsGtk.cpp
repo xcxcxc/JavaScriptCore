@@ -34,7 +34,6 @@
 #include <gio/gunixinputstream.h>
 #include <gudev/gudev.h>
 #include <wtf/HashMap.h>
-#include <wtf/PassOwnPtr.h>
 #include <wtf/gobject/GRefPtr.h>
 #include <wtf/gobject/GUniquePtr.h>
 #include <wtf/text/CString.h>
@@ -44,15 +43,10 @@ namespace WebCore {
 
 class GamepadDeviceGtk : public GamepadDeviceLinux {
 public:
-    static PassOwnPtr<GamepadDeviceGtk> create(String deviceFile)
-    {
-        return adoptPtr(new GamepadDeviceGtk(deviceFile));
-    }
+    explicit GamepadDeviceGtk(String deviceFile);
     ~GamepadDeviceGtk();
 
 private:
-    GamepadDeviceGtk(String deviceFile);
-
     static gboolean readCallback(GObject* pollableStream, gpointer data);
     GRefPtr<GInputStream> m_inputStream;
     GRefPtr<GSource> m_source;
@@ -98,7 +92,7 @@ gboolean GamepadDeviceGtk::readCallback(GObject* pollableStream, gpointer data)
 
 class GamepadsGtk {
 public:
-    GamepadsGtk(unsigned length);
+    explicit GamepadsGtk(unsigned length);
 
     void registerDevice(String deviceFile);
     void unregisterDevice(String deviceFile);
@@ -110,7 +104,7 @@ private:
     static void onUEventCallback(GUdevClient*, gchar* action, GUdevDevice*, gpointer data);
     static gboolean isGamepadDevice(GUdevDevice*);
 
-    Vector<OwnPtr<GamepadDeviceGtk> > m_slots;
+    Vector<std::unique_ptr<GamepadDeviceGtk> > m_slots;
     HashMap<String, GamepadDeviceGtk*> m_deviceMap;
 
     GRefPtr<GUdevClient> m_gudevClient;
@@ -145,7 +139,7 @@ void GamepadsGtk::registerDevice(String deviceFile)
 
     for (unsigned index = 0; index < m_slots.size(); index++) {
         if (!m_slots[index]) {
-            m_slots[index] = GamepadDeviceGtk::create(deviceFile);
+            m_slots[index] = std::make_unique<GamepadDeviceGtk>(deviceFile);
             m_deviceMap.add(deviceFile, m_slots[index].get());
             break;
         }

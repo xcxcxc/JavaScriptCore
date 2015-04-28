@@ -34,6 +34,7 @@
 #include "Page.h"
 #include "PageConsoleClient.h"
 #include "SecurityOrigin.h"
+#include <profiler/Profile.h>
 #include <runtime/JSLock.h>
 #include <wtf/Ref.h>
 
@@ -73,7 +74,7 @@ String JSCustomXPathNSResolver::lookupNamespaceURI(const String& prefix)
 
     ExecState* exec = m_globalObject->globalExec();
         
-    JSValue function = m_customResolver->get(exec, Identifier(exec, "lookupNamespaceURI"));
+    JSValue function = m_customResolver->get(exec, Identifier::fromString(exec, "lookupNamespaceURI"));
     CallData callData;
     CallType callType = getCallData(function, callData);
     if (callType == CallTypeNone) {

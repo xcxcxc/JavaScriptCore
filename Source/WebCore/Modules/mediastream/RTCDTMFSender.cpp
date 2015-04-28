@@ -65,7 +65,7 @@ RTCDTMFSender::RTCDTMFSender(ScriptExecutionContext* context, PassRefPtr<MediaSt
     , m_interToneGap(defaultInterToneGapMs)
     , m_handler(WTF::move(handler))
     , m_stopped(false)
-    , m_scheduledEventTimer(this, &RTCDTMFSender::scheduledEventTimerFired)
+    , m_scheduledEventTimer(*this, &RTCDTMFSender::scheduledEventTimerFired)
 {
     m_handler->setClient(this);
 }
@@ -131,7 +131,18 @@ void RTCDTMFSender::didPlayTone(const String& tone)
 void RTCDTMFSender::stop()
 {
     m_stopped = true;
-    m_handler->setClient(0);
+    m_handler->setClient(nullptr);
+}
+
+const char* RTCDTMFSender::activeDOMObjectName() const
+{
+    return "RTCDTMFSender";
+}
+
+bool RTCDTMFSender::canSuspendForPageCache() const
+{
+    // FIXME: We should try and do better here.
+    return false;
 }
 
 void RTCDTMFSender::scheduleDispatchEvent(PassRefPtr<Event> event)
@@ -142,7 +153,7 @@ void RTCDTMFSender::scheduleDispatchEvent(PassRefPtr<Event> event)
         m_scheduledEventTimer.startOneShot(0);
 }
 
-void RTCDTMFSender::scheduledEventTimerFired(Timer<RTCDTMFSender>*)
+void RTCDTMFSender::scheduledEventTimerFired()
 {
     if (m_stopped)
         return;

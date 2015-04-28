@@ -38,6 +38,7 @@ namespace WebCore {
 
 class RenderProgress;
 class RenderStyle;
+struct AttachmentLayout;
 
 class RenderThemeMac final : public RenderTheme {
 public:
@@ -66,9 +67,6 @@ public:
 
     virtual void platformColorsDidChange() override;
 
-    // System fonts.
-    virtual void systemFont(CSSValueID, FontDescription&) const override;
-
     virtual int minimumMenuListSize(RenderStyle&) const override;
 
     virtual void adjustSliderThumbSize(RenderStyle&, Element*) const override;
@@ -83,8 +81,6 @@ public:
     virtual int popupInternalPaddingTop(RenderStyle&) const override;
     virtual int popupInternalPaddingBottom(RenderStyle&) const override;
     virtual PopupMenuStyle::PopupMenuSize popupMenuSize(const RenderStyle&, IntRect&) const override;
-
-    virtual bool paintCapsLockIndicator(const RenderObject&, const PaintInfo&, const IntRect&) override;
 
     virtual bool popsMenuByArrowKeys() const override { return true; }
 
@@ -111,6 +107,9 @@ public:
 protected:
     RenderThemeMac();
     virtual ~RenderThemeMac();
+
+    // System fonts.
+    virtual void updateCachedSystemFontDescription(CSSValueID, FontDescription&) const override;
 
 #if ENABLE(VIDEO)
     // Media controls
@@ -165,11 +164,18 @@ protected:
 #endif
 
     virtual bool shouldShowPlaceholderWhenFocused() const override;
+    virtual bool shouldHaveCapsLockIndicator(HTMLInputElement&) const override;
 
     virtual bool paintSnapshottedPluginOverlay(const RenderObject&, const PaintInfo&, const IntRect&) override;
 
+#if ENABLE(ATTACHMENT_ELEMENT)
+    virtual LayoutSize attachmentIntrinsicSize(const RenderAttachment&) const override;
+    virtual int attachmentBaseline(const RenderAttachment&) const override;
+    virtual bool paintAttachment(const RenderObject&, const PaintInfo&, const IntRect&) override;
+#endif
+
 private:
-    virtual String fileListNameForWidth(const FileList*, const Font&, int width, bool multipleFilesAllowed) const override;
+    virtual String fileListNameForWidth(const FileList*, const FontCascade&, int width, bool multipleFilesAllowed) const override;
 
     FloatRect convertToPaintingRect(const RenderObject& inputRenderer, const RenderObject& partRenderer, const FloatRect& inputRect, const IntRect&) const;
 

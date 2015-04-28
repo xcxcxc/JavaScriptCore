@@ -83,6 +83,8 @@ def WTFMediaTime_SummaryProvider(valobj, dict):
         return "{ -Infinity }"
     if provider.isIndefinite():
         return "{ Indefinite }"
+    if provider.hasDoubleValue():
+        return "{ %f }" % (provider.timeValueAsDouble())
     return "{ %d/%d, %f }" % (provider.timeValue(), provider.timeScale(), float(provider.timeValue()) / provider.timeScale())
 
 
@@ -139,6 +141,8 @@ def btjs(debugger, command, result, internal_dict):
         if annotateJSFrames and not frame or not frame.GetSymbol() or frame.GetSymbol().GetName() == "llint_entry":
             callFrame = frame.GetSP()
             JSFrameDescription = frame.EvaluateExpression("((JSC::ExecState*)0x%x)->describeFrame()" % frame.GetFP()).GetSummary()
+            if not JSFrameDescription:
+                JSFrameDescription = frame.EvaluateExpression("((JSC::CallFrame*)0x%x)->describeFrame()" % frame.GetFP()).GetSummary()
             if not JSFrameDescription:
                 JSFrameDescription = frame.EvaluateExpression("(char*)_ZN3JSC9ExecState13describeFrameEv(0x%x)" % frame.GetFP()).GetSummary()
             if JSFrameDescription:
@@ -239,7 +243,7 @@ class WTFStringImplProvider:
     def is_8bit(self):
         # FIXME: find a way to access WTF::StringImpl::s_hashFlag8BitBuffer
         return bool(self.valobj.GetChildMemberWithName('m_hashAndFlags').GetValueAsUnsigned(0) \
-            & 1 << 5)
+            & 1 << 3)
 
     def is_initialized(self):
         return self.valobj.GetValueAsUnsigned() != 0
@@ -407,6 +411,10 @@ class WTFMediaTimeProvider:
     def timeValue(self):
         return self.valobj.GetChildMemberWithName('m_timeValue').GetValueAsSigned(0)
 
+    def timeValueAsDouble(self):
+        error = lldb.SBError()
+        return self.valobj.GetChildMemberWithName('m_timeValueAsDouble').GetData().GetDouble(error, 0)
+
     def timeScale(self):
         return self.valobj.GetChildMemberWithName('m_timeScale').GetValueAsSigned(0)
 
@@ -421,3 +429,6 @@ class WTFMediaTimeProvider:
 
     def isIndefinite(self):
         return self.valobj.GetChildMemberWithName('m_timeFlags').GetValueAsSigned(0) & (1 << 4)
+
+    def hasDoubleValue(self):
+        return self.valobj.GetChildMemberWithName('m_timeFlags').GetValueAsSigned(0) & (1 << 5)

@@ -51,15 +51,8 @@ namespace WebCore {
 
 ScriptedAnimationController::ScriptedAnimationController(Document* document, PlatformDisplayID displayID)
     : m_document(document)
-    , m_nextCallbackId(0)
-    , m_suspendCount(0)
 #if USE(REQUEST_ANIMATION_FRAME_TIMER)
-    , m_animationTimer(this, &ScriptedAnimationController::animationTimerFired)
-    , m_lastAnimationFrameTimeMonotonic(0)
-#if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    , m_isUsingTimer(false)
-    , m_isThrottled(false)
-#endif
+    , m_animationTimer(*this, &ScriptedAnimationController::animationTimerFired)
 #endif
 {
     windowScreenDidChange(displayID);
@@ -132,8 +125,8 @@ void ScriptedAnimationController::serviceScriptedAnimations(double monotonicTime
     if (!m_callbacks.size() || m_suspendCount || (m_document->settings() && !m_document->settings()->requestAnimationFrameEnabled()))
         return;
 
-    double highResNowMs = 1000.0 * m_document->loader()->timing()->monotonicTimeToZeroBasedDocumentTime(monotonicTimeNow);
-    double legacyHighResNowMs = 1000.0 * m_document->loader()->timing()->monotonicTimeToPseudoWallTime(monotonicTimeNow);
+    double highResNowMs = 1000.0 * m_document->loader()->timing().monotonicTimeToZeroBasedDocumentTime(monotonicTimeNow);
+    double legacyHighResNowMs = 1000.0 * m_document->loader()->timing().monotonicTimeToPseudoWallTime(monotonicTimeNow);
 
     // First, generate a list of callbacks to consider.  Callbacks registered from this point
     // on are considered only for the "next" frame, not this one.
@@ -173,7 +166,7 @@ void ScriptedAnimationController::windowScreenDidChange(PlatformDisplayID displa
     if (m_document->settings() && !m_document->settings()->requestAnimationFrameEnabled())
         return;
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-    DisplayRefreshMonitorManager::sharedManager().windowScreenDidChange(displayID, this);
+    DisplayRefreshMonitorManager::sharedManager().windowScreenDidChange(displayID, *this);
 #else
     UNUSED_PARAM(displayID);
 #endif
@@ -187,7 +180,7 @@ void ScriptedAnimationController::scheduleAnimation()
 #if USE(REQUEST_ANIMATION_FRAME_TIMER)
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
     if (!m_isUsingTimer && !m_isThrottled) {
-        if (DisplayRefreshMonitorManager::sharedManager().scheduleAnimation(this))
+        if (DisplayRefreshMonitorManager::sharedManager().scheduleAnimation(*this))
             return;
 
         m_isUsingTimer = true;
@@ -211,7 +204,7 @@ void ScriptedAnimationController::scheduleAnimation()
 }
 
 #if USE(REQUEST_ANIMATION_FRAME_TIMER)
-void ScriptedAnimationController::animationTimerFired(Timer<ScriptedAnimationController>&)
+void ScriptedAnimationController::animationTimerFired()
 {
     m_lastAnimationFrameTimeMonotonic = monotonicallyIncreasingTime();
     serviceScriptedAnimations(m_lastAnimationFrameTimeMonotonic);
@@ -226,9 +219,15 @@ void ScriptedAnimationController::displayRefreshFired(double monotonicTimeNow)
 
 
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
-PassRefPtr<DisplayRefreshMonitor> ScriptedAnimationController::createDisplayRefreshMonitor(PlatformDisplayID displayID) const
+RefPtr<DisplayRefreshMonitor> ScriptedAnimationController::createDisplayRefreshMonitor(PlatformDisplayID displayID) const
 {
-    return m_document->page()->chrome().client().createDisplayRefreshMonitor(displayID);
+    if (!m_document->page())
+        return nullptr;
+
+    if (auto monitor = m_document->page()->chrome().client().createDisplayRefreshMonitor(displayID))
+        return monitor;
+
+    return DisplayRefreshMonitor::createDefaultDisplayRefreshMonitor(displayID);
 }
 #endif
 

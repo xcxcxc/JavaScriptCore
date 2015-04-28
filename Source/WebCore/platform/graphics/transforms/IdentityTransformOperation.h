@@ -35,7 +35,12 @@ public:
     {
         return adoptRef(new IdentityTransformOperation());
     }
-        
+
+    virtual PassRefPtr<TransformOperation> clone() const override
+    {
+        return create();
+    }
+
 private:
     virtual bool isIdentity() const override { return true; }
     virtual OperationType type() const override { return IDENTITY; }
@@ -62,8 +67,8 @@ private:
 
 };
 
-TRANSFORMOPERATION_TYPE_CASTS(IdentityTransformOperation, type() == TransformOperation::IDENTITY);
-
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_TRANSFORMOPERATION(WebCore::IdentityTransformOperation, type() == WebCore::TransformOperation::IDENTITY)
 
 #endif // IdentityTransformOperation_h

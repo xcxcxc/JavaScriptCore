@@ -24,7 +24,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
 #include "WebChromeClient.h"
 
 #include "COMPropertyBag.h"
@@ -72,7 +71,7 @@ static const size_t maxFilePathsListSize = USHRT_MAX;
 WebChromeClient::WebChromeClient(WebView* webView)
     : m_webView(webView)
 #if ENABLE(NOTIFICATIONS) || ENABLE(LEGACY_NOTIFICATIONS)
-    , m_notificationsDelegate(new WebDesktopNotificationsDelegate(webView))
+    , m_notificationsDelegate(std::make_unique<WebDesktopNotificationsDelegate>(webView))
 #endif
 {
 }
@@ -464,19 +463,19 @@ IntRect WebChromeClient::windowResizerRect() const
 void WebChromeClient::invalidateRootView(const IntRect& windowRect)
 {
     ASSERT(core(m_webView->topLevelFrame()));
-    m_webView->repaint(windowRect, false /*contentChanged*/, false /*repaintContentOnly*/);
+    m_webView->repaint(windowRect, false /*contentChanged*/, false /*immediate*/, false /*repaintContentOnly*/);
 }
 
 void WebChromeClient::invalidateContentsAndRootView(const IntRect& windowRect)
 {
     ASSERT(core(m_webView->topLevelFrame()));
-    m_webView->repaint(windowRect, true /*contentChanged*/, false /*repaintContentOnly*/);
+    m_webView->repaint(windowRect, true /*contentChanged*/, false /*immediate*/, false /*repaintContentOnly*/);
 }
 
 void WebChromeClient::invalidateContentsForSlowScroll(const IntRect& windowRect)
 {
     ASSERT(core(m_webView->topLevelFrame()));
-    m_webView->repaint(windowRect, true /*contentChanged*/, true /*repaintContentOnly*/);
+    m_webView->repaint(windowRect, true /*contentChanged*/, false /*immediate*/, true /*repaintContentOnly*/);
 }
 
 void WebChromeClient::scroll(const IntSize& delta, const IntRect& scrollViewRect, const IntRect& clipRect)
@@ -583,7 +582,6 @@ void WebChromeClient::print(Frame* frame)
         uiDelegate->printFrame(m_webView, kit(frame));
 }
 
-#if ENABLE(SQL_DATABASE)
 void WebChromeClient::exceededDatabaseQuota(Frame* frame, const String& databaseIdentifier, DatabaseDetails)
 {
     COMPtr<WebSecurityOrigin> origin(AdoptCOM, WebSecurityOrigin::createInstance(frame->document()->securityOrigin()));
@@ -598,8 +596,9 @@ void WebChromeClient::exceededDatabaseQuota(Frame* frame, const String& database
             HMODULE safariHandle = GetModuleHandleW(L"Safari.exe");
             if (!safariHandle)
                 return;
-            GetModuleFileName(safariHandle, path, WTF_ARRAY_LENGTH(path));
-            DWORD handle;
+            if (!::GetModuleFileName(safariHandle, path, WTF_ARRAY_LENGTH(path)))
+                return;
+            DWORD handle = 0;
             DWORD versionSize = GetFileVersionInfoSize(path, &handle);
             if (!versionSize)
                 return;
@@ -618,7 +617,6 @@ void WebChromeClient::exceededDatabaseQuota(Frame* frame, const String& database
         }
     }
 }
-#endif
 
 // FIXME: Move this include to the top of the file with the other includes.
 #include "ApplicationCacheStorage.h"
@@ -632,21 +630,6 @@ void WebChromeClient::reachedMaxAppCacheSize(int64_t spaceNeeded)
 void WebChromeClient::reachedApplicationCacheOriginQuota(SecurityOrigin*, int64_t)
 {
     notImplemented();
-}
-
-void WebChromeClient::populateVisitedLinks()
-{
-    COMPtr<IWebHistoryDelegate> historyDelegate;
-    m_webView->historyDelegate(&historyDelegate);
-    if (historyDelegate) {
-        historyDelegate->populateVisitedLinksForWebView(m_webView);
-        return;
-    }
-
-    WebHistory* history = WebHistory::sharedHistory();
-    if (!history)
-        return;
-    history->addVisitedLinksToPageGroup(m_webView->page()->group());
 }
 
 void WebChromeClient::runOpenPanel(Frame*, PassRefPtr<FileChooser> prpFileChooser)
@@ -752,6 +735,11 @@ void WebChromeClient::attachRootGraphicsLayer(Frame* frame, GraphicsLayer* graph
     m_webView->setRootChildLayer(graphicsLayer);
 }
 
+void WebChromeClient::attachViewOverlayGraphicsLayer(Frame*, GraphicsLayer*)
+{
+    // FIXME: If we want view-relative page overlays in Legacy WebKit on Windows, this would be the place to hook them up.
+}
+
 void WebChromeClient::scheduleCompositingLayerFlush()
 {
     m_webView->flushPendingGraphicsLayerChangesSoon();
@@ -778,14 +766,14 @@ bool WebChromeClient::supportsVideoFullscreen()
     return true;
 }
 
-void WebChromeClient::enterVideoFullscreenForVideoElement(HTMLVideoElement* videoElement)
+void WebChromeClient::enterVideoFullscreenForVideoElement(HTMLVideoElement& videoElement)
 {
     m_webView->enterVideoFullscreenForVideoElement(videoElement);
 }
 
-void WebChromeClient::exitVideoFullscreen()
+void WebChromeClient::exitVideoFullscreenForVideoElement(HTMLVideoElement& videoElement)
 {
-    m_webView->exitVideoFullscreen();
+    m_webView->exitVideoFullscreenForVideoElement(videoElement);
 }
 
 #endif

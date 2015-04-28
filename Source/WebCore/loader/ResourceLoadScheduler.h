@@ -48,7 +48,7 @@ class SubresourceLoader;
 class ResourceLoadScheduler {
     WTF_MAKE_NONCOPYABLE(ResourceLoadScheduler); WTF_MAKE_FAST_ALLOCATED;
 public:
-    friend ResourceLoadScheduler* resourceLoadScheduler();
+    WEBCORE_EXPORT friend ResourceLoadScheduler* resourceLoadScheduler();
 
     WEBCORE_EXPORT virtual PassRefPtr<SubresourceLoader> scheduleSubresourceLoad(Frame*, CachedResource*, const ResourceRequest&, const ResourceLoaderOptions&);
     WEBCORE_EXPORT virtual PassRefPtr<NetscapePlugInStreamLoader> schedulePluginStreamLoad(Frame*, NetscapePlugInStreamLoaderClient*, const ResourceRequest&);
@@ -75,8 +75,6 @@ protected:
     WEBCORE_EXPORT ResourceLoadScheduler();
     WEBCORE_EXPORT virtual ~ResourceLoadScheduler();
 
-    WEBCORE_EXPORT void notifyDidScheduleResourceRequest(ResourceLoader*);
-
 #if USE(QUICK_LOOK)
     WEBCORE_EXPORT bool maybeLoadQuickLookResource(ResourceLoader&);
 #endif
@@ -84,7 +82,7 @@ protected:
 private:
     void scheduleLoad(ResourceLoader*);
     void scheduleServePendingRequests();
-    void requestTimerFired(Timer<ResourceLoadScheduler>&);
+    void requestTimerFired();
 
     bool isSuspendingPendingRequests() const { return !!m_suspendPendingRequestsCount; }
 
@@ -109,7 +107,7 @@ private:
         typedef HashSet<RefPtr<ResourceLoader>> RequestMap;
         RequestMap m_requestsLoading;
         const String m_name;
-        const int m_maxRequestsInFlight;
+        const unsigned m_maxRequestsInFlight;
     };
 
     enum CreateHostPolicy {
@@ -124,7 +122,7 @@ private:
     HostMap m_hosts;
     HostInformation* m_nonHTTPProtocolHost;
         
-    Timer<ResourceLoadScheduler> m_requestTimer;
+    Timer m_requestTimer;
 
     unsigned m_suspendPendingRequestsCount;
     bool m_isSerialLoadingEnabled;

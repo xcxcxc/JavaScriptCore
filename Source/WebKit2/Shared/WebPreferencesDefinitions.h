@@ -38,12 +38,6 @@
 #define DEFAULT_WEBKIT_SCROLL_ANIMATOR_ENABLED false
 #endif
 
-#if PLATFORM(IOS) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090)
-#define DEFAULT_SCREEN_FONT_SUBSTITUTION_ENABLED false
-#else
-#define DEFAULT_SCREEN_FONT_SUBSTITUTION_ENABLED true
-#endif
-
 #if PLATFORM(COCOA)
 #define DEFAULT_HIDDEN_PAGE_DOM_TIMER_THROTTLING_ENABLED true
 #define DEFAULT_HIDDEN_PAGE_CSS_ANIMATION_SUSPENSION_ENABLED true
@@ -101,8 +95,6 @@
     macro(DatabasesEnabled, databasesEnabled, Bool, bool, true) \
     macro(XSSAuditorEnabled, xssAuditorEnabled, Bool, bool, true) \
     macro(FrameFlatteningEnabled, frameFlatteningEnabled, Bool, bool, DEFAULT_FRAME_FLATTENING_ENABLED) \
-    macro(DeveloperExtrasEnabled, developerExtrasEnabled, Bool, bool, false) \
-    macro(JavaScriptExperimentsEnabled, javaScriptExperimentsEnabled, Bool, bool, false) \
     macro(PrivateBrowsingEnabled, privateBrowsingEnabled, Bool, bool, false) \
     macro(TextAreasAreResizable, textAreasAreResizable, Bool, bool, DEFAULT_TEXT_AREAS_ARE_RESIZABLE) \
     macro(JavaScriptCanOpenWindowsAutomatically, javaScriptCanOpenWindowsAutomatically, Bool, bool, DEFAULT_JAVASCRIPT_CAN_OPEN_WINDOWS_AUTOMATICALLY) \
@@ -110,17 +102,17 @@
     macro(NeedsSiteSpecificQuirks, needsSiteSpecificQuirks, Bool, bool, false) \
     macro(AcceleratedCompositingEnabled, acceleratedCompositingEnabled, Bool, bool, true) \
     macro(ForceCompositingMode, forceCompositingMode, Bool, bool, false) \
-    macro(AcceleratedDrawingEnabled, acceleratedDrawingEnabled, Bool, bool, DEFAULT_ACCELERATED_DRAWING_ENABLED) \
     macro(CanvasUsesAcceleratedDrawing, canvasUsesAcceleratedDrawing, Bool, bool, DEFAULT_CANVAS_USES_ACCELERATED_DRAWING) \
     macro(WebGLEnabled, webGLEnabled, Bool, bool, true) \
-    macro(MultithreadedWebGLEnabled, multithreadedWebGLEnabled, Bool, bool, false) \
     macro(ForceSoftwareWebGLRendering, forceSoftwareWebGLRendering, Bool, bool, false) \
     macro(Accelerated2dCanvasEnabled, accelerated2dCanvasEnabled, Bool, bool, false) \
+    macro(CSSAnimationTriggersEnabled, cssAnimationTriggersEnabled, Bool, bool, true) \
     macro(CSSRegionsEnabled, cssRegionsEnabled, Bool, bool, true) \
     macro(CSSCompositingEnabled, cssCompositingEnabled, Bool, bool, true) \
     macro(ForceFTPDirectoryListings, forceFTPDirectoryListings, Bool, bool, false) \
     macro(TabsToLinks, tabsToLinks, Bool, bool, DEFAULT_WEBKIT_TABSTOLINKS_ENABLED) \
     macro(DNSPrefetchingEnabled, dnsPrefetchingEnabled, Bool, bool, false) \
+    macro(DOMTimersThrottlingEnabled, domTimersThrottlingEnabled, Bool, bool, true) \
     macro(WebArchiveDebugModeEnabled, webArchiveDebugModeEnabled, Bool, bool, false) \
     macro(LocalFileContentSniffingEnabled, localFileContentSniffingEnabled, Bool, bool, false) \
     macro(UsesPageCache, usesPageCache, Bool, bool, true) \
@@ -138,12 +130,12 @@
     macro(AVFoundationEnabled, isAVFoundationEnabled, Bool, bool, true) \
     macro(MediaPlaybackRequiresUserGesture, mediaPlaybackRequiresUserGesture, Bool, bool, DEFAULT_MEDIA_PLAYBACK_REQUIRES_USER_GESTURE) \
     macro(MediaPlaybackAllowsInline, mediaPlaybackAllowsInline, Bool, bool, DEFAULT_MEDIA_PLAYBACK_ALLOWS_INLINE) \
+    macro(AllowsAlternateFullscreen, allowsAlternateFullscreen, Bool, bool, true) \
     macro(MediaPlaybackAllowsAirPlay, mediaPlaybackAllowsAirPlay, Bool, bool, true) \
     macro(InspectorStartsAttached, inspectorStartsAttached, Bool, bool, true) \
     macro(ShowsToolTipOverTruncatedText, showsToolTipOverTruncatedText, Bool, bool, false) \
     macro(MockScrollbarsEnabled, mockScrollbarsEnabled, Bool, bool, false) \
     macro(WebAudioEnabled, webAudioEnabled, Bool, bool, true) \
-    macro(ApplicationChromeModeEnabled, applicationChromeMode, Bool, bool, false) \
     macro(SuppressesIncrementalRendering, suppressesIncrementalRendering, Bool, bool, false) \
     macro(BackspaceKeyNavigationEnabled, backspaceKeyNavigationEnabled, Bool, bool, true) \
     macro(CaretBrowsingEnabled, caretBrowsingEnabled, Bool, bool, false) \
@@ -163,7 +155,6 @@
     macro(ScrollingPerformanceLoggingEnabled, scrollingPerformanceLoggingEnabled, Bool, bool, false) \
     macro(ScrollAnimatorEnabled, scrollAnimatorEnabled, Bool, bool, DEFAULT_WEBKIT_SCROLL_ANIMATOR_ENABLED) \
     macro(ForceUpdateScrollbarsOnMainThreadForPerformanceTesting, forceUpdateScrollbarsOnMainThreadForPerformanceTesting, Bool, bool, false) \
-    macro(ScreenFontSubstitutionEnabled, screenFontSubstitutionEnabled, Bool, bool, DEFAULT_SCREEN_FONT_SUBSTITUTION_ENABLED) \
     macro(CookieEnabled, cookieEnabled, Bool, bool, true) \
     macro(PlugInSnapshottingEnabled, plugInSnapshottingEnabled, Bool, bool, false) \
     macro(SnapshotAllPlugIns, snapshotAllPlugIns, Bool, bool, false) \
@@ -174,7 +165,7 @@
     macro(TextAutosizingEnabled, textAutosizingEnabled, Bool, bool, false) \
     macro(AggressiveTileRetentionEnabled, aggressiveTileRetentionEnabled, Bool, bool, false) \
     macro(TemporaryTileCohortRetentionEnabled, temporaryTileCohortRetentionEnabled, Bool, bool, DEFAULT_TEMPORARY_TILE_COHORT_RETENTION_ENABLED) \
-    macro(QTKitEnabled, isQTKitEnabled, Bool, bool, true) \
+    macro(QTKitEnabled, isQTKitEnabled, Bool, bool, WebCore::Settings::isQTKitEnabled()) \
     macro(PageVisibilityBasedProcessSuppressionEnabled, pageVisibilityBasedProcessSuppressionEnabled, Bool, bool, true) \
     macro(SmartInsertDeleteEnabled, smartInsertDeleteEnabled, Bool, bool, true) \
     macro(SelectTrailingWhitespaceEnabled, selectTrailingWhitespaceEnabled, Bool, bool, false) \
@@ -185,7 +176,6 @@
     macro(LowPowerVideoAudioBufferSizeEnabled, lowPowerVideoAudioBufferSizeEnabled, Bool, bool, false) \
     macro(ThreadedScrollingEnabled, threadedScrollingEnabled, Bool, bool, true) \
     macro(SimpleLineLayoutEnabled, simpleLineLayoutEnabled, Bool, bool, true) \
-    macro(SimpleLineLayoutDebugBordersEnabled, simpleLineLayoutDebugBordersEnabled, Bool, bool, false) \
     macro(SubpixelCSSOMElementMetricsEnabled, subpixelCSSOMElementMetricsEnabled, Bool, bool, false) \
     macro(BackgroundShouldExtendBeyondPage, backgroundShouldExtendBeyondPage, Bool, bool, false) \
     macro(MediaStreamEnabled, mediaStreamEnabled, Bool, bool, false) \
@@ -196,7 +186,6 @@
     macro(ShouldConvertPositionStyleOnCopy, shouldConvertPositionStyleOnCopy, Bool, bool, false) \
     macro(Standalone, standalone, Bool, bool, false) \
     macro(TelephoneNumberParsingEnabled, telephoneNumberParsingEnabled, Bool, bool, false) \
-    macro(AlwaysUseBaselineOfPrimaryFont, alwaysUseBaselineOfPrimaryFont, Bool, bool, false) \
     macro(AllowMultiElementImplicitSubmission, allowMultiElementImplicitSubmission, Bool, bool, false) \
     macro(AlwaysUseAcceleratedOverflowScroll, alwaysUseAcceleratedOverflowScroll, Bool, bool, false) \
     macro(PasswordEchoEnabled, passwordEchoEnabled, Bool, bool, DEFAULT_PASSWORD_ECHO_ENABLED) \
@@ -205,6 +194,8 @@
     macro(ServiceControlsEnabled, serviceControlsEnabled, Bool, bool, false) \
     macro(GamepadsEnabled, gamepadsEnabled, Bool, bool, false) \
     macro(LongMousePressEnabled, longMousePressEnabled, Bool, bool, false) \
+    macro(NewBlockInsideInlineModelEnabled, newBlockInsideInlineModelEnabled, Bool, bool, false) \
+    macro(AntialiasedFontDilationEnabled, antialiasedFontDilationEnabled, Bool, bool, true) \
 
 #define FOR_EACH_WEBKIT_DOUBLE_PREFERENCE(macro) \
     macro(IncrementalRenderingSuppressionTimeout, incrementalRenderingSuppressionTimeout, Double, double, 5) \
@@ -228,14 +219,23 @@
     macro(InspectorAttachedWidth, inspectorAttachedWidth, UInt32, uint32_t, 750) \
     macro(InspectorAttachmentSide, inspectorAttachmentSide, UInt32, uint32_t, 0) \
     macro(StorageBlockingPolicy, storageBlockingPolicy, UInt32, uint32_t, WebCore::SecurityOrigin::BlockThirdPartyStorage) \
+    macro(JavaScriptRuntimeFlags, javaScriptRuntimeFlags, UInt32, uint32_t, 0) \
     \
 
 #define FOR_EACH_WEBKIT_DEBUG_BOOL_PREFERENCE(macro) \
+    macro(AcceleratedDrawingEnabled, acceleratedDrawingEnabled, Bool, bool, DEFAULT_ACCELERATED_DRAWING_ENABLED) \
     macro(CompositingBordersVisible, compositingBordersVisible, Bool, bool, false) \
     macro(CompositingRepaintCountersVisible, compositingRepaintCountersVisible, Bool, bool, false) \
     macro(TiledScrollingIndicatorVisible, tiledScrollingIndicatorVisible, Bool, bool, false) \
+    macro(SimpleLineLayoutDebugBordersEnabled, simpleLineLayoutDebugBordersEnabled, Bool, bool, false) \
+    macro(DeveloperExtrasEnabled, developerExtrasEnabled, Bool, bool, false) \
     macro(LogsPageMessagesToSystemConsoleEnabled, logsPageMessagesToSystemConsoleEnabled, Bool, bool, false) \
+    macro(IgnoreViewportScalingConstraints, ignoreViewportScalingConstraints, Bool, bool, true) \
+    macro(ForceAlwaysUserScalable, forceAlwaysUserScalable, Bool, bool, false) \
     \
+
+#define FOR_EACH_WEBKIT_DEBUG_UINT32_PREFERENCE(macro) \
+    macro(VisibleDebugOverlayRegions, visibleDebugOverlayRegions, UInt32, uint32_t, 0)
 
 #if PLATFORM(COCOA)
 
@@ -284,6 +284,7 @@
 
 #define FOR_EACH_WEBKIT_DEBUG_PREFERENCE(macro) \
     FOR_EACH_WEBKIT_DEBUG_BOOL_PREFERENCE(macro) \
+    FOR_EACH_WEBKIT_DEBUG_UINT32_PREFERENCE(macro) \
     \
 
 #define FOR_EACH_WEBKIT_PREFERENCE(macro) \

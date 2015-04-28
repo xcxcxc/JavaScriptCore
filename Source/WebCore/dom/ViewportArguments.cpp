@@ -395,26 +395,12 @@ void setViewportFeature(const String& keyString, const String& valueString, Docu
         arguments->userZoom = findUserScalableValue(keyString, valueString, document);
 #if PLATFORM(IOS)
     else if (keyString == "minimal-ui")
-        arguments->minimalUI = true;
+        // FIXME: Ignore silently for now. This should eventually fallback to the warning.
+        { }
 #endif
     else
         reportViewportWarning(document, UnrecognizedViewportArgumentKeyError, keyString, String());
 }
-
-#if PLATFORM(IOS)
-void finalizeViewportArguments(ViewportArguments& arguments, const FloatSize& screenSize)
-{
-    if (arguments.width == ViewportArguments::ValueDeviceWidth)
-        arguments.width = screenSize.width();
-    else if (arguments.width == ViewportArguments::ValueDeviceHeight)
-        arguments.width = screenSize.height();
-
-    if (arguments.height == ViewportArguments::ValueDeviceWidth)
-        arguments.height = screenSize.width();
-    else if (arguments.height == ViewportArguments::ValueDeviceHeight)
-        arguments.height = screenSize.height();
-}
-#endif
 
 static const char* viewportErrorMessageTemplate(ViewportErrorCode errorCode)
 {

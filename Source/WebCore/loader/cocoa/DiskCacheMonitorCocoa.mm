@@ -26,28 +26,19 @@
 #import "config.h"
 #import "DiskCacheMonitorCocoa.h"
 
+#import "CFNetworkSPI.h"
 #import "CachedResource.h"
 #import "MemoryCache.h"
 #import "ResourceRequest.h"
 #import "SessionID.h"
 #import "SharedBuffer.h"
 #import <wtf/MainThread.h>
-#import <wtf/OwnPtr.h>
-#import <wtf/PassOwnPtr.h>
 #import <wtf/PassRefPtr.h>
 #import <wtf/RefPtr.h>
 
-#ifdef __has_include
-#if __has_include(<CFNetwork/CFURLCachePriv.h>)
-#include <CFNetwork/CFURLCachePriv.h>
+#if USE(WEB_THREAD)
+#include "WebCoreThreadRun.h"
 #endif
-#endif
-
-#if (PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 80000) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090)
-
-typedef void (^CFCachedURLResponseCallBackBlock)(CFCachedURLResponseRef);
-extern "C" void _CFCachedURLResponseSetBecameFileBackedCallBackBlock(CFCachedURLResponseRef, CFCachedURLResponseCallBackBlock, dispatch_queue_t);
-extern "C" CFDataRef _CFCachedURLResponseGetMemMappedData(CFCachedURLResponseRef);
 
 namespace WebCore {
 
@@ -68,7 +59,8 @@ void DiskCacheMonitor::monitorFileBackingStoreCreation(const ResourceRequest& re
     if (!cachedResponse)
         return;
 
-    new DiskCacheMonitor(request, sessionID, cachedResponse); // Balanced by adoptPtr in the blocks setup in the constructor, one of which is guaranteed to run.
+    // FIXME: It's not good to have the new here, but the delete inside the constructor. Reconsider this design.
+    new DiskCacheMonitor(request, sessionID, cachedResponse); // Balanced by delete and unique_ptr in the blocks set up in the constructor, one of which is guaranteed to run.
 }
 
 DiskCacheMonitor::DiskCacheMonitor(const ResourceRequest& request, SessionID sessionID, CFCachedURLResponseRef cachedResponse)
@@ -81,33 +73,46 @@ DiskCacheMonitor::DiskCacheMonitor(const ResourceRequest& request, SessionID ses
     __block DiskCacheMonitor* rawMonitor = this;
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC * diskCacheMonitorTimeout), dispatch_get_main_queue(), ^{
-        adoptPtr(rawMonitor); // Balanced by `new DiskCacheMonitor` in monitorFileBackingStoreCreation.
-        rawMonitor = 0;
+        delete rawMonitor; // Balanced by "new DiskCacheMonitor" in monitorFileBackingStoreCreation.
+        rawMonitor = nullptr;
     });
 
     // Set up the disk caching callback to create the ShareableResource and send it to the WebProcess.
     CFCachedURLResponseCallBackBlock block = ^(CFCachedURLResponseRef cachedResponse)
     {
+        ASSERT(isMainThread());
         // If the monitor isn't there then it timed out before this resource was cached to disk.
         if (!rawMonitor)
             return;
 
-        OwnPtr<DiskCacheMonitor> monitor = adoptPtr(rawMonitor); // Balanced by `new DiskCacheMonitor` in monitorFileBackingStoreCreation.
-        rawMonitor = 0;
+        auto monitor = std::unique_ptr<DiskCacheMonitor>(rawMonitor); // Balanced by "new DiskCacheMonitor" in monitorFileBackingStoreCreation.
+        rawMonitor = nullptr;
 
         RefPtr<SharedBuffer> fileBackedBuffer = DiskCacheMonitor::tryGetFileBackedSharedBufferFromCFURLCachedResponse(cachedResponse);
         if (!fileBackedBuffer)
             return;
 
-        monitor->resourceBecameFileBacked(fileBackedBuffer);
+        monitor->resourceBecameFileBacked(*fileBackedBuffer);
     };
 
-    _CFCachedURLResponseSetBecameFileBackedCallBackBlock(cachedResponse, block, dispatch_get_main_queue());
+#if USE(WEB_THREAD)
+    CFCachedURLResponseCallBackBlock blockToRun = ^ (CFCachedURLResponseRef response)
+    {
+        CFRetain(response);
+        WebThreadRun(^ {
+            block(response);
+            CFRelease(response);
+        });
+    };
+#else
+    CFCachedURLResponseCallBackBlock blockToRun = block;
+#endif
+    _CFCachedURLResponseSetBecameFileBackedCallBackBlock(cachedResponse, blockToRun, dispatch_get_main_queue());
 }
 
-void DiskCacheMonitor::resourceBecameFileBacked(PassRefPtr<SharedBuffer> fileBackedBuffer)
+void DiskCacheMonitor::resourceBecameFileBacked(SharedBuffer& fileBackedBuffer)
 {
-    CachedResource* resource = memoryCache()->resourceForRequest(m_resourceRequest, m_sessionID);
+    CachedResource* resource = MemoryCache::singleton().resourceForRequest(m_resourceRequest, m_sessionID);
     if (!resource)
         return;
 
@@ -116,5 +121,3 @@ void DiskCacheMonitor::resourceBecameFileBacked(PassRefPtr<SharedBuffer> fileBac
 
 
 } // namespace WebCore
-
-#endif // (PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 80000) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090)

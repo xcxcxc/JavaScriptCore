@@ -150,7 +150,13 @@ public:
     
     virtual HRESULT STDMETHODCALLTYPE setJavaScriptEnabled( 
         /* [in] */ BOOL enabled);
-    
+
+    virtual HRESULT STDMETHODCALLTYPE javaScriptRuntimeFlags(
+        /* [retval][out] */ unsigned*);
+
+    virtual HRESULT STDMETHODCALLTYPE setJavaScriptRuntimeFlags(
+        /* [in] */ unsigned);
+
     virtual HRESULT STDMETHODCALLTYPE javaScriptCanOpenWindowsAutomatically( 
         /* [retval][out] */ BOOL* enabled);
     
@@ -371,12 +377,6 @@ public:
     virtual HRESULT STDMETHODCALLTYPE setExperimentalNotificationsEnabled(
         /* [in] */ BOOL enabled);
 
-    virtual HRESULT STDMETHODCALLTYPE setShouldPaintNativeControls( 
-    /* [in] */ BOOL shouldPaint);
-
-    virtual HRESULT STDMETHODCALLTYPE shouldPaintNativeControls( 
-    /* [retval][out] */ BOOL *shouldPaint);
-
     virtual HRESULT STDMETHODCALLTYPE setZoomsTextOnly( 
     /* [retval][out] */ BOOL zoomsTextOnly);
 
@@ -479,9 +479,6 @@ public:
 
     virtual HRESULT STDMETHODCALLTYPE mockScrollbarsEnabled(BOOL*);
     virtual HRESULT STDMETHODCALLTYPE setMockScrollbarsEnabled(BOOL);
-
-    virtual HRESULT STDMETHODCALLTYPE screenFontSubstitutionEnabled(BOOL*);
-    virtual HRESULT STDMETHODCALLTYPE setScreenFontSubstitutionEnabled(BOOL);
 
     virtual HRESULT STDMETHODCALLTYPE isInheritURIQueryComponentEnabled(BOOL*);
     virtual HRESULT STDMETHODCALLTYPE setEnableInheritURIQueryComponent(BOOL);

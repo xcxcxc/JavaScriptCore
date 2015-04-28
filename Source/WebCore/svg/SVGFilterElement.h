@@ -39,7 +39,7 @@ class SVGFilterElement final : public SVGElement,
                                public SVGURIReference,
                                public SVGExternalResourcesRequired {
 public:
-    static PassRefPtr<SVGFilterElement> create(const QualifiedName&, Document&);
+    static Ref<SVGFilterElement> create(const QualifiedName&, Document&);
 
     void setFilterRes(unsigned filterResX, unsigned filterResY);
 
@@ -48,12 +48,12 @@ private:
 
     virtual bool needsPendingResourceHandling() const override { return false; }
 
-    bool isSupportedAttribute(const QualifiedName&);
+    static bool isSupportedAttribute(const QualifiedName&);
     virtual void parseAttribute(const QualifiedName&, const AtomicString&) override;
     virtual void svgAttributeChanged(const QualifiedName&) override;
     virtual void childrenChanged(const ChildChange&) override;
 
-    virtual RenderPtr<RenderElement> createElementRenderer(PassRef<RenderStyle>) override;
+    virtual RenderPtr<RenderElement> createElementRenderer(Ref<RenderStyle>&&, const RenderTreePosition&) override;
     virtual bool childShouldCreateRenderer(const Node&) const override;
 
     virtual bool selfHasRelativeLengths() const override { return true; }
@@ -74,8 +74,6 @@ private:
         DECLARE_ANIMATED_BOOLEAN(ExternalResourcesRequired, externalResourcesRequired)
     END_DECLARE_ANIMATED_PROPERTIES
 };
-
-NODE_TYPE_CASTS(SVGFilterElement)
 
 }
 

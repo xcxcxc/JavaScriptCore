@@ -57,7 +57,7 @@ IDBTransactionBackend::IDBTransactionBackend(IDBDatabaseBackend* databaseBackend
     , m_commitPending(false)
     , m_callbacks(callbacks)
     , m_database(databaseBackend)
-    , m_taskTimer(this, &IDBTransactionBackend::taskTimerFired)
+    , m_taskTimer(*this, &IDBTransactionBackend::taskTimerFired)
     , m_pendingPreemptiveEvents(0)
     , m_id(id)
 {
@@ -74,6 +74,10 @@ IDBTransactionBackend::IDBTransactionBackend(IDBDatabaseBackend* databaseBackend
             });
             return;
         }
+
+        // Handle the case where the transaction was aborted before the server connection finished opening the transaction.
+        if (backend->m_state == Finished)
+            return;
 
         backend->m_state = Unused;
         if (backend->hasPendingTasks())
@@ -270,7 +274,7 @@ void IDBTransactionBackend::commit()
     });
 }
 
-void IDBTransactionBackend::taskTimerFired(Timer<IDBTransactionBackend>&)
+void IDBTransactionBackend::taskTimerFired()
 {
     LOG(StorageAPI, "IDBTransactionBackend::taskTimerFired");
 

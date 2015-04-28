@@ -30,6 +30,7 @@ class NumberPrototype;
 class NumberConstructor : public InternalFunction {
 public:
     typedef InternalFunction Base;
+    static const unsigned StructureFlags = Base::StructureFlags | OverridesGetOwnPropertySlot | ImplementsHasInstance;
 
     static NumberConstructor* create(VM& vm, Structure* structure, NumberPrototype* numberPrototype)
     {
@@ -38,9 +39,6 @@ public:
         return constructor;
     }
 
-    static bool getOwnPropertySlot(JSObject*, ExecState*, PropertyName, PropertySlot&);
-    JSValue getValueProperty(ExecState*, int token) const;
-
     DECLARE_INFO;
 
     static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue proto) 
@@ -48,11 +46,8 @@ public:
         return Structure::create(vm, globalObject, proto, TypeInfo(ObjectType, StructureFlags), info()); 
     }
 
-    enum { NaNValue, NegInfinity, PosInfinity, MaxValue, MinValue };
-
 protected:
     void finishCreation(VM&, NumberPrototype*);
-    static const unsigned StructureFlags = OverridesGetOwnPropertySlot | ImplementsHasInstance | InternalFunction::StructureFlags;
 
 private:
     NumberConstructor(VM&, Structure*);

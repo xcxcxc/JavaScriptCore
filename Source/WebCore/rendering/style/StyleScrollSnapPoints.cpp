@@ -56,14 +56,15 @@ StyleScrollSnapPoints::StyleScrollSnapPoints()
 }
 
 inline StyleScrollSnapPoints::StyleScrollSnapPoints(const StyleScrollSnapPoints& other)
-    : xPoints(other.xPoints)
-    , yPoints(other.yPoints)
+    : RefCounted()
+    , xPoints(other.xPoints ? std::make_unique<ScrollSnapPoints>(*other.xPoints) : nullptr)
+    , yPoints(other.yPoints ? std::make_unique<ScrollSnapPoints>(*other.yPoints) : nullptr)
     , destination(other.destination)
     , coordinates(other.coordinates)
 {
 }
 
-PassRef<StyleScrollSnapPoints> StyleScrollSnapPoints::copy() const
+Ref<StyleScrollSnapPoints> StyleScrollSnapPoints::copy() const
 {
     return adoptRef(*new StyleScrollSnapPoints(*this));
 }

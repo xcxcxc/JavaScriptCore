@@ -169,6 +169,9 @@ novalidate
 nowrap
 object
 onabort
+onanimationstart
+onanimationiteration
+onanimationend
 onautocomplete
 onautocompleteerror
 onbeforecopy
@@ -212,6 +215,7 @@ onload
 onloadeddata
 onloadedmetadata
 onloadstart
+onmessage
 onmousedown
 onmouseenter
 onmouseleave
@@ -266,6 +270,10 @@ onwebkitfullscreenerror
 onwebkitkeyadded
 onwebkitkeyerror
 onwebkitkeymessage
+onwebkitmouseforcechanged
+onwebkitmouseforcedown
+onwebkitmouseforceup
+onwebkitmouseforcewillbegin
 onwebkitneedkey
 onwebkitsourceclose
 onwebkitsourceended
@@ -326,6 +334,7 @@ standby
 start
 step
 style
+subtitle
 summary
 tabindex
 tableborder
@@ -346,6 +355,7 @@ version
 vlink
 vspace
 webkitallowfullscreen
+webkitattachmentpath
 width
 wrap
 
@@ -354,6 +364,7 @@ autocapitalize
 data-youtube-id
 onwebkitcurrentplaybacktargetiswirelesschanged
 onwebkitplaybacktargetavailabilitychanged
+onwebkitpresentationmodechanged
 x-webkit-imagemenu
 webkit-playsinline
 x-webkit-airplay

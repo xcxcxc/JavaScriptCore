@@ -32,7 +32,6 @@
 #include "ScrollTypes.h"
 #include "ScrollingCoordinator.h"
 #include "ScrollingTreeNode.h"
-#include <wtf/PassOwnPtr.h>
 
 namespace WebCore {
 
@@ -104,9 +103,9 @@ private:
     ScrollableAreaParameters m_scrollableAreaParameters;
 };
 
-SCROLLING_NODE_TYPE_CASTS(ScrollingTreeScrollingNode, isScrollingNode());
-
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_SCROLLING_NODE(ScrollingTreeScrollingNode, isScrollingNode())
 
 #endif // ENABLE(ASYNC_SCROLLING)
 

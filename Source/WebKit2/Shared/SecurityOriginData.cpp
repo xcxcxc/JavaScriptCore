@@ -28,25 +28,25 @@
 
 #include "APIArray.h"
 #include "WebCoreArgumentCoders.h"
-#include "WebSecurityOrigin.h"
+#include "APISecurityOrigin.h"
 #include <wtf/text/CString.h>
 
 using namespace WebCore;
 
 namespace WebKit {
 
-SecurityOriginData SecurityOriginData::fromSecurityOrigin(const SecurityOrigin* securityOrigin)
+SecurityOriginData SecurityOriginData::fromSecurityOrigin(const SecurityOrigin& securityOrigin)
 {
     SecurityOriginData securityOriginData;
 
-    securityOriginData.protocol = securityOrigin->protocol();
-    securityOriginData.host = securityOrigin->host();
-    securityOriginData.port = securityOrigin->port();
+    securityOriginData.protocol = securityOrigin.protocol();
+    securityOriginData.host = securityOrigin.host();
+    securityOriginData.port = securityOrigin.port();
 
     return securityOriginData;
 }
 
-PassRefPtr<SecurityOrigin> SecurityOriginData::securityOrigin() const
+Ref<SecurityOrigin> SecurityOriginData::securityOrigin() const
 {
     return SecurityOrigin::create(protocol, host, port);
 }
@@ -92,13 +92,13 @@ void performAPICallbackWithSecurityOriginDataVector(const Vector<SecurityOriginD
     securityOrigins.reserveInitialCapacity(originDatas.size());
 
     for (const auto& originData : originDatas) {
-        RefPtr<API::Object> origin = WebSecurityOrigin::create(originData.protocol, originData.host, originData.port);
+        RefPtr<API::Object> origin = API::SecurityOrigin::create(originData.protocol, originData.host, originData.port);
         if (!origin)
             continue;
         securityOrigins.uncheckedAppend(WTF::move(origin));
     }
 
-    callback->performCallbackWithReturnValue(API::Array::create(WTF::move(securityOrigins)).get());
+    callback->performCallbackWithReturnValue(API::Array::create(WTF::move(securityOrigins)).ptr());
 }
 
 bool operator==(const SecurityOriginData& a, const SecurityOriginData& b)

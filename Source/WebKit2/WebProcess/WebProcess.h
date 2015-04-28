@@ -37,7 +37,8 @@
 #include "TextCheckerState.h"
 #include "ViewUpdateDispatcher.h"
 #include "VisitedLinkTable.h"
-#include <WebCore/SessionIDHash.h>
+#include "WebOriginDataManagerSupplement.h"
+#include <WebCore/SessionID.h>
 #include <WebCore/Timer.h>
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
@@ -48,6 +49,11 @@
 
 #if PLATFORM(COCOA)
 #include <dispatch/dispatch.h>
+#include <WebCore/MachSendRight.h>
+#endif
+
+#if PLATFORM(IOS)
+#include "WebSQLiteDatabaseTracker.h"
 #endif
 
 namespace API {
@@ -66,9 +72,11 @@ namespace WebKit {
 class DownloadManager;
 class EventDispatcher;
 class InjectedBundle;
+class UserData;
 class WebConnectionToUIProcess;
 class WebFrame;
 class WebIconDatabaseProxy;
+class WebOriginDataManager;
 class WebPage;
 class WebPageGroupProxy;
 class WebProcessSupplement;
@@ -86,10 +94,10 @@ class WebResourceLoadScheduler;
 class WebToDatabaseProcessConnection;
 #endif
 
-class WebProcess : public ChildProcess, private DownloadManager::Client {
+class WebProcess : public ChildProcess, public WebOriginDataManagerSupplement, private DownloadManager::Client {
     friend class NeverDestroyed<DownloadManager>;
 public:
-    static WebProcess& shared();
+    static WebProcess& singleton();
 
     template <typename T>
     T* supplement()
@@ -113,12 +121,14 @@ public:
     InjectedBundle* injectedBundle() const { return m_injectedBundle.get(); }
 
 #if PLATFORM(COCOA)
-    mach_port_t compositingRenderServerPort() const { return m_compositingRenderServerPort; }
+    const WebCore::MachSendRight& compositingRenderServerPort() const { return m_compositingRenderServerPort; }
 #endif
 
-    bool shouldPlugInAutoStartFromOrigin(const WebPage*, const String& pageOrigin, const String& pluginOrigin, const String& mimeType);
+    bool shouldPlugInAutoStartFromOrigin(WebPage&, const String& pageOrigin, const String& pluginOrigin, const String& mimeType);
     void plugInDidStartFromOrigin(const String& pageOrigin, const String& pluginOrigin, const String& mimeType, WebCore::SessionID);
     void plugInDidReceiveUserInteraction(const String& pageOrigin, const String& pluginOrigin, const String& mimeType, WebCore::SessionID);
+    void setPluginLoadClientPolicy(uint8_t policy, const String& host, const String& bundleIdentifier, const String& versionString);
+    void clearPluginClientPolicies();
 
     bool fullKeyboardAccessEnabled() const { return m_fullKeyboardAccessEnabled; }
 
@@ -132,7 +142,6 @@ public:
 
 #if PLATFORM(COCOA)
     pid_t presenterApplicationPid() const { return m_presenterApplicationPid; }
-    bool shouldForceScreenFontSubstitution() const { return m_shouldForceScreenFontSubstitution; }
 #endif
     
     const TextCheckerState& textCheckerState() const { return m_textCheckerState; }
@@ -167,7 +176,7 @@ public:
     void pageDidEnterWindow(uint64_t pageID);
     void pageWillLeaveWindow(uint64_t pageID);
 
-    void nonVisibleProcessCleanupTimerFired(WebCore::Timer<WebProcess>*);
+    void nonVisibleProcessCleanupTimerFired();
 
     void updateActivePages();
 
@@ -178,13 +187,21 @@ public:
     void processWillSuspend();
     void cancelProcessWillSuspend();
     bool markAllLayersVolatileIfPossible();
-    void processSuspensionCleanupTimerFired(WebCore::Timer<WebProcess>*);
+    void setAllLayerTreeStatesFrozen(bool);
+    void processSuspensionCleanupTimerFired();
+    void processDidResume();
 
 #if PLATFORM(IOS)
     void resetAllGeolocationPermissions();
 #endif
 
-    RefPtr<API::Object> apiObjectByConvertingFromHandles(API::Object*);
+    RefPtr<API::Object> transformHandlesToObjects(API::Object*);
+    static RefPtr<API::Object> transformObjectsToHandles(API::Object*);
+
+#if PLATFORM(COCOA)
+    RefPtr<ObjCObjectGraph> transformHandlesToObjects(ObjCObjectGraph&);
+    static RefPtr<ObjCObjectGraph> transformObjectsToHandles(ObjCObjectGraph&);
+#endif
 
 #if ENABLE(SERVICE_CONTROLS)
     bool hasImageServices() const { return m_hasImageServices; }
@@ -201,12 +218,13 @@ private:
     virtual IPC::Connection* downloadProxyConnection() override;
     virtual AuthenticationManager& downloadsAuthenticationManager() override;
 
-    void initializeWebProcess(const WebProcessCreationParameters&, IPC::MessageDecoder&);
-    void platformInitializeWebProcess(const WebProcessCreationParameters&, IPC::MessageDecoder&);
+    void initializeWebProcess(WebProcessCreationParameters&&);
+    void platformInitializeWebProcess(WebProcessCreationParameters&&);
 
     void platformTerminate();
     void registerURLSchemeAsEmptyDocument(const String&);
     void registerURLSchemeAsSecure(const String&) const;
+    void registerURLSchemeAsBypassingContentSecurityPolicy(const String&) const;
     void setDomainRelaxationForbiddenForURLScheme(const String&) const;
     void registerURLSchemeAsLocal(const String&) const;
     void registerURLSchemeAsNoAccess(const String&) const;
@@ -236,6 +254,7 @@ private:
     void stopMemorySampler();
 
     void downloadRequest(uint64_t downloadID, uint64_t initiatingPageID, const WebCore::ResourceRequest&);
+    void resumeDownload(uint64_t downloadID, const IPC::DataReference& resumeData, const String& path, const SandboxExtension::Handle&);
     void cancelDownload(uint64_t downloadID);
 
     void setTextCheckerState(const TextCheckerState&);
@@ -245,6 +264,10 @@ private:
     void setJavaScriptGarbageCollectorTimerEnabled(bool flag);
 
     void releasePageCache();
+
+    void fetchWebsiteData(WebCore::SessionID, uint64_t websiteDataTypes, uint64_t callbackID);
+    void deleteWebsiteData(WebCore::SessionID, uint64_t websiteDataTypes, std::chrono::system_clock::time_point modifiedSince, uint64_t callbackID);
+    void deleteWebsiteDataForOrigins(WebCore::SessionID, uint64_t websiteDataTypes, const Vector<WebKit::SecurityOriginData>& origins, uint64_t callbackID);
 
 #if USE(SOUP)
     void setIgnoreTLSErrors(bool);
@@ -256,7 +279,7 @@ private:
     void setEnabledServices(bool hasImageServices, bool hasSelectionServices, bool hasRichContentServices);
 #endif
 
-    void postInjectedBundleMessage(const IPC::DataReference& messageData);
+    void handleInjectedBundleMessage(const String& messageName, const UserData& messageBody);
     void setInjectedBundleParameter(const String& key, const IPC::DataReference&);
 
     // ChildProcess
@@ -275,13 +298,21 @@ private:
 
     // IPC::Connection::Client
     friend class WebConnectionToUIProcess;
-    virtual void didReceiveMessage(IPC::Connection*, IPC::MessageDecoder&);
-    virtual void didReceiveSyncMessage(IPC::Connection*, IPC::MessageDecoder&, std::unique_ptr<IPC::MessageEncoder>&);
-    virtual void didClose(IPC::Connection*);
-    virtual void didReceiveInvalidMessage(IPC::Connection*, IPC::StringReference messageReceiverName, IPC::StringReference messageName) override;
+    virtual void didReceiveMessage(IPC::Connection&, IPC::MessageDecoder&) override;
+    virtual void didReceiveSyncMessage(IPC::Connection&, IPC::MessageDecoder&, std::unique_ptr<IPC::MessageEncoder>&) override;
+    virtual void didClose(IPC::Connection&) override;
+    virtual void didReceiveInvalidMessage(IPC::Connection&, IPC::StringReference messageReceiverName, IPC::StringReference messageName) override;
+    virtual IPC::ProcessType localProcessType() override { return IPC::ProcessType::Web; }
+    virtual IPC::ProcessType remoteProcessType() override { return IPC::ProcessType::UI; }
 
     // Implemented in generated WebProcessMessageReceiver.cpp
-    void didReceiveWebProcessMessage(IPC::Connection*, IPC::MessageDecoder&);
+    void didReceiveWebProcessMessage(IPC::Connection&, IPC::MessageDecoder&);
+
+    // WebOriginDataManagerSupplement
+    virtual void getOrigins(WKOriginDataTypes, std::function<void (const Vector<SecurityOriginData>&)> completion) override;
+    virtual void deleteEntriesForOrigin(WKOriginDataTypes, const SecurityOriginData&, std::function<void ()> completion) override;
+    virtual void deleteEntriesModifiedBetweenDates(WKOriginDataTypes, double startDate, double endDate, std::function<void ()> completion) override;
+    virtual void deleteAllEntries(WKOriginDataTypes, std::function<void ()> completion) override;
 
     RefPtr<WebConnectionToUIProcess> m_webConnection;
 
@@ -293,7 +324,7 @@ private:
 #if PLATFORM(IOS)
     RefPtr<ViewUpdateDispatcher> m_viewUpdateDispatcher;
 #endif
-    WebCore::Timer<WebProcess> m_processSuspensionCleanupTimer;
+    WebCore::Timer m_processSuspensionCleanupTimer;
 
     bool m_inDidClose;
 
@@ -302,12 +333,12 @@ private:
 
     bool m_hasSetCacheModel;
     CacheModel m_cacheModel;
+    bool m_diskCacheIsDisabledForTesting;
 
 #if PLATFORM(COCOA)
-    mach_port_t m_compositingRenderServerPort;
+    WebCore::MachSendRight m_compositingRenderServerPort;
     pid_t m_presenterApplicationPid;
     dispatch_group_t m_clearResourceCachesDispatchGroup;
-    bool m_shouldForceScreenFontSubstitution;
 #endif
 
     bool m_fullKeyboardAccessEnabled;
@@ -344,7 +375,12 @@ private:
 #endif
 
     HashSet<uint64_t> m_pagesInWindows;
-    WebCore::Timer<WebProcess> m_nonVisibleProcessCleanupTimer;
+    WebCore::Timer m_nonVisibleProcessCleanupTimer;
+
+    std::unique_ptr<WebOriginDataManager> m_webOriginDataManager;
+#if PLATFORM(IOS)
+    WebSQLiteDatabaseTracker m_webSQLiteDatabaseTracker;
+#endif
 };
 
 } // namespace WebKit

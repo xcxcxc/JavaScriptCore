@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,27 +28,12 @@
 
 #if ENABLE(NETWORK_PROCESS)
 
+#import "NetworkCache.h"
 #import "NetworkProcessCreationParameters.h"
 #import "NetworkResourceLoader.h"
 #import "SandboxExtension.h"
-#import <mach/host_info.h>
-#import <mach/mach.h>
-#import <mach/mach_error.h>
-
-typedef const struct _CFURLCache* CFURLCacheRef;
-extern "C" CFURLCacheRef CFURLCacheCopySharedURLCache();
-extern "C" void _CFURLCachePurgeMemoryCache(CFURLCacheRef);
-extern "C" void CFURLConnectionInvalidateConnectionCache();
-
-#if PLATFORM(IOS) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
-extern "C" void _CFURLCacheSetMinSizeForVMCachedResource(CFURLCacheRef, CFIndex);
-#endif
-
-#if PLATFORM(IOS)
-@interface NSURLCache (WKDetails)
--(id)_initWithMemoryCapacity:(NSUInteger)memoryCapacity diskCapacity:(NSUInteger)diskCapacity relativePath:(NSString *)path;
-@end
-#endif
+#import <WebCore/CFNetworkSPI.h>
+#import <wtf/RAMSize.h>
 
 namespace WebKit {
 
@@ -62,13 +47,31 @@ void NetworkProcess::platformInitializeNetworkProcessCocoa(const NetworkProcessC
 {
 #if PLATFORM(IOS)
     SandboxExtension::consumePermanently(parameters.cookieStorageDirectoryExtensionHandle);
-    SandboxExtension::consumePermanently(parameters.hstsDatabasePathExtensionHandle);
+    SandboxExtension::consumePermanently(parameters.containerCachesDirectoryExtensionHandle);
     SandboxExtension::consumePermanently(parameters.parentBundleDirectoryExtensionHandle);
 #endif
     m_diskCacheDirectory = parameters.diskCacheDirectory;
 
+#if (PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 90000) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100)
+    _CFNetworkSetATSContext(parameters.networkATSContext.get());
+#endif
+
+    // FIXME: Most of what this function does for cache size gets immediately overridden by setCacheModel().
+    // - memory cache size passed from UI process is always ignored;
+    // - disk cache size passed from UI process is effectively a minimum size.
+    // One non-obvious constraint is that we need to use -setSharedURLCache: even in testing mode, to prevent creating a default one on disk later, when some other code touches the cache.
+
+    ASSERT(!m_diskCacheIsDisabledForTesting || !parameters.nsURLCacheDiskCapacity);
+
     if (!m_diskCacheDirectory.isNull()) {
         SandboxExtension::consumePermanently(parameters.diskCacheDirectoryExtensionHandle);
+#if ENABLE(NETWORK_CACHE)
+        if (parameters.shouldEnableNetworkCache && NetworkCache::singleton().initialize(m_diskCacheDirectory, parameters.shouldEnableNetworkCacheEfficacyLogging)) {
+            RetainPtr<NSURLCache> urlCache(adoptNS([[NSURLCache alloc] initWithMemoryCapacity:0 diskCapacity:0 diskPath:nil]));
+            [NSURLCache setSharedURLCache:urlCache.get()];
+            return;
+        }
+#endif
 #if PLATFORM(IOS)
         [NSURLCache setSharedURLCache:adoptNS([[NSURLCache alloc]
             _initWithMemoryCapacity:parameters.nsURLCacheMemoryCapacity
@@ -82,31 +85,11 @@ void NetworkProcess::platformInitializeNetworkProcessCocoa(const NetworkProcessC
 #endif
     }
 
-#if PLATFORM(IOS) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
     RetainPtr<CFURLCacheRef> cache = adoptCF(CFURLCacheCopySharedURLCache());
     if (!cache)
         return;
 
     _CFURLCacheSetMinSizeForVMCachedResource(cache.get(), NetworkResourceLoader::fileBackedResourceMinimumSize());
-#endif
-}
-
-static uint64_t memorySize()
-{
-    static host_basic_info_data_t hostInfo;
-
-    static dispatch_once_t once;
-    dispatch_once(&once, ^() {
-        mach_port_t host = mach_host_self();
-        mach_msg_type_number_t count = HOST_BASIC_INFO_COUNT;
-        kern_return_t r = host_info(host, HOST_BASIC_INFO, (host_info_t)&hostInfo, &count);
-        mach_port_deallocate(mach_task_self(), host);
-
-        if (r != KERN_SUCCESS)
-            LOG_ERROR("%s : host_info(%d) : %s.\n", __FUNCTION__, r, mach_error_string(r));
-    });
-
-    return hostInfo.max_mem;
 }
 
 static uint64_t volumeFreeSize(const String& path)
@@ -117,9 +100,10 @@ static uint64_t volumeFreeSize(const String& path)
 
 void NetworkProcess::platformSetCacheModel(CacheModel cacheModel)
 {
+    uint64_t memSize = ramSize() / 1024 / 1024;
+
     // As a fudge factor, use 1000 instead of 1024, in case the reported byte
     // count doesn't align exactly to a megabyte boundary.
-    uint64_t memSize = memorySize() / 1024 / 1000;
     uint64_t diskFreeSize = volumeFreeSize(m_diskCacheDirectory) / 1024 / 1000;
 
     unsigned cacheTotalCapacity = 0;
@@ -134,10 +118,45 @@ void NetworkProcess::platformSetCacheModel(CacheModel cacheModel)
         cacheTotalCapacity, cacheMinDeadCapacity, cacheMaxDeadCapacity, deadDecodedDataDeletionInterval,
         pageCacheCapacity, urlCacheMemoryCapacity, urlCacheDiskCapacity);
 
+    if (m_diskCacheSizeOverride >= 0)
+        urlCacheDiskCapacity = m_diskCacheSizeOverride;
 
+#if ENABLE(NETWORK_CACHE)
+    auto& networkCache = NetworkCache::singleton();
+    if (networkCache.isEnabled()) {
+        networkCache.setCapacity(urlCacheDiskCapacity);
+        return;
+    }
+#endif
     NSURLCache *nsurlCache = [NSURLCache sharedURLCache];
     [nsurlCache setMemoryCapacity:urlCacheMemoryCapacity];
-    [nsurlCache setDiskCapacity:std::max<unsigned long>(urlCacheDiskCapacity, [nsurlCache diskCapacity])]; // Don't shrink a big disk cache, since that would cause churn.
+    if (!m_diskCacheIsDisabledForTesting)
+        [nsurlCache setDiskCapacity:std::max<unsigned long>(urlCacheDiskCapacity, [nsurlCache diskCapacity])]; // Don't shrink a big disk cache, since that would cause churn.
+}
+
+void NetworkProcess::clearDiskCache(std::chrono::system_clock::time_point modifiedSince, std::function<void ()> completionHandler)
+{
+#if ENABLE(NETWORK_CACHE)
+    NetworkCache::singleton().clear();
+#endif
+
+    if (!m_clearCacheDispatchGroup)
+        m_clearCacheDispatchGroup = dispatch_group_create();
+
+    dispatch_group_async(m_clearCacheDispatchGroup, dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), [modifiedSince, completionHandler] {
+        NSURLCache *cache = [NSURLCache sharedURLCache];
+
+#if PLATFORM(IOS) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 101000
+        NSTimeInterval timeInterval = std::chrono::duration_cast<std::chrono::duration<double>>(modifiedSince.time_since_epoch()).count();
+        NSDate *date = [NSDate dateWithTimeIntervalSince1970:timeInterval];
+        [cache removeCachedResponsesSinceDate:date];
+#else
+        [cache removeAllCachedResponses];
+#endif
+        dispatch_async(dispatch_get_main_queue(), [completionHandler] {
+            completionHandler();
+        });
+    });
 }
 
 }

@@ -4,28 +4,25 @@ project(WebKit)
 # -----------------------------------------------------------------------------
 # Default library type
 # -----------------------------------------------------------------------------
+set(BMALLOC_DIR "${CMAKE_SOURCE_DIR}/Source/bmalloc")
 set(WTF_DIR "${CMAKE_SOURCE_DIR}/Source/WTF")
 set(JAVASCRIPTCORE_DIR "${CMAKE_SOURCE_DIR}/Source/JavaScriptCore")
 set(WEBCORE_DIR "${CMAKE_SOURCE_DIR}/Source/WebCore")
 set(WEBKIT_DIR "${CMAKE_SOURCE_DIR}/Source/WebKit")
 set(WEBKIT2_DIR "${CMAKE_SOURCE_DIR}/Source/WebKit2")
 set(THIRDPARTY_DIR "${CMAKE_SOURCE_DIR}/Source/ThirdParty")
-set(PLATFORM_DIR "${CMAKE_SOURCE_DIR}/Source/Platform")
 
 set(TOOLS_DIR "${CMAKE_SOURCE_DIR}/Tools")
 
 set(DERIVED_SOURCES_DIR "${CMAKE_BINARY_DIR}/DerivedSources")
 set(DERIVED_SOURCES_JAVASCRIPTCORE_DIR "${CMAKE_BINARY_DIR}/DerivedSources/JavaScriptCore")
 set(DERIVED_SOURCES_WEBCORE_DIR "${CMAKE_BINARY_DIR}/DerivedSources/WebCore")
-set(DERIVED_SOURCES_WEBKIT_DIR "${CMAKE_BINARY_DIR}/DerivedSources/WebKit")
+set(DERIVED_SOURCES_WEBKITLEGACY_DIR "${CMAKE_BINARY_DIR}/DerivedSources/WebKitLegacy")
 set(DERIVED_SOURCES_WEBKIT2_DIR "${CMAKE_BINARY_DIR}/DerivedSources/WebKit2")
 set(DERIVED_SOURCES_WEBINSPECTORUI_DIR "${CMAKE_BINARY_DIR}/DerivedSources/WebInspectorUI")
+set(DERIVED_SOURCES_WTF_DIR "${CMAKE_BINARY_DIR}/DerivedSources/WTF")
 
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/Source/cmake")
-
-if (NOT DEFINED ENABLE_WEBCORE)
-    set(ENABLE_WEBCORE ON)
-endif()
 
 if (NOT DEFINED ENABLE_WEBKIT)
     set(ENABLE_WEBKIT ON)
@@ -35,9 +32,6 @@ if (NOT DEFINED ENABLE_TOOLS AND EXISTS ${TOOLS_DIR})
     set(ENABLE_TOOLS ON)
 endif ()
 
-# Do not create transitive library dependencies by default
-set(CMAKE_LINK_INTERFACE_LIBRARIES "")
-
 include(WebKitMacros)
 include(WebKitFS)
 include(WebKitHelpers)
@@ -46,7 +40,7 @@ include(WebKitFeatures)
 # -----------------------------------------------------------------------------
 # Determine which port will be built
 # -----------------------------------------------------------------------------
-set(ALL_PORTS Efl WinCE GTK AppleWin WinCairo Mac Android)
+set(ALL_PORTS Efl GTK AppleWin WinCairo Mac)
 set(PORT "NOPORT" CACHE STRING "choose which WebKit port to build (one of ${ALL_PORTS})")
 
 list(FIND ALL_PORTS ${PORT} RET)
@@ -70,7 +64,7 @@ find_package(Gperf 3.0.1 REQUIRED)
 # TODO Enforce version requirement for perl
 find_package(Perl 5.10.0 REQUIRED)
 
-find_package(PythonInterp 2.6.0 REQUIRED)
+find_package(PythonInterp 2.7.0 REQUIRED)
 find_package(Ruby 1.8.7)
 
 # -----------------------------------------------------------------------------
@@ -101,6 +95,8 @@ elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64")
     set(WTF_CPU_PPC64 1)
 elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "ppc64le")
     set(WTF_CPU_PPC64LE 1)
+elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "parisc*")
+    set(WTF_CPU_HPPA 1)
 elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "s390")
     set(WTF_CPU_S390 1)
 elseif (LOWERCASE_CMAKE_SYSTEM_PROCESSOR MATCHES "s390x")
@@ -133,11 +129,7 @@ if (SHARED_CORE)
     set(JavaScriptCore_LIBRARY_TYPE SHARED)
     set(WebCore_LIBRARY_TYPE SHARED)
 else ()
-    if (${PORT} STREQUAL GTK)
-        set(JavaScriptCore_LIBRARY_TYPE SHARED)
-    else ()
-        set(JavaScriptCore_LIBRARY_TYPE STATIC)
-    endif ()
+    set(JavaScriptCore_LIBRARY_TYPE SHARED)
     set(WebCore_LIBRARY_TYPE STATIC)
 endif ()
 
@@ -186,3 +178,13 @@ add_subdirectory(Source)
 if (ENABLE_TOOLS)
     add_subdirectory(Tools)
 endif ()
+
+# -----------------------------------------------------------------------------
+# Print the features list last, for maximum visibility.
+# -----------------------------------------------------------------------------
+PRINT_WEBKIT_OPTIONS()
+
+# -----------------------------------------------------------------------------
+# Create the configuration header
+# -----------------------------------------------------------------------------
+CREATE_CONFIGURATION_HEADER()

@@ -1,5 +1,6 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2015 Apple Inc. All rights reserved.
+ * Copyright (C) 2014 Dhi Aurrahman <diorahman@rockybars.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,8 +28,6 @@
 #define SelectorCheckerTestFunctions_h
 
 #include "FocusController.h"
-#include "HTMLAnchorElement.h"
-#include "HTMLAreaElement.h"
 #include "HTMLInputElement.h"
 #include "HTMLOptionElement.h"
 #include "RenderScrollbar.h"
@@ -44,9 +43,9 @@ namespace WebCore {
 
 ALWAYS_INLINE bool isAutofilled(const Element* element)
 {
-    if (element->isFormControlElement()) {
+    if (is<HTMLFormControlElement>(*element)) {
         if (const HTMLInputElement* inputElement = element->toInputElement())
-            return inputElement->isAutofilled();
+            return inputElement->isAutoFilled();
     }
     return false;
 }
@@ -58,19 +57,14 @@ ALWAYS_INLINE bool isDefaultButtonForForm(const Element* element)
 
 ALWAYS_INLINE bool isDisabled(const Element* element)
 {
-    if (element->isFormControlElement() || isHTMLOptionElement(element) || isHTMLOptGroupElement(element))
-        return element->isDisabledFormControl();
-    return false;
+    return (is<HTMLFormControlElement>(*element) || is<HTMLOptionElement>(*element) || is<HTMLOptGroupElement>(*element))
+        && element->isDisabledFormControl();
 }
 
 ALWAYS_INLINE bool isEnabled(const Element* element)
 {
-    bool isEnabled = false;
-    if (element->isFormControlElement() || isHTMLOptionElement(element) || isHTMLOptGroupElement(element))
-        isEnabled = !element->isDisabledFormControl();
-    else if (element->isLink())
-        isEnabled = isHTMLAnchorElement(element) || isHTMLAreaElement(element);
-    return isEnabled;
+    return (is<HTMLFormControlElement>(*element) || is<HTMLOptionElement>(*element) || is<HTMLOptGroupElement>(*element))
+        && !element->isDisabledFormControl();
 }
 
 ALWAYS_INLINE bool isMediaDocument(Element* element)
@@ -86,27 +80,24 @@ ALWAYS_INLINE bool isChecked(Element* element)
     const HTMLInputElement* inputElement = element->toInputElement();
     if (inputElement && inputElement->shouldAppearChecked() && !inputElement->shouldAppearIndeterminate())
         return true;
-    if (isHTMLOptionElement(element) && toHTMLOptionElement(element)->selected())
+    if (is<HTMLOptionElement>(*element) && downcast<HTMLOptionElement>(*element).selected())
         return true;
     return false;
 }
 
 ALWAYS_INLINE bool isInRange(Element* element)
 {
-    element->document().setContainsValidityStyleRules();
     return element->isInRange();
 }
 
 ALWAYS_INLINE bool isOutOfRange(Element* element)
 {
-    element->document().setContainsValidityStyleRules();
     return element->isOutOfRange();
 }
 
 ALWAYS_INLINE bool isInvalid(const Element* element)
 {
-    element->document().setContainsValidityStyleRules();
-    return element->willValidate() && !element->isValidFormControlElement();
+    return element->matchesInvalidPseudoClass();
 }
 
 ALWAYS_INLINE bool isOptionalFormControl(const Element* element)
@@ -121,35 +112,95 @@ ALWAYS_INLINE bool isRequiredFormControl(const Element* element)
 
 ALWAYS_INLINE bool isValid(const Element* element)
 {
-    element->document().setContainsValidityStyleRules();
-    return element->willValidate() && element->isValidFormControlElement();
+    return element->matchesValidPseudoClass();
 }
 
 ALWAYS_INLINE bool isWindowInactive(const Element* element)
 {
     return !element->document().page()->focusController().isActive();
 }
-    
-inline bool matchesLangPseudoClass(const Element* element, AtomicStringImpl* filter)
+
+ALWAYS_INLINE bool containslanguageSubtagMatchingRange(StringView language, StringView range, unsigned languageLength, unsigned& position)
 {
-    AtomicString value;
+    unsigned languageSubtagsStartIndex = position;
+    unsigned languageSubtagsEndIndex = languageLength;
+    bool isAsteriskRange = range == "*";
+    do {
+        if (languageSubtagsStartIndex > 0)
+            languageSubtagsStartIndex += 1;
+        
+        languageSubtagsEndIndex = std::min<unsigned>(language.find('-', languageSubtagsStartIndex), languageLength);
+
+        if (languageSubtagsStartIndex > languageSubtagsEndIndex)
+            return false;
+
+        StringView languageSubtag = language.substring(languageSubtagsStartIndex, languageSubtagsEndIndex - languageSubtagsStartIndex);
+        bool isEqual = equalIgnoringASCIICase(range, languageSubtag);
+        if (!isAsteriskRange) {
+            if ((!isEqual && !languageSubtagsStartIndex) || (languageSubtag.length() == 1 && languageSubtagsStartIndex > 0))
+                return false;
+        }
+        languageSubtagsStartIndex = languageSubtagsEndIndex;
+        if (isEqual || isAsteriskRange) {
+            position = languageSubtagsStartIndex;
+            return true;
+        }
+
+    } while (languageSubtagsStartIndex < languageLength);
+    return false;
+}
+
+ALWAYS_INLINE bool matchesLangPseudoClass(const Element* element, const Vector<AtomicString>& argumentList)
+{
+    ASSERT(element);
+
+    AtomicString language;
 #if ENABLE(VIDEO_TRACK)
-    if (element->isWebVTTElement())
-        value = toWebVTTElement(element)->language();
+    if (is<WebVTTElement>(*element))
+        language = downcast<WebVTTElement>(*element).language();
     else
 #endif
-        value = element->computeInheritedLanguage();
+        language = element->computeInheritedLanguage();
 
-    if (value.isNull())
+    if (language.isEmpty())
         return false;
 
-    if (value.impl() == filter)
-        return true;
+    // Implement basic and extended filterings of given language tags
+    // as specified in www.ietf.org/rfc/rfc4647.txt.
+    StringView languageStringView = language.string();
+    unsigned languageLength = language.length();
+    for (const AtomicString& range : argumentList) {
+        if (range.isEmpty())
+            continue;
 
-    if (value.impl()->startsWith(filter, false)) {
-        if (value.length() == filter->length())
+        if (range == "*")
             return true;
-        return value[filter->length()] == '-';
+
+        StringView rangeStringView = range.string();
+        if (equalIgnoringASCIICase(languageStringView, rangeStringView) && !languageStringView.contains('-'))
+            return true;
+        
+        unsigned rangeLength = rangeStringView.length();
+        unsigned rangeSubtagsStartIndex = 0;
+        unsigned rangeSubtagsEndIndex = rangeLength;
+        unsigned lastMatchedLanguageSubtagIndex = 0;
+
+        bool matchedRange = true;
+        do {
+            if (rangeSubtagsStartIndex > 0)
+                rangeSubtagsStartIndex += 1;
+            if (rangeSubtagsStartIndex > languageLength)
+                return false;
+            rangeSubtagsEndIndex = std::min<unsigned>(rangeStringView.find('-', rangeSubtagsStartIndex), rangeLength);
+            StringView rangeSubtag = rangeStringView.substring(rangeSubtagsStartIndex, rangeSubtagsEndIndex - rangeSubtagsStartIndex);
+            if (!containslanguageSubtagMatchingRange(languageStringView, rangeSubtag, languageLength, lastMatchedLanguageSubtagIndex)) {
+                matchedRange = false;
+                break;
+            }
+            rangeSubtagsStartIndex = rangeSubtagsEndIndex;
+        } while (rangeSubtagsStartIndex < rangeLength);
+        if (matchedRange)
+            return true;
     }
     return false;
 }
@@ -269,7 +320,7 @@ ALWAYS_INLINE bool scrollbarMatchesNoButtonPseudoClass(const SelectorChecker::Ch
 
 ALWAYS_INLINE bool scrollbarMatchesCornerPresentPseudoClass(const SelectorChecker::CheckingContext& context)
 {
-    return context.scrollbar && context.scrollbar->scrollableArea()->isScrollCornerVisible();
+    return context.scrollbar && context.scrollbar->scrollableArea().isScrollCornerVisible();
 }
 
 #if ENABLE(FULLSCREEN_API)
@@ -311,12 +362,12 @@ ALWAYS_INLINE bool matchesFullScreenDocumentPseudoClass(const Element* element)
 #if ENABLE(VIDEO_TRACK)
 ALWAYS_INLINE bool matchesFutureCuePseudoClass(const Element* element)
 {
-    return (element->isWebVTTElement() && !toWebVTTElement(element)->isPastNode());
+    return is<WebVTTElement>(*element) && !downcast<WebVTTElement>(*element).isPastNode();
 }
 
 ALWAYS_INLINE bool matchesPastCuePseudoClass(const Element* element)
 {
-    return (element->isWebVTTElement() && toWebVTTElement(element)->isPastNode());
+    return is<WebVTTElement>(*element) && downcast<WebVTTElement>(*element).isPastNode();
 }
 #endif
 

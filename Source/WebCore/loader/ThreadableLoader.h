@@ -36,10 +36,7 @@
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
-
-#if ENABLE(RESOURCE_TIMING)
 #include <wtf/text/AtomicString.h>
-#endif
 
 namespace WebCore {
 
@@ -66,12 +63,12 @@ namespace WebCore {
         ThreadableLoaderOptions();
         ~ThreadableLoaderOptions();
 
+        std::unique_ptr<ThreadableLoaderOptions> isolatedCopy() const;
+
         PreflightPolicy preflightPolicy; // If AccessControl is used, how to determine if a preflight is needed.
         CrossOriginRequestPolicy crossOriginRequestPolicy;
         RefPtr<SecurityOrigin> securityOrigin;
-#if ENABLE(RESOURCE_TIMING)
         AtomicString initiator;
-#endif
     };
 
     // Useful for doing loader operations from any thread (not threadsafe, 

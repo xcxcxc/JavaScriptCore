@@ -209,6 +209,10 @@ public:
             return virtualRegisterForArgument(index).offset();
         return virtualRegisterForLocal(index - numberOfArguments()).offset();
     }
+    VirtualRegister virtualRegisterForIndex(size_t index) const
+    {
+        return VirtualRegister(operandForIndex(index));
+    }
     size_t indexForOperand(int operand) const
     {
         if (operandIsArgument(operand))
@@ -252,11 +256,7 @@ public:
     }
     
     void dumpInContext(PrintStream& out, DumpContext* context) const;
-    
-    void dump(PrintStream& out) const
-    {
-        dumpInContext(out, 0);
-    }
+    void dump(PrintStream& out) const;
     
 private:
     Vector<T, 8> m_arguments;

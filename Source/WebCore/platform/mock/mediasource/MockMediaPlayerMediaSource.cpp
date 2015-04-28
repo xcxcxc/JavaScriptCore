@@ -32,7 +32,6 @@
 #include "MediaPlayer.h"
 #include "MediaSourcePrivateClient.h"
 #include "MockMediaSourcePrivate.h"
-#include <wtf/Functional.h>
 #include <wtf/MainThread.h>
 #include <wtf/text/WTFString.h>
 
@@ -41,12 +40,8 @@ namespace WebCore {
 // MediaPlayer Enigne Support
 void MockMediaPlayerMediaSource::registerMediaEngine(MediaEngineRegistrar registrar)
 {
-    registrar(create, getSupportedTypes, supportsType, 0, 0, 0, 0);
-}
-
-PassOwnPtr<MediaPlayerPrivateInterface> MockMediaPlayerMediaSource::create(MediaPlayer* player)
-{
-    return adoptPtr(new MockMediaPlayerMediaSource(player));
+    registrar([](MediaPlayer* player) { return std::make_unique<MockMediaPlayerMediaSource>(player); }, getSupportedTypes,
+        supportsType, 0, 0, 0, 0);
 }
 
 static HashSet<String> mimeTypeCache()
@@ -57,6 +52,7 @@ static HashSet<String> mimeTypeCache()
     if (!isInitialized) {
         isInitialized = true;
         cache.add(ASCIILiteral("video/mock"));
+        cache.add(ASCIILiteral("audio/mock"));
     }
 
     return cache;
@@ -112,7 +108,9 @@ void MockMediaPlayerMediaSource::cancelLoad()
 void MockMediaPlayerMediaSource::play()
 {
     m_playing = 1;
-    callOnMainThread(bind(&MockMediaPlayerMediaSource::advanceCurrentTime, this));
+    callOnMainThread([this] {
+        advanceCurrentTime();
+    });
 }
 
 void MockMediaPlayerMediaSource::pause()
@@ -120,9 +118,9 @@ void MockMediaPlayerMediaSource::pause()
     m_playing = 0;
 }
 
-IntSize MockMediaPlayerMediaSource::naturalSize() const
+FloatSize MockMediaPlayerMediaSource::naturalSize() const
 {
-    return IntSize();
+    return FloatSize();
 }
 
 bool MockMediaPlayerMediaSource::hasVideo() const
@@ -169,7 +167,7 @@ std::unique_ptr<PlatformTimeRanges> MockMediaPlayerMediaSource::buffered() const
     if (m_mediaSourcePrivate)
         return m_mediaSourcePrivate->buffered();
 
-    return PlatformTimeRanges::create();
+    return std::make_unique<PlatformTimeRanges>();
 }
 
 bool MockMediaPlayerMediaSource::didLoadingProgress() const
@@ -181,7 +179,7 @@ void MockMediaPlayerMediaSource::setSize(const IntSize&)
 {
 }
 
-void MockMediaPlayerMediaSource::paint(GraphicsContext*, const IntRect&)
+void MockMediaPlayerMediaSource::paint(GraphicsContext*, const FloatRect&)
 {
 }
 
@@ -207,7 +205,9 @@ void MockMediaPlayerMediaSource::seekWithTolerance(const MediaTime& time, const 
         m_player->timeChanged();
 
         if (m_playing)
-            callOnMainThread(bind(&MockMediaPlayerMediaSource::advanceCurrentTime, this));
+            callOnMainThread([this] {
+                advanceCurrentTime();
+            });
     }
 }
 
@@ -267,7 +267,9 @@ void MockMediaPlayerMediaSource::seekCompleted()
     m_player->timeChanged();
 
     if (m_playing)
-        callOnMainThread(bind(&MockMediaPlayerMediaSource::advanceCurrentTime, this));
+        callOnMainThread([this] {
+            advanceCurrentTime();
+        });
 }
 
 unsigned long MockMediaPlayerMediaSource::totalVideoFrames()

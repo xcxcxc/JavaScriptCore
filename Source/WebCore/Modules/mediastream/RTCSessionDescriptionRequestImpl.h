@@ -51,11 +51,13 @@ public:
     virtual void requestSucceeded(PassRefPtr<RTCSessionDescriptionDescriptor>) override;
     virtual void requestFailed(const String& error) override;
 
-    // ActiveDOMObject
-    virtual void stop() override;
-
 private:
     RTCSessionDescriptionRequestImpl(ScriptExecutionContext*, PassRefPtr<RTCSessionDescriptionCallback>, PassRefPtr<RTCPeerConnectionErrorCallback>);
+
+    // ActiveDOMObject API.
+    void stop() override;
+    const char* activeDOMObjectName() const override;
+    bool canSuspendForPageCache() const override;
 
     void clear();
 

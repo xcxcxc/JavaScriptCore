@@ -73,9 +73,10 @@ void DragController::declareAndWriteDragImage(DataTransfer&, Element&, const URL
 {
 }
 
-PassRefPtr<DocumentFragment> DragController::createFragmentFromDragData(DragData&, Frame&, Range&, bool /*allowPlainText*/, bool& /*chosePlainText*/)
+#if ENABLE(ATTACHMENT_ELEMENT)
+void DragController::declareAndWriteAttachment(DataTransfer&, Element&, const URL&)
 {
-    return nullptr;
 }
+#endif
 
 }

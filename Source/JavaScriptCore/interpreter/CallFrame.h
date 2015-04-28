@@ -45,14 +45,15 @@ namespace JSC  {
         JSValue calleeAsValue() const { return this[JSStack::Callee].jsValue(); }
         JSObject* callee() const { return this[JSStack::Callee].function(); }
         CodeBlock* codeBlock() const { return this[JSStack::CodeBlock].Register::codeBlock(); }
-        JSScope* scope() const
+        JSScope* scope(int scopeRegisterOffset) const
         {
-            ASSERT(this[JSStack::ScopeChain].Register::scope());
-            return this[JSStack::ScopeChain].Register::scope();
+            ASSERT(this[scopeRegisterOffset].Register::scope());
+            return this[scopeRegisterOffset].Register::scope();
         }
 
-        bool hasActivation() const { return !!uncheckedActivation(); }
+        bool hasActivation() const;
         JSLexicalEnvironment* lexicalEnvironment() const;
+        JSLexicalEnvironment* lexicalEnvironmentOrNullptr() const;
         JSValue uncheckedActivation() const;
 
         // Global object in which execution began.
@@ -185,26 +186,27 @@ namespace JSC  {
 #endif
 
         void setCallerFrame(CallFrame* frame) { callerFrameAndPC().callerFrame = frame; }
-        void setScope(JSScope* scope) { static_cast<Register*>(this)[JSStack::ScopeChain] = scope; }
+        void setScope(int scopeRegisterOffset, JSScope* scope) { static_cast<Register*>(this)[scopeRegisterOffset] = scope; }
         void setActivation(JSLexicalEnvironment*);
 
-        ALWAYS_INLINE void init(CodeBlock* codeBlock, Instruction* vPC, JSScope* scope,
-            CallFrame* callerFrame, int argc, JSObject* callee)
-        {
-            ASSERT(callerFrame == noCaller() || callerFrame->stack()->containsAddress(this));
+        ALWAYS_INLINE void init(CodeBlock* codeBlock, Instruction* vPC,
+            CallFrame* callerFrame, int argc, JSObject* callee) 
+        { 
+            ASSERT(callerFrame == noCaller() || callerFrame->stack()->containsAddress(this)); 
 
-            setCodeBlock(codeBlock);
-            setScope(scope);
-            setCallerFrame(callerFrame);
-            setReturnPC(vPC); // This is either an Instruction* or a pointer into JIT generated code stored as an Instruction*.
-            setArgumentCountIncludingThis(argc); // original argument count (for the sake of the "arguments" object)
-            setCallee(callee);
+            setCodeBlock(codeBlock); 
+            setCallerFrame(callerFrame); 
+            setReturnPC(vPC); // This is either an Instruction* or a pointer into JIT generated code stored as an Instruction*. 
+            setArgumentCountIncludingThis(argc); // original argument count (for the sake of the "arguments" object) 
+            setCallee(callee); 
         }
 
         // Read a register from the codeframe (or constant from the CodeBlock).
         Register& r(int);
+        Register& r(VirtualRegister);
         // Read a register for a non-constant
         Register& uncheckedR(int);
+        Register& uncheckedR(VirtualRegister);
 
         // Access to arguments as passed. (After capture, arguments may move to a different location.)
         size_t argumentCount() const { return argumentCountIncludingThis() - 1; }
@@ -235,6 +237,15 @@ namespace JSC  {
         void setArgument(size_t argument, JSValue value)
         {
             this[argumentOffset(argument)] = value;
+        }
+
+        JSValue getArgumentUnsafe(size_t argIndex)
+        {
+            // User beware! This method does not verify that there is a valid
+            // argument at the specified argIndex. This is used for debugging
+            // and verification code only. The caller is expected to know what
+            // he/she is doing when calling this method.
+            return this[argumentOffset(argIndex)].jsValue();
         }
 
         static int thisArgumentOffset() { return argumentOffsetIncludingThis(0); }
@@ -293,22 +304,12 @@ namespace JSC  {
             return argIndex;
         }
 
-        JSValue getArgumentUnsafe(size_t argIndex)
-        {
-            // User beware! This method does not verify that there is a valid
-            // argument at the specified argIndex. This is used for debugging
-            // and verification code only. The caller is expected to know what
-            // he/she is doing when calling this method.
-            return this[argumentOffset(argIndex)].jsValue();
-        }
-
         void* callerFrameOrVMEntryFrame() const { return callerFrameAndPC().callerFrame; }
 
         CallerFrameAndPC& callerFrameAndPC() { return *reinterpret_cast<CallerFrameAndPC*>(this); }
         const CallerFrameAndPC& callerFrameAndPC() const { return *reinterpret_cast<const CallerFrameAndPC*>(this); }
 
         friend class JSStack;
-        friend class VMInspector;
     };
 
 } // namespace JSC

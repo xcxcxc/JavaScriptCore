@@ -38,6 +38,7 @@ OBJC_CLASS AVAsset;
 OBJC_CLASS AVSampleBufferAudioRenderer;
 OBJC_CLASS AVSampleBufferDisplayLayer;
 OBJC_CLASS AVSampleBufferRenderSynchronizer;
+OBJC_CLASS AVStreamSession;
 
 typedef struct OpaqueCMTimebase* CMTimebaseRef;
 
@@ -49,13 +50,12 @@ class MediaSourcePrivateAVFObjC;
 
 class MediaPlayerPrivateMediaSourceAVFObjC : public MediaPlayerPrivateInterface {
 public:
-    MediaPlayerPrivateMediaSourceAVFObjC(MediaPlayer*);
+    explicit MediaPlayerPrivateMediaSourceAVFObjC(MediaPlayer*);
     virtual ~MediaPlayerPrivateMediaSourceAVFObjC();
 
     static void registerMediaEngine(MediaEngineRegistrar);
 
     // MediaPlayer Factory Methods
-    static PassOwnPtr<MediaPlayerPrivateInterface> create(MediaPlayer*);
     static bool isAvailable();
     static void getSupportedTypes(HashSet<String>& types);
     static MediaPlayer::SupportsType supportsType(const MediaEngineSupportParameters&);
@@ -80,8 +80,11 @@ public:
 
     void effectiveRateChanged();
     void sizeChanged();
+    void characteristicsChanged();
 
 #if ENABLE(ENCRYPTED_MEDIA_V2)
+    bool hasStreamSession() { return m_streamSession; }
+    AVStreamSession *streamSession();
     virtual void setCDMSession(CDMSession*) override;
     void keyNeeded(Uint8Array*);
 #endif
@@ -92,11 +95,16 @@ private:
     // MediaPlayerPrivateInterface
     virtual void load(const String& url) override;
     virtual void load(const String& url, MediaSourcePrivateClient*) override;
+#if ENABLE(MEDIA_STREAM)
+    virtual void load(MediaStreamPrivate*) { }
+#endif
     virtual void cancelLoad() override;
 
     virtual void prepareToPlay() override;
     virtual PlatformMedia platformMedia() const override;
     virtual PlatformLayer* platformLayer() const override;
+
+    virtual bool supportsFullscreen() const { return true; }
 
     virtual void play() override;
     void playInternal();
@@ -112,7 +120,7 @@ private:
 
     virtual bool supportsScanning() const override;
 
-    virtual IntSize naturalSize() const override;
+    virtual FloatSize naturalSize() const override;
 
     virtual bool hasVideo() const override;
     virtual bool hasAudio() const override;
@@ -128,6 +136,8 @@ private:
     virtual bool seeking() const override;
     virtual void setRateDouble(double) override;
 
+    void setPreservesPitch(bool) override;
+
     virtual std::unique_ptr<PlatformTimeRanges> seekable() const override;
     virtual MediaTime maxMediaTimeSeekable() const override;
     virtual MediaTime minMediaTimeSeekable() const override;
@@ -137,8 +147,8 @@ private:
 
     virtual void setSize(const IntSize&) override;
 
-    virtual void paint(GraphicsContext*, const IntRect&) override;
-    virtual void paintCurrentFrameInContext(GraphicsContext*, const IntRect&) override;
+    virtual void paint(GraphicsContext*, const FloatRect&) override;
+    virtual void paintCurrentFrameInContext(GraphicsContext*, const FloatRect&) override;
 
     virtual bool hasAvailableVideoFrame() const override;
 
@@ -161,10 +171,16 @@ private:
     virtual unsigned long corruptedVideoFrames() override;
     virtual MediaTime totalFrameDelay() override;
 
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    virtual bool isCurrentPlaybackTargetSupported() const override;
+    virtual void setWirelessPlaybackTarget(Ref<MediaPlaybackTarget>&&);
+    virtual void setShouldPlayToPlaybackTarget(bool) override;
+#endif
+
     void ensureLayer();
     void destroyLayer();
     bool shouldBePlaying() const;
-    void seekTimerFired(Timer<MediaPlayerPrivateMediaSourceAVFObjC>&);
+    void seekTimerFired();
 
     friend class MediaSourcePrivateAVFObjC;
 
@@ -190,7 +206,8 @@ private:
     RetainPtr<AVSampleBufferRenderSynchronizer> m_synchronizer;
     RetainPtr<id> m_timeJumpedObserver;
     RetainPtr<id> m_durationObserver;
-    Timer<MediaPlayerPrivateMediaSourceAVFObjC> m_seekTimer;
+    RetainPtr<AVStreamSession> m_streamSession;
+    Timer m_seekTimer;
     CDMSessionMediaSourceAVFObjC* m_session;
     MediaPlayer::NetworkState m_networkState;
     MediaPlayer::ReadyState m_readyState;
@@ -201,6 +218,10 @@ private:
     bool m_seekCompleted;
     mutable bool m_loadingProgressed;
     bool m_hasAvailableVideoFrame;
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    RefPtr<MediaPlaybackTarget> m_playbackTarget;
+    bool m_currentPlaybackTargetIsSupported { true };
+#endif
 };
 
 }

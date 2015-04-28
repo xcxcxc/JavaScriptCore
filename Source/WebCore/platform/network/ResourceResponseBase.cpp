@@ -27,6 +27,7 @@
 #include "config.h"
 #include "ResourceResponseBase.h"
 
+#include "CacheValidation.h"
 #include "HTTPHeaderNames.h"
 #include "HTTPParsers.h"
 #include "ResourceResponse.h"
@@ -37,67 +38,33 @@
 
 namespace WebCore {
 
-static void parseCacheHeader(const String& header, Vector<std::pair<String, String>>& result);
-
 inline const ResourceResponse& ResourceResponseBase::asResourceResponse() const
 {
     return *static_cast<const ResourceResponse*>(this);
 }
 
-ResourceResponseBase::ResourceResponseBase()  
-    : m_expectedContentLength(0)
+ResourceResponseBase::ResourceResponseBase()
+    : m_isNull(true)
+    , m_expectedContentLength(0)
     , m_includesCertificateInfo(false)
     , m_httpStatusCode(0)
-    , m_connectionID(0)
-    , m_cacheControlMaxAge(0)
-    , m_age(0)
-    , m_date(0)
-    , m_expires(0)
-    , m_lastModified(0)
-    , m_wasCached(false)
-    , m_connectionReused(false)
-    , m_isNull(true)
-    , m_haveParsedCacheControlHeader(false)
-    , m_haveParsedAgeHeader(false)
-    , m_haveParsedDateHeader(false)
-    , m_haveParsedExpiresHeader(false)
-    , m_haveParsedLastModifiedHeader(false)
-    , m_cacheControlContainsNoCache(false)
-    , m_cacheControlContainsNoStore(false)
-    , m_cacheControlContainsMustRevalidate(false)
 {
 }
 
 ResourceResponseBase::ResourceResponseBase(const URL& url, const String& mimeType, long long expectedLength, const String& textEncodingName)
-    : m_url(url)
+    : m_isNull(false)
+    , m_url(url)
     , m_mimeType(mimeType)
     , m_expectedContentLength(expectedLength)
     , m_textEncodingName(textEncodingName)
     , m_includesCertificateInfo(true) // Empty but valid for synthetic responses.
     , m_httpStatusCode(0)
-    , m_connectionID(0)
-    , m_cacheControlMaxAge(0)
-    , m_age(0)
-    , m_date(0)
-    , m_expires(0)
-    , m_lastModified(0)
-    , m_wasCached(false)
-    , m_connectionReused(false)
-    , m_isNull(false)
-    , m_haveParsedCacheControlHeader(false)
-    , m_haveParsedAgeHeader(false)
-    , m_haveParsedDateHeader(false)
-    , m_haveParsedExpiresHeader(false)
-    , m_haveParsedLastModifiedHeader(false)
-    , m_cacheControlContainsNoCache(false)
-    , m_cacheControlContainsNoStore(false)
-    , m_cacheControlContainsMustRevalidate(false)
 {
 }
 
-PassOwnPtr<ResourceResponse> ResourceResponseBase::adopt(PassOwnPtr<CrossThreadResourceResponseData> data)
+std::unique_ptr<ResourceResponse> ResourceResponseBase::adopt(std::unique_ptr<CrossThreadResourceResponseData> data)
 {
-    OwnPtr<ResourceResponse> response = adoptPtr(new ResourceResponse);
+    auto response = std::make_unique<ResourceResponse>();
     response->setURL(data->m_url);
     response->setMimeType(data->m_mimeType);
     response->setExpectedContentLength(data->m_expectedContentLength);
@@ -109,13 +76,13 @@ PassOwnPtr<ResourceResponse> ResourceResponseBase::adopt(PassOwnPtr<CrossThreadR
     response->lazyInit(AllFields);
     response->m_httpHeaderFields.adopt(WTF::move(data->m_httpHeaders));
     response->m_resourceLoadTiming = data->m_resourceLoadTiming;
-    response->doPlatformAdopt(data);
-    return response.release();
+    response->doPlatformAdopt(WTF::move(data));
+    return response;
 }
 
-PassOwnPtr<CrossThreadResourceResponseData> ResourceResponseBase::copyData() const
+std::unique_ptr<CrossThreadResourceResponseData> ResourceResponseBase::copyData() const
 {
-    OwnPtr<CrossThreadResourceResponseData> data = adoptPtr(new CrossThreadResourceResponseData);
+    auto data = std::make_unique<CrossThreadResourceResponseData>();
     data->m_url = url().copy();
     data->m_mimeType = mimeType().isolatedCopy();
     data->m_expectedContentLength = expectedContentLength();
@@ -124,7 +91,7 @@ PassOwnPtr<CrossThreadResourceResponseData> ResourceResponseBase::copyData() con
     data->m_httpStatusText = httpStatusText().isolatedCopy();
     data->m_httpHeaders = httpHeaderFields().copyData();
     data->m_resourceLoadTiming = m_resourceLoadTiming;
-    return asResourceResponse().doPlatformCopyData(data.release());
+    return asResourceResponse().doPlatformCopyData(WTF::move(data));
 }
 
 bool ResourceResponseBase::isHTTP() const
@@ -362,69 +329,29 @@ void ResourceResponseBase::parseCacheControlDirectives() const
 
     lazyInit(CommonFieldsOnly);
 
+    m_cacheControlDirectives = WebCore::parseCacheControlDirectives(m_httpHeaderFields);
     m_haveParsedCacheControlHeader = true;
-
-    m_cacheControlContainsMustRevalidate = false;
-    m_cacheControlContainsNoCache = false;
-    m_cacheControlMaxAge = std::numeric_limits<double>::quiet_NaN();
-
-    String cacheControlValue = m_httpHeaderFields.get(HTTPHeaderName::CacheControl);
-    if (!cacheControlValue.isEmpty()) {
-        Vector<std::pair<String, String>> directives;
-        parseCacheHeader(cacheControlValue, directives);
-
-        size_t directivesSize = directives.size();
-        for (size_t i = 0; i < directivesSize; ++i) {
-            // RFC2616 14.9.1: A no-cache directive with a value is only meaningful for proxy caches.
-            // It should be ignored by a browser level cache.
-            if (equalIgnoringCase(directives[i].first, "no-cache") && directives[i].second.isEmpty())
-                m_cacheControlContainsNoCache = true;
-            else if (equalIgnoringCase(directives[i].first, "no-store"))
-                m_cacheControlContainsNoStore = true;
-            else if (equalIgnoringCase(directives[i].first, "must-revalidate"))
-                m_cacheControlContainsMustRevalidate = true;
-            else if (equalIgnoringCase(directives[i].first, "max-age")) {
-                if (!std::isnan(m_cacheControlMaxAge)) {
-                    // First max-age directive wins if there are multiple ones.
-                    continue;
-                }
-                bool ok;
-                double maxAge = directives[i].second.toDouble(&ok);
-                if (ok)
-                    m_cacheControlMaxAge = maxAge;
-            }
-        }
-    }
-
-    if (!m_cacheControlContainsNoCache) {
-        // Handle Pragma: no-cache
-        // This is deprecated and equivalent to Cache-control: no-cache
-        // Don't bother tokenizing the value, it is not important
-        String pragmaValue = m_httpHeaderFields.get(HTTPHeaderName::Pragma);
-
-        m_cacheControlContainsNoCache = pragmaValue.contains("no-cache", false);
-    }
 }
     
 bool ResourceResponseBase::cacheControlContainsNoCache() const
 {
     if (!m_haveParsedCacheControlHeader)
         parseCacheControlDirectives();
-    return m_cacheControlContainsNoCache;
+    return m_cacheControlDirectives.noCache;
 }
 
 bool ResourceResponseBase::cacheControlContainsNoStore() const
 {
     if (!m_haveParsedCacheControlHeader)
         parseCacheControlDirectives();
-    return m_cacheControlContainsNoStore;
+    return m_cacheControlDirectives.noStore;
 }
 
 bool ResourceResponseBase::cacheControlContainsMustRevalidate() const
 {
     if (!m_haveParsedCacheControlHeader)
         parseCacheControlDirectives();
-    return m_cacheControlContainsMustRevalidate;
+    return m_cacheControlDirectives.mustRevalidate;
 }
 
 bool ResourceResponseBase::hasCacheValidatorFields() const
@@ -434,29 +361,26 @@ bool ResourceResponseBase::hasCacheValidatorFields() const
     return !m_httpHeaderFields.get(HTTPHeaderName::LastModified).isEmpty() || !m_httpHeaderFields.get(HTTPHeaderName::ETag).isEmpty();
 }
 
-double ResourceResponseBase::cacheControlMaxAge() const
+Optional<std::chrono::microseconds> ResourceResponseBase::cacheControlMaxAge() const
 {
     if (!m_haveParsedCacheControlHeader)
         parseCacheControlDirectives();
-    return m_cacheControlMaxAge;
+    return m_cacheControlDirectives.maxAge;
 }
 
-static double parseDateValueInHeader(const HTTPHeaderMap& headers, HTTPHeaderName headerName)
+static Optional<std::chrono::system_clock::time_point> parseDateValueInHeader(const HTTPHeaderMap& headers, HTTPHeaderName headerName)
 {
     String headerValue = headers.get(headerName);
     if (headerValue.isEmpty())
-        return std::numeric_limits<double>::quiet_NaN(); 
+        return { };
     // This handles all date formats required by RFC2616:
     // Sun, 06 Nov 1994 08:49:37 GMT  ; RFC 822, updated by RFC 1123
     // Sunday, 06-Nov-94 08:49:37 GMT ; RFC 850, obsoleted by RFC 1036
     // Sun Nov  6 08:49:37 1994       ; ANSI C's asctime() format
-    double dateInMilliseconds = parseDate(headerValue);
-    if (!std::isfinite(dateInMilliseconds))
-        return std::numeric_limits<double>::quiet_NaN();
-    return dateInMilliseconds / 1000;
+    return parseHTTPDate(headerValue);
 }
 
-double ResourceResponseBase::date() const
+Optional<std::chrono::system_clock::time_point> ResourceResponseBase::date() const
 {
     lazyInit(CommonFieldsOnly);
 
@@ -467,22 +391,24 @@ double ResourceResponseBase::date() const
     return m_date;
 }
 
-double ResourceResponseBase::age() const
+Optional<std::chrono::microseconds> ResourceResponseBase::age() const
 {
+    using namespace std::chrono;
+
     lazyInit(CommonFieldsOnly);
 
     if (!m_haveParsedAgeHeader) {
         String headerValue = m_httpHeaderFields.get(HTTPHeaderName::Age);
         bool ok;
-        m_age = headerValue.toDouble(&ok);
-        if (!ok)
-            m_age = std::numeric_limits<double>::quiet_NaN();
+        double ageDouble = headerValue.toDouble(&ok);
+        if (ok)
+            m_age = duration_cast<microseconds>(duration<double>(ageDouble));
         m_haveParsedAgeHeader = true;
     }
     return m_age;
 }
 
-double ResourceResponseBase::expires() const
+Optional<std::chrono::system_clock::time_point> ResourceResponseBase::expires() const
 {
     lazyInit(CommonFieldsOnly);
 
@@ -493,7 +419,7 @@ double ResourceResponseBase::expires() const
     return m_expires;
 }
 
-double ResourceResponseBase::lastModified() const
+Optional<std::chrono::system_clock::time_point> ResourceResponseBase::lastModified() const
 {
     lazyInit(CommonFieldsOnly);
 
@@ -517,44 +443,16 @@ bool ResourceResponseBase::isAttachment() const
     return equalIgnoringCase(value, "attachment");
 }
   
-bool ResourceResponseBase::wasCached() const
+ResourceResponseBase::Source ResourceResponseBase::source() const
 {
     lazyInit(AllFields);
 
-    return m_wasCached;
+    return m_source;
 }
 
-void ResourceResponseBase::setWasCached(bool value)
+void ResourceResponseBase::setSource(Source source)
 {
-    m_wasCached = value;
-}
-
-bool ResourceResponseBase::connectionReused() const
-{
-    lazyInit(AllFields);
-
-    return m_connectionReused;
-}
-
-void ResourceResponseBase::setConnectionReused(bool connectionReused)
-{
-    lazyInit(AllFields);
-
-    m_connectionReused = connectionReused;
-}
-
-unsigned ResourceResponseBase::connectionID() const
-{
-    lazyInit(AllFields);
-
-    return m_connectionID;
-}
-
-void ResourceResponseBase::setConnectionID(unsigned connectionID)
-{
-    lazyInit(AllFields);
-
-    m_connectionID = connectionID;
+    m_source = source;
 }
 
 void ResourceResponseBase::lazyInit(InitLevel initLevel) const
@@ -585,101 +483,6 @@ bool ResourceResponseBase::compare(const ResourceResponse& a, const ResourceResp
     if (a.resourceLoadTiming() != b.resourceLoadTiming())
         return false;
     return ResourceResponse::platformCompare(a, b);
-}
-
-static bool isCacheHeaderSeparator(UChar c)
-{
-    // See RFC 2616, Section 2.2
-    switch (c) {
-        case '(':
-        case ')':
-        case '<':
-        case '>':
-        case '@':
-        case ',':
-        case ';':
-        case ':':
-        case '\\':
-        case '"':
-        case '/':
-        case '[':
-        case ']':
-        case '?':
-        case '=':
-        case '{':
-        case '}':
-        case ' ':
-        case '\t':
-            return true;
-        default:
-            return false;
-    }
-}
-
-static bool isControlCharacter(UChar c)
-{
-    return c < ' ' || c == 127;
-}
-
-static inline String trimToNextSeparator(const String& str)
-{
-    return str.substring(0, str.find(isCacheHeaderSeparator));
-}
-
-static void parseCacheHeader(const String& header, Vector<std::pair<String, String>>& result)
-{
-    const String safeHeader = header.removeCharacters(isControlCharacter);
-    unsigned max = safeHeader.length();
-    for (unsigned pos = 0; pos < max; /* pos incremented in loop */) {
-        size_t nextCommaPosition = safeHeader.find(',', pos);
-        size_t nextEqualSignPosition = safeHeader.find('=', pos);
-        if (nextEqualSignPosition != notFound && (nextEqualSignPosition < nextCommaPosition || nextCommaPosition == notFound)) {
-            // Get directive name, parse right hand side of equal sign, then add to map
-            String directive = trimToNextSeparator(safeHeader.substring(pos, nextEqualSignPosition - pos).stripWhiteSpace());
-            pos += nextEqualSignPosition - pos + 1;
-
-            String value = safeHeader.substring(pos, max - pos).stripWhiteSpace();
-            if (value[0] == '"') {
-                // The value is a quoted string
-                size_t nextDoubleQuotePosition = value.find('"', 1);
-                if (nextDoubleQuotePosition != notFound) {
-                    // Store the value as a quoted string without quotes
-                    result.append(std::pair<String, String>(directive, value.substring(1, nextDoubleQuotePosition - 1).stripWhiteSpace()));
-                    pos += (safeHeader.find('"', pos) - pos) + nextDoubleQuotePosition + 1;
-                    // Move past next comma, if there is one
-                    size_t nextCommaPosition2 = safeHeader.find(',', pos);
-                    if (nextCommaPosition2 != notFound)
-                        pos += nextCommaPosition2 - pos + 1;
-                    else
-                        return; // Parse error if there is anything left with no comma
-                } else {
-                    // Parse error; just use the rest as the value
-                    result.append(std::pair<String, String>(directive, trimToNextSeparator(value.substring(1, value.length() - 1).stripWhiteSpace())));
-                    return;
-                }
-            } else {
-                // The value is a token until the next comma
-                size_t nextCommaPosition2 = value.find(',');
-                if (nextCommaPosition2 != notFound) {
-                    // The value is delimited by the next comma
-                    result.append(std::pair<String, String>(directive, trimToNextSeparator(value.substring(0, nextCommaPosition2).stripWhiteSpace())));
-                    pos += (safeHeader.find(',', pos) - pos) + 1;
-                } else {
-                    // The rest is the value; no change to value needed
-                    result.append(std::pair<String, String>(directive, trimToNextSeparator(value)));
-                    return;
-                }
-            }
-        } else if (nextCommaPosition != notFound && (nextCommaPosition < nextEqualSignPosition || nextEqualSignPosition == notFound)) {
-            // Add directive to map with empty string as value
-            result.append(std::pair<String, String>(trimToNextSeparator(safeHeader.substring(pos, nextCommaPosition - pos).stripWhiteSpace()), ""));
-            pos += nextCommaPosition - pos + 1;
-        } else {
-            // Add last directive to map with empty string as value
-            result.append(std::pair<String, String>(trimToNextSeparator(safeHeader.substring(pos, max - pos).stripWhiteSpace()), ""));
-            return;
-        }
-    }
 }
 
 }

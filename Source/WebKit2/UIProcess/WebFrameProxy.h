@@ -36,8 +36,13 @@
 #include <wtf/text/WTFString.h>
 
 #if ENABLE(CONTENT_FILTERING)
-#include <WebCore/ContentFilter.h>
+#include <WebCore/ContentFilterUnblockHandler.h>
 #endif
+
+namespace API {
+class Navigation;
+}
+
 
 namespace IPC {
     class ArgumentDecoder;
@@ -113,13 +118,13 @@ public:
     void didChangeTitle(const String&);
 
     // Policy operations.
-    void receivedPolicyDecision(WebCore::PolicyAction, uint64_t listenerID, uint64_t navigationID = 0);
-    WebFramePolicyListenerProxy* setUpPolicyListenerProxy(uint64_t listenerID);
-    WebFormSubmissionListenerProxy* setUpFormSubmissionListenerProxy(uint64_t listenerID);
+    void receivedPolicyDecision(WebCore::PolicyAction, uint64_t listenerID, API::Navigation* = nullptr);
+    WebFramePolicyListenerProxy& setUpPolicyListenerProxy(uint64_t listenerID);
+    WebFormSubmissionListenerProxy& setUpFormSubmissionListenerProxy(uint64_t listenerID);
 
 #if ENABLE(CONTENT_FILTERING)
-    void setContentFilterForBlockedLoad(std::unique_ptr<WebCore::ContentFilter> contentFilter) { m_contentFilterForBlockedLoad = WTF::move(contentFilter); }
-    bool contentFilterDidHandleNavigationAction(const WebCore::ResourceRequest&);
+    void contentFilterDidBlockLoad(WebCore::ContentFilterUnblockHandler contentFilterUnblockHandler) { m_contentFilterUnblockHandler = WTF::move(contentFilterUnblockHandler); }
+    bool didHandleContentFilterUnblockNavigation(const WebCore::ResourceRequest&);
 #endif
 
 private:
@@ -137,7 +142,7 @@ private:
     uint64_t m_frameID;
 
 #if ENABLE(CONTENT_FILTERING)
-    std::unique_ptr<WebCore::ContentFilter> m_contentFilterForBlockedLoad;
+    WebCore::ContentFilterUnblockHandler m_contentFilterUnblockHandler;
 #endif
 };
 

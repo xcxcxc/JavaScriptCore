@@ -60,7 +60,7 @@ WebInspector.ApplicationCacheFrameContentView.prototype = {
 
     closed: function()
     {
-        WebInspector.applicationCacheManager.removeEventListener(WebInspector.ApplicationCacheManager.Event.FrameManifestStatusChanged, this._updateStatus, this);
+        WebInspector.applicationCacheManager.removeEventListener(null, null, this);
     },
 
     updateLayout: function()
@@ -214,7 +214,6 @@ WebInspector.ApplicationCacheFrameContentView.prototype = {
                 size: Number.bytesToString(resource.size)
             };
             var node = new WebInspector.DataGridNode(data);
-            node.selectable = true;
             this._dataGrid.appendChild(node);
         }
     },

@@ -32,9 +32,10 @@ class GLContextEGL : public GLContext {
     WTF_MAKE_NONCOPYABLE(GLContextEGL);
 public:
     enum EGLSurfaceType { PbufferSurface, WindowSurface, PixmapSurface };
-    static PassOwnPtr<GLContextEGL> createContext(EGLNativeWindowType, GLContext* sharingContext = 0);
-    static PassOwnPtr<GLContextEGL> createWindowContext(EGLNativeWindowType, GLContext* sharingContext);
+    static std::unique_ptr<GLContextEGL> createContext(EGLNativeWindowType, GLContext* sharingContext = 0);
+    static std::unique_ptr<GLContextEGL> createWindowContext(EGLNativeWindowType, GLContext* sharingContext);
 
+    GLContextEGL(EGLContext, EGLSurface, EGLSurfaceType);
     virtual ~GLContextEGL();
     virtual bool makeContextCurrent();
     virtual void swapBuffers();
@@ -44,19 +45,18 @@ public:
 #if USE(CAIRO)
     virtual cairo_device_t* cairoDevice();
 #endif
+    virtual bool isEGLContext() const { return true; }
 
-#if USE(3D_GRAPHICS)
+#if ENABLE(GRAPHICS_CONTEXT_3D)
     virtual PlatformGraphicsContext3D platformContext();
 #endif
 
 private:
-    static PassOwnPtr<GLContextEGL> createPbufferContext(EGLContext sharingContext);
-    static PassOwnPtr<GLContextEGL> createPixmapContext(EGLContext sharingContext);
+    static std::unique_ptr<GLContextEGL> createPbufferContext(EGLContext sharingContext);
+    static std::unique_ptr<GLContextEGL> createPixmapContext(EGLContext sharingContext);
 
     static void addActiveContext(GLContextEGL*);
     static void cleanupSharedEGLDisplay(void);
-
-    GLContextEGL(EGLContext, EGLSurface, EGLSurfaceType);
 
     EGLContext m_context;
     EGLSurface m_surface;

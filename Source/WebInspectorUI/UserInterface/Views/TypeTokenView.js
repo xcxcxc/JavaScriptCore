@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,74 +23,60 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-WebInspector.TypeTokenView = function(tokenAnnotator, shouldHaveRightMargin, shouldHaveLeftMargin, titleType, functionOrVariableName)
+WebInspector.TypeTokenView = class TypeTokenView extends WebInspector.Object
 {
-    console.assert(titleType === WebInspector.TypeTokenView.TitleType.Variable  || titleType === WebInspector.TypeTokenView.TitleType.ReturnStatement);
+    constructor(tokenAnnotator, shouldHaveRightMargin, shouldHaveLeftMargin, titleType, functionOrVariableName)
+    {
+        console.assert(titleType === WebInspector.TypeTokenView.TitleType.Variable || titleType === WebInspector.TypeTokenView.TitleType.ReturnStatement);
 
-    WebInspector.Object.call(this);
+        super();
 
-    var span = document.createElement("span");
-    span.classList.add("type-token");
-    if (shouldHaveRightMargin)
-        span.classList.add("type-token-right-spacing");
-    if (shouldHaveLeftMargin)
-        span.classList.add("type-token-left-spacing");
+        var span = document.createElement("span");
+        span.classList.add("type-token");
+        if (shouldHaveRightMargin)
+            span.classList.add("type-token-right-spacing");
+        if (shouldHaveLeftMargin)
+            span.classList.add("type-token-left-spacing");
 
-    this.element = span;
-    this._tokenAnnotator = tokenAnnotator;
-    this._types = null;
-    this._colorClass = null;
+        this.element = span;
+        this._tokenAnnotator = tokenAnnotator;
+        this._types = null;
+        this._typeSet = null;
+        this._colorClass = null;
 
-    this._popoverTitle = WebInspector.TypeTokenView.titleForPopover(titleType, functionOrVariableName);
+        this._popoverTitle = WebInspector.TypeTokenView.titleForPopover(titleType, functionOrVariableName);
 
-    this._setUpMouseoverHandlers();
-};
-
-WebInspector.TypeTokenView.titleForPopover = function(titleType, functionOrVariableName)
-{
-    var titleString = null;
-    if (titleType === WebInspector.TypeTokenView.TitleType.Variable)
-        titleString = WebInspector.UIString("Type information for variable: %s").format(functionOrVariableName);
-    else {
-        if (functionOrVariableName)
-            titleString = WebInspector.UIString("Return type for function: %s").format(functionOrVariableName);
-        else
-            titleString = WebInspector.UIString("Return type for anonymous function");
+        this._setUpMouseoverHandlers();
     }
 
-    return titleString;
-};
+    // Static
 
-WebInspector.TypeTokenView.TitleType = {
-    Variable: "title-type-variable",
-    ReturnStatement: "title-type-return-statement"
-};
+    static titleForPopover(titleType, functionOrVariableName)
+    {
+        var titleString = null;
+        if (titleType === WebInspector.TypeTokenView.TitleType.Variable)
+            titleString = WebInspector.UIString("Type information for variable: %s").format(functionOrVariableName);
+        else {
+            if (functionOrVariableName)
+                titleString = WebInspector.UIString("Return type for function: %s").format(functionOrVariableName);
+            else
+                titleString = WebInspector.UIString("Return type for anonymous function");
+        }
 
-WebInspector.TypeTokenView.ColorClassForType = {
-    "String": "type-token-string",
-    "Function": "type-token-function",
-    "Number": "type-token-number",
-    "Integer": "type-token-number",
-    "Undefined": "type-token-empty",
-    "Null": "type-token-empty",
-    "(?)": "type-token-empty",
-    "Boolean": "type-token-boolean",
-    "(many)": "type-token-many"
-};
-
-WebInspector.TypeTokenView.DelayHoverTime = 350;
-
-WebInspector.TypeTokenView.prototype = {
-    constructor: WebInspector.TypeTokenView,
-    __proto__: WebInspector.Object.prototype,
+        return titleString;
+    }
 
     // Public
 
-    update: function(types)
+    update(types)
     {
         this._types = types;
+        this._typeSet = WebInspector.TypeSet.fromPayload(this._types);
 
         var title = this._displayTypeName();
+        if (title === this.element.textContent)
+            return;
+
         this.element.textContent = title;
         var hashString = title[title.length - 1] === "?" ? title.slice(0, title.length - 1) : title;
 
@@ -99,11 +85,11 @@ WebInspector.TypeTokenView.prototype = {
 
         this._colorClass = WebInspector.TypeTokenView.ColorClassForType[hashString] || "type-token-default";
         this.element.classList.add(this._colorClass);
-    },
+    }
 
     // Private
 
-    _setUpMouseoverHandlers: function()
+    _setUpMouseoverHandlers()
     {
         var timeoutID = null;
 
@@ -124,32 +110,38 @@ WebInspector.TypeTokenView.prototype = {
         this.element.addEventListener("mouseout", function() {
             if (timeoutID)
                 clearTimeout(timeoutID);
-        }.bind(this));
-    },
+        });
+    }
 
-    _shouldShowPopover: function()
+    _shouldShowPopover()
     {
-        if (this._types.primitiveTypeNames && this._types.primitiveTypeNames.length > 1)
+        if (!this._types.isValid)
+            return false;
+
+        if (this._typeSet.primitiveTypeNames.length > 1)
             return true;
 
-        if (this._types.structures && this._types.structures)
+        if (this._types.structures && this._types.structures.length)
             return true;
 
         return false;
-    },
+    }
 
-    _displayTypeName: function() 
+    _displayTypeName()
     {
-        var typeSet = WebInspector.TypeSet.fromPayload(this._types);
+        if (!this._types.isValid)
+            return "";
 
-        if (this._types.leastCommonAncestor) {
+        var typeSet = this._typeSet;
+
+        if (this._types.leastCommonAncestor && !this._typeSet.primitiveTypeNames.length) {
             if (typeSet.isContainedIn(WebInspector.TypeSet.TypeBit.Object))
                 return this._types.leastCommonAncestor;
             if (typeSet.isContainedIn(WebInspector.TypeSet.TypeBit.Object | WebInspector.TypeSet.NullOrUndefinedTypeBits))
                 return this._types.leastCommonAncestor + "?";
         }
 
-        // The order of these checks are important. 
+        // The order of these checks are important.
         // For example, if a value is only a function, it is contained in TypeFunction, but it is also contained in (TypeFunction | TypeNull).
         // Therefore, more specific types must be checked first.
 
@@ -168,6 +160,8 @@ WebInspector.TypeTokenView.prototype = {
             return "Number";
         if (typeSet.isContainedIn(WebInspector.TypeSet.TypeBit.String))
             return "String";
+        if (typeSet.isContainedIn(WebInspector.TypeSet.TypeBit.Symbol))
+            return "Symbol";
 
         if (typeSet.isContainedIn(WebInspector.TypeSet.NullOrUndefinedTypeBits))
             return "(?)";
@@ -182,12 +176,34 @@ WebInspector.TypeTokenView.prototype = {
             return "Number?";
         if (typeSet.isContainedIn(WebInspector.TypeSet.TypeBit.String | WebInspector.TypeSet.NullOrUndefinedTypeBits))
             return "String?";
-       
+        if (typeSet.isContainedIn(WebInspector.TypeSet.TypeBit.Symbol | WebInspector.TypeSet.NullOrUndefinedTypeBits))
+            return "Symbol?";
+
         if (typeSet.isContainedIn(WebInspector.TypeSet.TypeBit.Object | WebInspector.TypeSet.TypeBit.Function | WebInspector.TypeSet.TypeBit.String))
             return "Object";
         if (typeSet.isContainedIn(WebInspector.TypeSet.TypeBit.Object | WebInspector.TypeSet.TypeBit.Function | WebInspector.TypeSet.TypeBit.String | WebInspector.TypeSet.NullOrUndefinedTypeBits))
             return "Object?";
 
-        return "(" + WebInspector.UIString("many") + ")";
+        return WebInspector.UIString("(many)");
     }
 };
+
+WebInspector.TypeTokenView.TitleType = {
+    Variable: Symbol("title-type-variable"),
+    ReturnStatement: Symbol("title-type-return-statement")
+};
+
+WebInspector.TypeTokenView.ColorClassForType = {
+    "String": "type-token-string",
+    "Symbol": "type-token-symbol",
+    "Function": "type-token-function",
+    "Number": "type-token-number",
+    "Integer": "type-token-number",
+    "Undefined": "type-token-empty",
+    "Null": "type-token-empty",
+    "(?)": "type-token-empty",
+    "Boolean": "type-token-boolean",
+    "(many)": "type-token-many"
+};
+
+WebInspector.TypeTokenView.DelayHoverTime = 350;

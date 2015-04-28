@@ -99,8 +99,10 @@ JSValue JSValue::toThisSlowCase(ExecState* exec, ECMAMode ecmaMode) const
 JSObject* JSValue::synthesizePrototype(ExecState* exec) const
 {
     if (isCell()) {
-        ASSERT(isString());
-        return exec->lexicalGlobalObject()->stringPrototype();
+        if (isString())
+            return exec->lexicalGlobalObject()->stringPrototype();
+        ASSERT(isSymbol());
+        return exec->lexicalGlobalObject()->symbolPrototype();
     }
 
     if (isNumber())
@@ -119,9 +121,8 @@ void JSValue::putToPrimitive(ExecState* exec, PropertyName propertyName, JSValue
 {
     VM& vm = exec->vm();
 
-    unsigned index = propertyName.asIndex();
-    if (index != PropertyName::NotAnIndex) {
-        putToPrimitiveByIndex(exec, index, value, slot.isStrictMode());
+    if (Optional<uint32_t> index = parseIndex(propertyName)) {
+        putToPrimitiveByIndex(exec, index.value(), value, slot.isStrictMode());
         return;
     }
 
@@ -231,8 +232,8 @@ void JSValue::dumpInContextAssumingStructure(
                     out.print(" (atomic)");
                 if (impl->isAtomic())
                     out.print(" (identifier)");
-                if (impl->isEmptyUnique())
-                    out.print(" (unique)");
+                if (impl->isSymbol())
+                    out.print(" (symbol)");
             } else
                 out.print(" (unresolved)");
             out.print(": ", impl);
@@ -364,6 +365,10 @@ JSString* JSValue::toStringSlowCase(ExecState* exec) const
         return vm.smallStrings.nullString();
     if (isUndefined())
         return vm.smallStrings.undefinedString();
+    if (isSymbol()) {
+        throwTypeError(exec);
+        return jsEmptyString(exec);
+    }
 
     ASSERT(isCell());
     JSValue value = asCell()->toPrimitive(exec, PreferString);

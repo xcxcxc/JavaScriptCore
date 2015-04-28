@@ -29,6 +29,7 @@
 
 import os
 
+from webkitpy.common.system import path
 from webkitpy.layout_tests.models.test_configuration import TestConfiguration
 from webkitpy.port.base import Port
 from webkitpy.port.pulseaudio_sanitizer import PulseAudioSanitizer
@@ -64,8 +65,11 @@ class EflPort(Port):
         if not 'DISPLAY' in os.environ:
             del env['DISPLAY']
 
+        if 'ACCESSIBILITY_EAIL_LIBRARY_PATH' in os.environ:
+            env['ACCESSIBILITY_EAIL_LIBRARY_PATH'] = os.environ['ACCESSIBILITY_EAIL_LIBRARY_PATH']
+
         env['TEST_RUNNER_INJECTED_BUNDLE_FILENAME'] = self._build_path('lib', 'libTestRunnerInjectedBundle.so')
-        env['TEST_RUNNER_PLUGIN_PATH'] = self._build_path('lib')
+        env['TEST_RUNNER_PLUGIN_PATH'] = self._build_path('lib', 'plugins')
 
         # Silence GIO warnings about using the "memory" GSettings backend.
         env['GSETTINGS_BACKEND'] = 'memory'
@@ -74,6 +78,9 @@ class EflPort(Port):
             env['WEB_PROCESS_CMD_PREFIX'] = self.webprocess_cmd_prefix
 
         return env
+
+    def supports_per_test_timeout(self):
+        return True
 
     def default_timeout_ms(self):
         # Tests run considerably slower under gdb
@@ -122,12 +129,7 @@ class EflPort(Port):
         return list(reversed([self._filesystem.join(self._webkit_baseline_path(p), 'TestExpectations') for p in self._search_paths()]))
 
     def show_results_html_file(self, results_filename):
-        # FIXME: We should find a way to share this implmentation with Gtk,
-        # or teach run-launcher how to call run-safari and move this down to WebKitPort.
-        run_launcher_args = ["file://%s" % results_filename]
-        # FIXME: old-run-webkit-tests also added ["-graphicssystem", "raster", "-style", "windows"]
-        # FIXME: old-run-webkit-tests converted results_filename path for cygwin.
-        self._run_script("run-launcher", run_launcher_args)
+        self._run_script("run-minibrowser", [path.abspath_to_uri(self.host.platform, results_filename)])
 
     def check_sys_deps(self, needs_http):
         return super(EflPort, self).check_sys_deps(needs_http) and self._driver_class().check_driver(self)

@@ -27,57 +27,51 @@
 #define Allocator_h
 
 #include "BumpAllocator.h"
-#include "FixedVector.h"
-#include "MediumAllocator.h"
-#include "Sizes.h"
-#include "SmallLine.h"
 #include <array>
 
 namespace bmalloc {
 
 class Deallocator;
+class Heap;
 
 // Per-cache object allocator.
 
 class Allocator {
 public:
-    Allocator(Deallocator&);
+    Allocator(Heap*, Deallocator&);
     ~Allocator();
 
+    void* tryAllocate(size_t);
     void* allocate(size_t);
-    bool allocateFastCase(size_t, void*&);
-    void* allocateSlowCase(size_t);
-    
+    void* allocate(size_t alignment, size_t);
+    void* reallocate(void*, size_t);
+
     void scavenge();
 
 private:
-    typedef FixedVector<SmallLine*, smallLineCacheCapacity> SmallLineCache;
-    typedef FixedVector<MediumLine*, mediumLineCacheCapacity> MediumLineCache;
-
-    void* allocateFastCase(BumpAllocator&);
-
+    bool allocateFastCase(size_t, void*&);
+    void* allocateSlowCase(size_t);
+    
     void* allocateMedium(size_t);
     void* allocateLarge(size_t);
     void* allocateXLarge(size_t);
     
-    SmallLine* allocateSmallLine(size_t smallSizeClass);
-    MediumLine* allocateMediumLine();
+    BumpRange allocateBumpRange(size_t sizeClass);
+    BumpRange allocateBumpRangeSlowCase(size_t sizeClass);
     
+    std::array<BumpAllocator, mediumMax / alignment> m_bumpAllocators;
+    std::array<BumpRangeCache, mediumMax / alignment> m_bumpRangeCaches;
+
+    bool m_isBmallocEnabled;
     Deallocator& m_deallocator;
-
-    std::array<BumpAllocator, smallMax / alignment> m_smallAllocators;
-    std::array<BumpAllocator, mediumMax / alignment> m_mediumAllocators;
-
-    std::array<SmallLineCache, smallMax / alignment> m_smallLineCaches;
-    MediumLineCache m_mediumLineCache;
 };
 
 inline bool Allocator::allocateFastCase(size_t size, void*& object)
 {
-    if (size > smallMax)
+    if (size > mediumMax)
         return false;
 
-    BumpAllocator& allocator = m_smallAllocators[smallSizeClassFor(size)];
+    BumpAllocator& allocator = m_bumpAllocators[sizeClass(size)];
     if (!allocator.canAllocate())
         return false;
 

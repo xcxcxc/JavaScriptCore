@@ -183,6 +183,16 @@ bool getFileSize(const String& path, long long& result)
     return true;
 }
 
+bool getFileSize(PlatformFileHandle handle, long long& result)
+{
+    struct stat fileInfo;
+    if (fstat(handle, &fileInfo))
+        return false;
+
+    result = fileInfo.st_size;
+    return true;
+}
+
 bool getFileCreationTime(const String& path, time_t& result)
 {
 #if OS(DARWIN) || OS(OPENBSD) || OS(NETBSD) || OS(FREEBSD)

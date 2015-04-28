@@ -41,12 +41,18 @@ public:
         return adoptRef(new ScaleTransformOperation(sx, sy, sz, type));
     }
 
+    virtual PassRefPtr<TransformOperation> clone() const override
+    {
+        return adoptRef(new ScaleTransformOperation(m_x, m_y, m_z, m_type));
+    }
+
     double x() const { return m_x; }
     double y() const { return m_y; }
     double z() const { return m_z; }
 
 private:
     virtual bool isIdentity() const override { return m_x == 1 &&  m_y == 1 &&  m_z == 1; }
+    virtual bool isAffectedByTransformOrigin() const { return !isIdentity(); }
 
     virtual OperationType type() const override { return m_type; }
     virtual bool isSameType(const TransformOperation& o) const override { return o.type() == m_type; }
@@ -76,8 +82,8 @@ private:
     OperationType m_type;
 };
 
-TRANSFORMOPERATION_TYPE_CASTS(ScaleTransformOperation, isScaleTransformOperationType());
-
 } // namespace WebCore
+
+SPECIALIZE_TYPE_TRAITS_TRANSFORMOPERATION(WebCore::ScaleTransformOperation, isScaleTransformOperationType())
 
 #endif // ScaleTransformOperation_h

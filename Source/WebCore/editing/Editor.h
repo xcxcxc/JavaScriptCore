@@ -64,7 +64,7 @@ class HitTestResult;
 class KillRing;
 class Pasteboard;
 class SharedBuffer;
-class SimpleFontData;
+class Font;
 class SpellCheckRequest;
 class SpellChecker;
 class StyleProperties;
@@ -101,7 +101,7 @@ public:
     ~Editor();
 
     WEBCORE_EXPORT EditorClient* client() const;
-    TextCheckerClient* textChecker() const;
+    WEBCORE_EXPORT TextCheckerClient* textChecker() const;
 
     CompositeEditCommand* lastEditCommand() { return m_lastEditCommand.get(); }
 
@@ -129,13 +129,13 @@ public:
     WEBCORE_EXPORT void copy();
     WEBCORE_EXPORT void paste();
     void paste(Pasteboard&);
-    void pasteAsPlainText();
+    WEBCORE_EXPORT void pasteAsPlainText();
     WEBCORE_EXPORT void performDelete();
 
     WEBCORE_EXPORT void copyURL(const URL&, const String& title);
     void copyURL(const URL&, const String& title, Pasteboard&);
 #if !PLATFORM(IOS)
-    void copyImage(const HitTestResult&);
+    WEBCORE_EXPORT void copyImage(const HitTestResult&);
 #endif
 
     String readPlainTextFromPasteboard(Pasteboard&);
@@ -174,7 +174,7 @@ public:
 #endif
 
     WEBCORE_EXPORT bool deleteWithDirection(SelectionDirection, TextGranularity, bool killRing, bool isTypingAction);
-    WEBCORE_EXPORT void deleteSelectionWithSmartDelete(bool smartDelete);
+    WEBCORE_EXPORT void deleteSelectionWithSmartDelete(bool smartDelete, EditAction = EditActionDelete);
     void clearText();
 #if PLATFORM(IOS)
     WEBCORE_EXPORT void removeUnchangeableStyles();
@@ -329,8 +329,8 @@ public:
     WEBCORE_EXPORT void confirmMarkedText();
     WEBCORE_EXPORT void setTextAsChildOfElement(const String&, Element*);
     WEBCORE_EXPORT void setTextAlignmentForChangedBaseWritingDirection(WritingDirection);
-    WEBCORE_EXPORT void insertDictationPhrases(PassOwnPtr<Vector<Vector<String> > > dictationPhrases, RetainPtr<id> metadata);
-    WEBCORE_EXPORT void setDictationPhrasesAsChildOfElement(PassOwnPtr<Vector<Vector<String> > > dictationPhrases, RetainPtr<id> metadata, Element* element);
+    WEBCORE_EXPORT void insertDictationPhrases(Vector<Vector<String>>&& dictationPhrases, RetainPtr<id> metadata);
+    WEBCORE_EXPORT void setDictationPhrasesAsChildOfElement(const Vector<Vector<String>>& dictationPhrases, RetainPtr<id> metadata, Element&);
 #endif
     
     void addToKillRing(Range*, bool prepend);
@@ -382,23 +382,18 @@ public:
     void textDidChangeInTextArea(Element*);
     WEBCORE_EXPORT WritingDirection baseWritingDirectionForSelectionStart() const;
 
-    WEBCORE_EXPORT void replaceSelectionWithFragment(PassRefPtr<DocumentFragment>, bool selectReplacement, bool smartReplace, bool matchStyle, MailBlockquoteHandling = MailBlockquoteHandling::RespectBlockquote);
-    WEBCORE_EXPORT void replaceSelectionWithText(const String&, bool selectReplacement, bool smartReplace);
+    WEBCORE_EXPORT void replaceSelectionWithFragment(PassRefPtr<DocumentFragment>, bool selectReplacement, bool smartReplace, bool matchStyle, EditAction = EditActionInsert, MailBlockquoteHandling = MailBlockquoteHandling::RespectBlockquote);
+    WEBCORE_EXPORT void replaceSelectionWithText(const String&, bool selectReplacement, bool smartReplace, EditAction = EditActionInsert);
     WEBCORE_EXPORT bool selectionStartHasMarkerFor(DocumentMarker::MarkerType, int from, int length) const;
     void updateMarkersForWordsAffectedByEditing(bool onlyHandleWordsContainingSelection);
     void deletedAutocorrectionAtPosition(const Position&, const String& originalString);
     
     WEBCORE_EXPORT void simplifyMarkup(Node* startNode, Node* endNode);
 
-    void deviceScaleFactorChanged();
-
     EditorParagraphSeparator defaultParagraphSeparator() const { return m_defaultParagraphSeparator; }
     void setDefaultParagraphSeparator(EditorParagraphSeparator separator) { m_defaultParagraphSeparator = separator; }
     Vector<String> dictationAlternativesForMarker(const DocumentMarker*);
     void applyDictationAlternativelternative(const String& alternativeString);
-
-    PassRefPtr<Range> avoidIntersectionWithDeleteButtonController(const Range*) const;
-    VisibleSelection avoidIntersectionWithDeleteButtonController(const VisibleSelection&) const;
 
 #if USE(APPKIT)
     WEBCORE_EXPORT void uppercaseWord();
@@ -422,25 +417,24 @@ public:
     WEBCORE_EXPORT void toggleAutomaticSpellingCorrection();
 #endif
 
-#if ENABLE(DELETION_UI)
-    DeleteButtonController& deleteButtonController() const { return *m_deleteButtonController; }
-#endif
+    PassRefPtr<DocumentFragment> webContentFromPasteboard(Pasteboard&, Range& context, bool allowPlainText, bool& chosePlainText);
 
 #if PLATFORM(COCOA)
     WEBCORE_EXPORT static RenderStyle* styleForSelectionStart(Frame* , Node *&nodeToRemove);
     WEBCORE_EXPORT bool insertParagraphSeparatorInQuotedContent();
-    WEBCORE_EXPORT const SimpleFontData* fontForSelection(bool&) const;
-    WEBCORE_EXPORT NSDictionary* fontAttributesForSelectionStart() const;
+    WEBCORE_EXPORT const Font* fontForSelection(bool&) const;
+    WEBCORE_EXPORT NSDictionary *fontAttributesForSelectionStart() const;
     WEBCORE_EXPORT String stringSelectionForPasteboard();
     String stringSelectionForPasteboardWithImageAltText();
-    PassRefPtr<DocumentFragment> webContentFromPasteboard(Pasteboard&, Range& context, bool allowPlainText, bool& chosePlainText);
 #if !PLATFORM(IOS)
     bool canCopyExcludingStandaloneImages();
     void takeFindStringFromSelection();
     WEBCORE_EXPORT void readSelectionFromPasteboard(const String& pasteboardName, MailBlockquoteHandling = MailBlockquoteHandling::RespectBlockquote);
     WEBCORE_EXPORT void replaceNodeFromPasteboard(Node*, const String& pasteboardName);
     WEBCORE_EXPORT PassRefPtr<SharedBuffer> dataSelectionForPasteboard(const String& pasteboardName);
+    WEBCORE_EXPORT void applyFontStyles(const String& fontFamily, double fontSize, unsigned fontTraits);
 #endif // !PLATFORM(IOS)
+    WEBCORE_EXPORT void replaceSelectionWithAttributedString(NSAttributedString *, MailBlockquoteHandling = MailBlockquoteHandling::RespectBlockquote);
 #endif
 
 #if PLATFORM(COCOA) || PLATFORM(EFL) || PLATFORM(GTK)
@@ -474,12 +468,12 @@ private:
     enum SetCompositionMode { ConfirmComposition, CancelComposition };
     void setComposition(const String&, SetCompositionMode);
 
-    void changeSelectionAfterCommand(const VisibleSelection& newSelection, FrameSelection::SetSelectionOptions);
+    void changeSelectionAfterCommand(const VisibleSelection& newSelection, FrameSelection::SetSelectionOptions, AXTextStateChangeIntent = AXTextStateChangeIntent());
 
     enum EditorActionSpecifier { CutAction, CopyAction };
     void performCutOrCopy(EditorActionSpecifier);
 
-    void editorUIUpdateTimerFired(Timer<Editor>&);
+    void editorUIUpdateTimerFired();
 
     Node* findEventTargetFromSelection() const;
 
@@ -494,9 +488,6 @@ private:
 #endif
 
     Frame& m_frame;
-#if ENABLE(DELETION_UI)
-    std::unique_ptr<DeleteButtonController> m_deleteButtonController;
-#endif
     RefPtr<CompositeEditCommand> m_lastEditCommand;
     RefPtr<Text> m_compositionNode;
     unsigned m_compositionStart;
@@ -514,16 +505,15 @@ private:
     bool m_overwriteModeEnabled;
 
     VisibleSelection m_oldSelectionForEditorUIUpdate;
-    Timer<Editor> m_editorUIUpdateTimer;
+    Timer m_editorUIUpdateTimer;
     bool m_editorUIUpdateTimerShouldCheckSpellingAndGrammar;
     bool m_editorUIUpdateTimerWasTriggeredByDictation;
 
 #if ENABLE(TELEPHONE_NUMBER_DETECTION) && !PLATFORM(IOS)
     bool shouldDetectTelephoneNumbers();
-    void scanSelectionForTelephoneNumbers(Timer<Editor>&);
     void scanRangeForTelephoneNumbers(Range&, const StringView&, Vector<RefPtr<Range>>& markedRanges);
 
-    Timer<Editor> m_telephoneNumberDetectionUpdateTimer;
+    Timer m_telephoneNumberDetectionUpdateTimer;
     Vector<RefPtr<Range>> m_detectedTelephoneNumberRanges;
 #endif
 };
@@ -547,20 +537,6 @@ inline bool Editor::markedTextMatchesAreHighlighted() const
 {
     return m_areMarkedTextMatchesHighlighted;
 }
-
-#if !ENABLE(DELETION_UI)
-
-inline PassRefPtr<Range> Editor::avoidIntersectionWithDeleteButtonController(const Range* range) const
-{
-    return const_cast<Range*>(range);
-}
-
-inline VisibleSelection Editor::avoidIntersectionWithDeleteButtonController(const VisibleSelection& selection) const
-{
-    return selection;
-}
-
-#endif
 
 } // namespace WebCore
 

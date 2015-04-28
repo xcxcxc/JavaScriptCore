@@ -74,17 +74,7 @@ public:
             }
         }
         
-        for (BlockIndex blockIndex = m_graph.numBlocks(); blockIndex--;) {
-            BasicBlock* block = m_graph.block(blockIndex);
-            if (!block)
-                continue;
-            
-            for (unsigned i = block->size(); i--;) {
-                Node* node = block->at(i);
-                if (node->op() == MovHint)
-                    node->child1()->mergeFlags(NodeRelevantToOSR);
-            }
-        }
+        m_graph.mergeRelevantToOSR();
         
         for (BlockIndex blockIndex = m_graph.numBlocks(); blockIndex--;) {
             BasicBlock* block = m_graph.block(blockIndex);
@@ -100,6 +90,9 @@ public:
                     Node* lastNode = nullptr;
                     if (sourceIndex > 1) {
                         lastNode = block->at(sourceIndex - 2);
+                        
+                        // This doesn't need to specialize for Phantom. lastNode could be any node
+                        // that isn't subject to DCE. But we keep it simple for now.
                         if (lastNode->op() != Phantom
                             || lastNode->origin.forExit != node->origin.forExit)
                             lastNode = nullptr;
@@ -149,14 +142,6 @@ public:
                     if (node->children.isEmpty()) {
                         m_graph.m_allocator.free(node);
                         changed = true;
-                        continue;
-                    }
-                    break;
-                }
-                    
-                case HardPhantom: {
-                    if (node->children.isEmpty()) {
-                        m_graph.m_allocator.free(node);
                         continue;
                     }
                     break;

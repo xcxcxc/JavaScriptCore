@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2006, 2007, 2008, 2009, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2006, 2007, 2008, 2009, 2014-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,22 +31,29 @@
 #include "Chrome.h"
 #include "ChromeClient.h"
 #include "DataTransfer.h"
+#include "DictionaryLookup.h"
 #include "DragController.h"
+#include "Editor.h"
 #include "EventNames.h"
 #include "FocusController.h"
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameView.h"
+#include "HTMLDocument.h"
+#include "HTMLIFrameElement.h"
 #include "KeyboardEvent.h"
 #include "MainFrame.h"
 #include "MouseEventWithHitTestResults.h"
 #include "Page.h"
 #include "Pasteboard.h"
 #include "PlatformEventFactoryMac.h"
+#include "Range.h"
 #include "RenderLayer.h"
 #include "RenderListBox.h"
 #include "RenderWidget.h"
 #include "RuntimeApplicationChecks.h"
+#include "ScrollAnimator.h"
+#include "ScrollLatchingState.h"
 #include "ScrollableArea.h"
 #include "Scrollbar.h"
 #include "Settings.h"
@@ -142,15 +149,15 @@ void EventHandler::focusDocumentView()
 bool EventHandler::passWidgetMouseDownEventToWidget(const MouseEventWithHitTestResults& event)
 {
     // Figure out which view to send the event to.
-    auto target = event.targetNode() ? event.targetNode()->renderer() : nullptr;
-    if (!target || !target->isWidget())
+    auto* target = event.targetNode() ? event.targetNode()->renderer() : nullptr;
+    if (!is<RenderWidget>(target))
         return false;
 
     // Double-click events don't exist in Cocoa. Since passWidgetMouseDownEventToWidget() will
     // just pass currentEvent down to the widget, we don't want to call it for events that
     // don't correspond to Cocoa events. The mousedown/ups will have already been passed on as
     // part of the pressed/released handling.
-    return passMouseDownEventToWidget(toRenderWidget(target)->widget());
+    return passMouseDownEventToWidget(downcast<RenderWidget>(*target).widget());
 }
 
 bool EventHandler::passWidgetMouseDownEventToWidget(RenderWidget* renderWidget)
@@ -360,13 +367,13 @@ bool EventHandler::passSubframeEventToSubframe(MouseEventWithHitTestResults& eve
             Node* node = event.targetNode();
             if (!node)
                 return false;
-            auto renderer = node->renderer();
-            if (!renderer || !renderer->isWidget())
+            auto* renderer = node->renderer();
+            if (!is<RenderWidget>(renderer))
                 return false;
-            Widget* widget = toRenderWidget(renderer)->widget();
+            Widget* widget = downcast<RenderWidget>(*renderer).widget();
             if (!widget || !widget->isFrameView())
                 return false;
-            if (!passWidgetMouseDownEventToWidget(toRenderWidget(renderer)))
+            if (!passWidgetMouseDownEventToWidget(downcast<RenderWidget>(renderer)))
                 return false;
             m_mouseDownWasInSubframe = true;
             return true;
@@ -422,20 +429,17 @@ static void selfRetainingNSScrollViewScrollWheel(NSScrollView *self, SEL selecto
         [self release];
 }
 
-bool EventHandler::passWheelEventToWidget(const PlatformWheelEvent& wheelEvent, Widget* widget)
+bool EventHandler::passWheelEventToWidget(const PlatformWheelEvent& wheelEvent, Widget& widget)
 {
     BEGIN_BLOCK_OBJC_EXCEPTIONS;
 
-    if (!widget)
-        return false;
-
-    NSView* nodeView = widget->platformWidget();
+    NSView* nodeView = widget.platformWidget();
     if (!nodeView) {
         // WebKit2 code path.
-        if (!widget->isFrameView())
+        if (!is<FrameView>(widget))
             return false;
 
-        return toFrameView(widget)->frame().eventHandler().handleWheelEvent(wheelEvent);
+        return downcast<FrameView>(widget).frame().eventHandler().handleWheelEvent(wheelEvent);
     }
 
     if ([currentNSEvent() type] != NSScrollWheel || m_sendingEventToSubview) 
@@ -683,7 +687,7 @@ PassRefPtr<DataTransfer> EventHandler::createDraggingDataTransfer() const
 {
     // Must be done before ondragstart adds types and data to the pboard,
     // also done for security, as it erases data from the last drag.
-    OwnPtr<Pasteboard> pasteboard = Pasteboard::create(NSDragPboard);
+    auto pasteboard = std::make_unique<Pasteboard>(NSDragPboard);
     pasteboard->clear();
     return DataTransfer::createForDragAndDrop();
 }
@@ -738,11 +742,17 @@ unsigned EventHandler::accessKeyModifiers()
     return PlatformEvent::CtrlKey | PlatformEvent::AltKey;
 }
 
-static ContainerNode* findEnclosingScrollableContainer(ContainerNode& node)
+static ContainerNode* findEnclosingOverflowScroll(ContainerNode* node)
 {
     // Find the first node with a valid scrollable area starting with the current
     // node and traversing its parents (or shadow hosts).
-    for (ContainerNode* candidate = &node; candidate; candidate = candidate->parentOrShadowHostNode()) {
+    for (ContainerNode* candidate = node; candidate; candidate = candidate->parentOrShadowHostNode()) {
+        if (is<HTMLIFrameElement>(candidate))
+            continue;
+
+        if (is<HTMLHtmlElement>(candidate) || is<HTMLDocument>(candidate))
+            return nullptr;
+
         RenderBox* box = candidate->renderBox();
         if (box && box->canBeScrolledAndHasScrollableArea())
             return candidate;
@@ -787,11 +797,11 @@ static Widget* widgetForEventTarget(Element* eventTarget)
     if (!eventTarget)
         return nullptr;
     
-    RenderElement* target = eventTarget->renderer();
-    if (!target || !target->isWidget())
+    auto* target = eventTarget->renderer();
+    if (!is<RenderWidget>(target))
         return nullptr;
     
-    return toRenderWidget(target)->widget();
+    return downcast<RenderWidget>(*target).widget();
 }
 
 static ScrollView* scrollViewForEventTarget(Element* eventTarget)
@@ -815,51 +825,92 @@ static bool eventTargetIsPlatformWidget(Element* eventTarget)
     return widget->platformWidget();
 }
 
+static bool latchingIsLockedToPlatformFrame(const Frame& frame)
+{
+    ScrollLatchingState* latchedState = frame.mainFrame().latchingState();
+    if (!latchedState)
+        return false;
+
+    if (frameHasPlatformWidget(frame) && &frame != latchedState->frame())
+        return true;
+
+    return false;
+}
+
+static bool latchingIsLockedToAncestorOfThisFrame(const Frame& frame)
+{
+    ScrollLatchingState* latchedState = frame.mainFrame().latchingState();
+    if (!latchedState || !latchedState->frame())
+        return false;
+
+    if (&frame == latchedState->frame())
+        return false;
+
+    for (Frame* ancestor = frame.tree().parent(); ancestor; ancestor = ancestor->tree().parent()) {
+        if (ancestor == latchedState->frame())
+            return true;
+    }
+    
+    return false;
+}
+
 void EventHandler::platformPrepareForWheelEvents(const PlatformWheelEvent& wheelEvent, const HitTestResult& result, RefPtr<Element>& wheelEventTarget, RefPtr<ContainerNode>& scrollableContainer, ScrollableArea*& scrollableArea, bool& isOverWidget)
 {
     FrameView* view = m_frame.view();
 
     scrollableContainer = nullptr;
     scrollableArea = nullptr;
-    if (!view || !view->frame().isMainFrame()) {
+    if (!view)
         scrollableContainer = wheelEventTarget;
-        scrollableArea = view;
-    } else {
+    else {
         if (eventTargetIsPlatformWidget(wheelEventTarget.get())) {
             scrollableContainer = wheelEventTarget;
             scrollableArea = scrollViewForEventTarget(wheelEventTarget.get());
         } else {
-            scrollableContainer = findEnclosingScrollableContainer(*wheelEventTarget);
+            scrollableContainer = findEnclosingOverflowScroll(wheelEventTarget.get());
             if (scrollableContainer) {
                 if (RenderBox* box = scrollableContainer->renderBox()) {
-                    if (box->isListBox())
-                        scrollableArea = toRenderListBox(box);
+                    if (is<RenderListBox>(*box))
+                        scrollableArea = downcast<RenderListBox>(box);
                     else
                         scrollableArea = box->layer();
                 }
+            } else {
+                scrollableContainer = view->frame().document()->bodyOrFrameset();
+                scrollableArea = view;
             }
         }
     }
     
+    ScrollLatchingState* latchingState = m_frame.mainFrame().latchingState();
     if (wheelEvent.shouldConsiderLatching()) {
-        if (scrollableArea && scrollableContainer)
-            m_startedGestureAtScrollLimit = scrolledToEdgeInDominantDirection(*scrollableContainer, *scrollableArea, wheelEvent.deltaX(), wheelEvent.deltaY());
-        else
-            m_startedGestureAtScrollLimit = false;
-        m_latchedWheelEventElement = wheelEventTarget;
-        // FIXME: What prevents us from deleting this scrollable container while still holding a pointer to it?
-        m_latchedScrollableContainer = scrollableContainer;
-        m_widgetIsLatched = result.isOverWidget();
-        isOverWidget = m_widgetIsLatched;
-        m_recentWheelEventDeltaTracker->beginTrackingDeltas();
-    } else if (wheelEvent.shouldResetLatching()) {
+        if (scrollableContainer && scrollableArea) {
+            bool startingAtScrollLimit = scrolledToEdgeInDominantDirection(*scrollableContainer, *scrollableArea, wheelEvent.deltaX(), wheelEvent.deltaY());
+            if (!startingAtScrollLimit) {
+                m_frame.mainFrame().pushNewLatchingState();
+                latchingState = m_frame.mainFrame().latchingState();
+                latchingState->setStartedGestureAtScrollLimit(false);
+                latchingState->setWheelEventElement(wheelEventTarget);
+                latchingState->setFrame(&m_frame);
+                // FIXME: What prevents us from deleting this scrollable container while still holding a pointer to it?
+                latchingState->setScrollableContainer(scrollableContainer);
+                latchingState->setWidgetIsLatched(result.isOverWidget());
+                isOverWidget = latchingState->widgetIsLatched();
+                m_frame.mainFrame().wheelEventDeltaTracker()->beginTrackingDeltas();
+            }
+        }
+    } else if (wheelEvent.shouldResetLatching())
         clearLatchedState();
-        m_recentWheelEventDeltaTracker->endTrackingDeltas();
-    }
-    
-    if (!wheelEvent.shouldResetLatching() && m_latchedWheelEventElement) {
-        wheelEventTarget = m_latchedWheelEventElement.get();
-        isOverWidget = m_widgetIsLatched;
+
+    if (!wheelEvent.shouldResetLatching() && latchingState && latchingState->wheelEventElement()) {
+        if (latchingIsLockedToPlatformFrame(m_frame))
+            return;
+
+        if (latchingIsLockedToAncestorOfThisFrame(m_frame))
+            return;
+
+        wheelEventTarget = latchingState->wheelEventElement();
+        isOverWidget = latchingState->widgetIsLatched();
     }
 }
 
@@ -867,51 +918,63 @@ void EventHandler::platformRecordWheelEvent(const PlatformWheelEvent& wheelEvent
 {
     switch (wheelEvent.phase()) {
         case PlatformWheelEventPhaseBegan:
-            m_recentWheelEventDeltaTracker->beginTrackingDeltas();
+            m_frame.mainFrame().wheelEventDeltaTracker()->beginTrackingDeltas();
             break;
         case PlatformWheelEventPhaseEnded:
-            m_recentWheelEventDeltaTracker->endTrackingDeltas();
+            m_frame.mainFrame().wheelEventDeltaTracker()->endTrackingDeltas();
             break;
         default:
             break;
     }
 
-    m_recentWheelEventDeltaTracker->recordWheelEventDelta(wheelEvent);
+    m_frame.mainFrame().wheelEventDeltaTracker()->recordWheelEventDelta(wheelEvent);
 }
 
-bool EventHandler::platformCompleteWheelEvent(const PlatformWheelEvent& wheelEvent, Element* wheelEventTarget, ContainerNode* scrollableContainer, ScrollableArea* scrollableArea)
+static FrameView* frameViewForLatchingState(Frame& frame, ScrollLatchingState* latchingState)
+{
+    if (latchingIsLockedToPlatformFrame(frame))
+        return frame.view();
+
+    return latchingState->frame() ? latchingState->frame()->view() : frame.view();
+}
+
+bool EventHandler::platformCompleteWheelEvent(const PlatformWheelEvent& wheelEvent, ContainerNode* scrollableContainer, ScrollableArea* scrollableArea)
 {
     // We do another check on the frame view because the event handler can run JS which results in the frame getting destroyed.
+    ASSERT(m_frame.view());
     FrameView* view = m_frame.view();
 
-    if (wheelEvent.useLatchedEventElement() && m_latchedScrollableContainer) {
-        if (!view || !view->frame().isMainFrame()) {
-            bool didHandleWheelEvent = view && view->wheelEvent(wheelEvent);
-            if (!didHandleWheelEvent && scrollableContainer == m_latchedScrollableContainer) {
-                // If we are just starting a scroll event, and have nowhere left to scroll, allow
-                // the enclosing frame to handle the scroll.
-                didHandleWheelEvent = !m_startedGestureAtScrollLimit;
-            }
+    ScrollLatchingState* latchingState = m_frame.mainFrame().latchingState();
+    if (wheelEvent.useLatchedEventElement() && latchingState && latchingState->scrollableContainer()) {
 
-            // If the platform widget is handling the event, we always want to return false
-            if (view && scrollableArea == view && view->platformWidget())
-                didHandleWheelEvent = false;
-            
-            m_isHandlingWheelEvent = false;
-            return didHandleWheelEvent;
-        }
-        
-        if (scrollableArea && !m_startedGestureAtScrollLimit && scrollableContainer == m_latchedScrollableContainer) {
-            m_isHandlingWheelEvent = false;
+        m_isHandlingWheelEvent = false;
 
-            if (eventTargetIsPlatformWidget(wheelEventTarget))
-                return !m_startedGestureAtScrollLimit;
-
+        // WebKit2 code path
+        if (!frameHasPlatformWidget(m_frame) && !latchingState->startedGestureAtScrollLimit() && scrollableContainer == latchingState->scrollableContainer() && scrollableArea && view != scrollableArea) {
+            // If we did not start at the scroll limit, do not pass the event on to be handled by enclosing scrollable regions.
             return true;
         }
+
+        if (!latchingState->startedGestureAtScrollLimit())
+            view = frameViewForLatchingState(m_frame, latchingState);
+
+        ASSERT(view);
+
+        bool didHandleWheelEvent = view->wheelEvent(wheelEvent);
+        if (scrollableContainer == latchingState->scrollableContainer()) {
+            // If we are just starting a scroll event, and have nowhere left to scroll, allow
+            // the enclosing frame to handle the scroll.
+            didHandleWheelEvent = !latchingState->startedGestureAtScrollLimit();
+        }
+
+        // If the platform widget is handling the event, we always want to return false.
+        if (scrollableArea == view && view->platformWidget())
+            didHandleWheelEvent = false;
+        
+        return didHandleWheelEvent;
     }
     
-    bool didHandleEvent = view ? view->wheelEvent(wheelEvent) : false;
+    bool didHandleEvent = view->wheelEvent(wheelEvent);
     m_isHandlingWheelEvent = false;
     return didHandleEvent;
 }
@@ -922,10 +985,41 @@ bool EventHandler::platformCompletePlatformWidgetWheelEvent(const PlatformWheelE
     if (frameHasPlatformWidget(m_frame) && widget.isFrameView())
         return true;
 
-    if (wheelEvent.useLatchedEventElement() && m_latchedScrollableContainer && scrollableContainer == m_latchedScrollableContainer)
-        return !m_startedGestureAtScrollLimit;
+    ScrollLatchingState* latchingState = m_frame.mainFrame().latchingState();
+    if (!latchingState)
+        return false;
+
+    if (wheelEvent.useLatchedEventElement() && latchingState->scrollableContainer() && scrollableContainer == latchingState->scrollableContainer())
+        return !latchingState->startedGestureAtScrollLimit();
 
     return false;
 }
-    
+
+void EventHandler::platformNotifyIfEndGesture(const PlatformWheelEvent& wheelEvent, ScrollableArea* scrollableArea)
+{
+    if (!scrollableArea)
+        return;
+
+    // Special case handling for ending wheel gesture to activate snap animation:
+    if (wheelEvent.phase() != PlatformWheelEventPhaseEnded && wheelEvent.momentumPhase() != PlatformWheelEventPhaseEnded)
+        return;
+
+#if ENABLE(CSS_SCROLL_SNAP)
+    if (ScrollAnimator* scrollAnimator = scrollableArea->existingScrollAnimator())
+        scrollAnimator->processWheelEventForScrollSnap(wheelEvent);
+#endif
+}
+
+VisibleSelection EventHandler::selectClosestWordFromHitTestResultBasedOnLookup(const HitTestResult& result)
+{
+    if (!m_frame.editor().behavior().shouldSelectBasedOnDictionaryLookup())
+        return VisibleSelection();
+
+    NSDictionary *options = nil;
+    if (RefPtr<Range> range = rangeForDictionaryLookupAtHitTestResult(result, &options))
+        return VisibleSelection(*range);
+
+    return VisibleSelection();
+}
+
 }

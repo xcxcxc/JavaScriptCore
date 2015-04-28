@@ -31,6 +31,12 @@ import "oaidl.idl";
 import "ocidl.idl";
 #endif
 
+typedef enum WebKitJavaScriptRuntimeFlags {
+    WebKitJavaScriptRuntimeFlagsSymbolDisabled = 1,  // 1u << 0
+    WebKitJavaScriptRuntimeFlagsPromiseDisabled = 2,  // 1u << 1
+    WebKitJavaScriptRuntimeFlagsAllEnabled = 0
+} WebKitJavaScriptRuntimeFlags;
+
 [
     object,
     oleautomation,
@@ -57,9 +63,6 @@ interface IWebPreferencesPrivate : IUnknown
 
     HRESULT localStorageDatabasePath([out, retval] BSTR* location);
     HRESULT setLocalStorageDatabasePath([in] BSTR location);
-
-    HRESULT setShouldPaintNativeControls([in] BOOL shouldPaint);
-    HRESULT shouldPaintNativeControls([out, retval] BOOL* enabled);
 
     HRESULT setDatabasesEnabled([in] BOOL enabled);
     HRESULT databasesEnabled([out, retval] BOOL *enabled);
@@ -113,6 +116,9 @@ interface IWebPreferencesPrivate : IUnknown
     HRESULT javaScriptCanAccessClipboard([out, retval] BOOL *enabled);
     HRESULT setJavaScriptCanAccessClipboard([in] BOOL enabled);
 
+    HRESULT javaScriptRuntimeFlags([out, retval] unsigned* flags);
+    HRESULT setJavaScriptRuntimeFlags([in] unsigned flags);
+
     HRESULT isDNSPrefetchingEnabled([out, retval] BOOL *enabled);
     HRESULT setDNSPrefetchingEnabled([in] BOOL enabled);
 
@@ -145,9 +151,6 @@ interface IWebPreferencesPrivate : IUnknown
 
     HRESULT mockScrollbarsEnabled([out, retval] BOOL* enabled);
     HRESULT setMockScrollbarsEnabled([in] BOOL enabled);
-
-    HRESULT screenFontSubstitutionEnabled([out, retval] BOOL* enabled);
-    HRESULT setScreenFontSubstitutionEnabled([in] BOOL enabled);
 
     HRESULT isInheritURIQueryComponentEnabled([out, retval] BOOL* enabled);
     HRESULT setEnableInheritURIQueryComponent([in] BOOL enabled);

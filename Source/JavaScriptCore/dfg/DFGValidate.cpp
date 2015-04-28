@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012-2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2012-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -50,7 +50,7 @@ public:
             startCrashing(); \
             dataLogF("\n\n\nAt "); \
             reportValidationContext context; \
-            dataLogF(": validation %s (%s:%d) failed.\n", #assertion, __FILE__, __LINE__); \
+            dataLogF(": validation failed: %s (%s:%d).\n", #assertion, __FILE__, __LINE__); \
             dumpGraphIfAppropriate(); \
             WTFReportAssertionFailure(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, #assertion); \
             CRASH(); \
@@ -62,11 +62,11 @@ public:
             startCrashing(); \
             dataLogF("\n\n\nAt "); \
             reportValidationContext context; \
-            dataLogF(": validation (%s = ", #left); \
+            dataLogF(": validation failed: (%s = ", #left); \
             dataLog(left); \
             dataLogF(") == (%s = ", #right); \
             dataLog(right); \
-            dataLogF(") (%s:%d) failed.\n", __FILE__, __LINE__); \
+            dataLogF(") (%s:%d).\n", __FILE__, __LINE__); \
             dumpGraphIfAppropriate(); \
             WTFReportAssertionFailure(__FILE__, __LINE__, WTF_PRETTY_FUNCTION, #left " == " #right); \
             CRASH(); \
@@ -74,7 +74,7 @@ public:
     } while (0)
 
     #define notSet (static_cast<size_t>(-1))
-
+        
     void validate()
     {
         // NB. This code is not written for performance, since it is not intended to run
@@ -118,8 +118,8 @@ public:
                         continue;
                     
                     m_myRefCounts.find(edge.node())->value++;
-                    
-                    VALIDATE((node, edge), edge->hasDoubleResult() == (edge.useKind() == DoubleRepUse || edge.useKind() == DoubleRepRealUse || edge.useKind() == DoubleRepMachineIntUse));
+
+                    validateEdgeWithDoubleResultIfNecessary(node, edge);
                     VALIDATE((node, edge), edge->hasInt52Result() == (edge.useKind() == Int52RepUse));
                     
                     if (m_graph.m_form == SSA) {
@@ -187,14 +187,26 @@ public:
                 Node* node = block->node(i);
                 if (m_graph.m_refCountState == ExactRefCount)
                     V_EQUAL((node), m_myRefCounts.get(node), node->adjustedRefCount());
-                else
-                    V_EQUAL((node), node->refCount(), 1);
             }
             
-            for (size_t i = 0 ; i < block->size() - 1; ++i) {
+            bool foundTerminal = false;
+            for (size_t i = 0 ; i < block->size(); ++i) {
                 Node* node = block->at(i);
-                VALIDATE((node), !node->isTerminal());
+                if (node->isTerminal()) {
+                    foundTerminal = true;
+                    for (size_t j = i + 1; j < block->size(); ++j) {
+                        node = block->at(j);
+                        VALIDATE((node), node->op() == Phantom || node->op() == PhantomLocal || node->op() == Flush);
+                        m_graph.doToChildren(
+                            node,
+                            [&] (Edge edge) {
+                                VALIDATE((node, edge), shouldNotHaveTypeCheck(edge.useKind()));
+                            });
+                    }
+                    break;
+                }
             }
+            VALIDATE((block), foundTerminal);
             
             for (size_t i = 0; i < block->size(); ++i) {
                 Node* node = block->at(i);
@@ -215,6 +227,23 @@ public:
                 case Identity:
                     VALIDATE((node), canonicalResultRepresentation(node->result()) == canonicalResultRepresentation(node->child1()->result()));
                     break;
+                case SetLocal:
+                case PutStack:
+                case Upsilon:
+                    VALIDATE((node), !!node->child1());
+                    switch (node->child1().useKind()) {
+                    case UntypedUse:
+                    case CellUse:
+                    case Int32Use:
+                    case Int52RepUse:
+                    case DoubleRepUse:
+                    case BooleanUse:
+                        break;
+                    default:
+                        VALIDATE((node), !"Bad use kind");
+                        break;
+                    }
+                    break;
                 case MakeRope:
                 case ValueAdd:
                 case ArithAdd:
@@ -225,6 +254,7 @@ public:
                 case ArithMod:
                 case ArithMin:
                 case ArithMax:
+                case ArithPow:
                 case CompareLess:
                 case CompareLessEq:
                 case CompareGreater:
@@ -417,12 +447,29 @@ private:
                     }
                 }
                 
+                switch (node->op()) {
+                case Phi:
+                case Upsilon:
+                case CheckInBounds:
+                case PhantomNewObject:
+                case PhantomNewFunction:
+                case GetMyArgumentByVal:
+                case PutHint:
+                case CheckStructureImmediate:
+                case MaterializeNewObject:
+                case PutStack:
+                case KillStack:
+                case GetStack:
+                    VALIDATE((node), !"unexpected node type in CPS");
+                    break;
+                default:
+                    break;
+                }
+                
                 if (!node->shouldGenerate())
                     continue;
                 switch (node->op()) {
                 case GetLocal:
-                    if (node->variableAccessData()->isCaptured())
-                        break;
                     // Ignore GetLocal's that we know to be dead, but that the graph
                     // doesn't yet know to be dead.
                     if (!m_myRefCounts.get(node))
@@ -432,13 +479,17 @@ private:
                     getLocalPositions.operand(node->local()) = i;
                     break;
                 case SetLocal:
-                    if (node->variableAccessData()->isCaptured())
-                        break;
                     // Only record the first SetLocal. There may be multiple SetLocals
                     // because of flushing.
                     if (setLocalPositions.operand(node->local()) != notSet)
                         break;
                     setLocalPositions.operand(node->local()) = i;
+                    break;
+                case SetArgument:
+                    // This acts like a reset. It's ok to have a second GetLocal for a local in the same
+                    // block if we had a SetArgument for that local.
+                    getLocalPositions.operand(node->local()) = notSet;
+                    setLocalPositions.operand(node->local()) = notSet;
                     break;
                 default:
                     break;
@@ -469,6 +520,8 @@ private:
             if (!block)
                 continue;
             
+            VALIDATE((block), block->phis.isEmpty());
+            
             unsigned nodeIndex = 0;
             for (; nodeIndex < block->size() && !block->at(nodeIndex)->origin.forExit.isSet(); nodeIndex++) { }
             
@@ -484,6 +537,13 @@ private:
                     VALIDATE((node), !node->origin.forExit.isSet());
                     break;
                     
+                case GetLocal:
+                case SetLocal:
+                case GetLocalUnlinked:
+                case SetArgument:
+                    VALIDATE((node), !"bad node type for SSA");
+                    break;
+                    
                 default:
                     // FIXME: Add more things here.
                     // https://bugs.webkit.org/show_bug.cgi?id=123471
@@ -492,7 +552,18 @@ private:
             }
         }
     }
-    
+
+    void validateEdgeWithDoubleResultIfNecessary(Node* node, Edge edge)
+    {
+        if (!edge->hasDoubleResult())
+            return;
+
+        if (m_graph.m_planStage < PlanStage::AfterFixup)
+            VALIDATE((node, edge), edge.useKind() == UntypedUse);
+        else
+            VALIDATE((node, edge), edge.useKind() == DoubleRepUse || edge.useKind() == DoubleRepRealUse || edge.useKind() == DoubleRepMachineIntUse);
+    }
+
     void checkOperand(
         BasicBlock* block, Operands<size_t>& getLocalPositions,
         Operands<size_t>& setLocalPositions, VirtualRegister operand)
@@ -527,23 +598,23 @@ private:
     void reportValidationContext(VirtualRegister local, BasicBlock* block)
     {
         if (!block) {
-            dataLog("r", local, " in null Block ");
+            dataLog(local, " in null Block ");
             return;
         }
 
-        dataLog("r", local, " in Block ", *block);
+        dataLog(local, " in Block ", *block);
     }
     
     void reportValidationContext(
         VirtualRegister local, BasicBlock* sourceBlock, BasicBlock* destinationBlock)
     {
-        dataLog("r", local, " in Block ", *sourceBlock, " -> ", *destinationBlock);
+        dataLog(local, " in Block ", *sourceBlock, " -> ", *destinationBlock);
     }
     
     void reportValidationContext(
         VirtualRegister local, BasicBlock* sourceBlock, Node* prevNode)
     {
-        dataLog(prevNode, " for r", local, " in Block ", *sourceBlock);
+        dataLog(prevNode, " for ", local, " in Block ", *sourceBlock);
     }
     
     void reportValidationContext(Node* node, BasicBlock* block)

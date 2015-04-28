@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2012 Apple Inc. All rights reserved.
+ * Copyright (C) 2012, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,6 +29,7 @@
 #include "CodeBlock.h"
 #include "CommonSlowPaths.h"
 #include "Debugger.h"
+#include "DirectArguments.h"
 #include "Executable.h"
 #include "Heap.h"
 #include "Interpreter.h"
@@ -49,6 +50,8 @@
 #include "ProtoCallFrame.h"
 #include "Structure.h"
 #include "StructureChain.h"
+#include "TypeProfiler.h"
+#include "TypeProfilerLog.h"
 #include "VMEntryRecord.h"
 #include "ValueProfile.h"
 #include <wtf/text/StringImpl.h>

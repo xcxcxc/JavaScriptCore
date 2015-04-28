@@ -38,12 +38,15 @@
 #include "IconURL.h"
 #include "LayoutMilestones.h"
 #include "MixedContentChecker.h"
+#include "PageThrottler.h"
 #include "ResourceHandleTypes.h"
 #include "ResourceLoadNotifier.h"
+#include "ResourceRequestBase.h"
 #include "SecurityContext.h"
 #include "Timer.h"
 #include <wtf/Forward.h>
 #include <wtf/HashSet.h>
+#include <wtf/Optional.h>
 
 namespace WebCore {
 
@@ -66,7 +69,6 @@ class IconController;
 class NavigationAction;
 class NetworkingContext;
 class Page;
-class PageActivityAssertionToken;
 class PolicyChecker;
 class ResourceError;
 class ResourceRequest;
@@ -107,7 +109,7 @@ public:
     // FIXME: These are all functions which start loads. We have too many.
     WEBCORE_EXPORT void loadURLIntoChildFrame(const URL&, const String& referer, Frame*);
     WEBCORE_EXPORT void loadFrameRequest(const FrameLoadRequest&, LockHistory, LockBackForwardList, // Called by submitForm, calls loadPostRequest and loadURL.
-        PassRefPtr<Event>, PassRefPtr<FormState>, ShouldSendReferrer, AllowNavigationToInvalidURL);
+        PassRefPtr<Event>, PassRefPtr<FormState>, ShouldSendReferrer, AllowNavigationToInvalidURL, NewFrameOpenerPolicy);
 
     WEBCORE_EXPORT void load(const FrameLoadRequest&);
 
@@ -125,7 +127,7 @@ public:
     WEBCORE_EXPORT void reloadWithOverrideEncoding(const String& overrideEncoding);
 
     void open(CachedFrameBase&);
-    void loadItem(HistoryItem*, FrameLoadType);
+    void loadItem(HistoryItem&, FrameLoadType);
     HistoryItem* requestedHistoryItem() const { return m_requestedHistoryItem.get(); }
 
     void retryAfterFailedCacheOnlyMainResourceLoad();
@@ -133,7 +135,7 @@ public:
     static void reportLocalLoadFailed(Frame*, const String& url);
 
     // FIXME: These are all functions which stop loads. We have too many.
-    void stopAllLoaders(ClearProvisionalItemPolicy = ShouldClearProvisionalItem);
+    WEBCORE_EXPORT void stopAllLoaders(ClearProvisionalItemPolicy = ShouldClearProvisionalItem);
     WEBCORE_EXPORT void stopForUserCancel(bool deferCheckLoadComplete = false);
     void stop();
     void stopLoading(UnloadEventPolicy);
@@ -176,7 +178,6 @@ public:
     bool subframeIsLoading() const;
     void willChangeTitle(DocumentLoader*);
     void didChangeTitle(DocumentLoader*);
-    void didChangeIcons(IconType);
 
     bool shouldTreatURLAsSrcdocDocument(const URL&) const;
 
@@ -265,10 +266,6 @@ public:
 
     WEBCORE_EXPORT void setOriginalURLForDownloadRequest(ResourceRequest&);
 
-    bool suppressOpenerInNewFrame() const { return m_suppressOpenerInNewFrame; }
-
-    static ObjectContentType defaultObjectContentType(const URL&, const String& mimeType, bool shouldPreferPlugInsForImages);
-
     bool quickRedirectComing() const { return m_quickRedirectComing; }
 
     WEBCORE_EXPORT bool shouldClose();
@@ -291,6 +288,10 @@ public:
 
     void forcePageTransitionIfNeeded();
 
+    void setOverrideCachePolicyForTesting(ResourceRequestCachePolicy policy) { m_overrideCachePolicyForTesting = policy; }
+    void setOverrideResourceLoadPriorityForTesting(ResourceLoadPriority priority) { m_overrideResourceLoadPriorityForTesting = priority; }
+    WEBCORE_EXPORT void clearTestingOverrides();
+
 private:
     enum FormSubmissionCacheLoadPolicy {
         MayAttemptCacheOnlyLoadForFormSubmissionItem,
@@ -299,10 +300,10 @@ private:
 
     bool allChildrenAreComplete() const; // immediate children, not all descendants
 
-    void checkTimerFired(Timer<FrameLoader>&);
+    void checkTimerFired();
     
-    void loadSameDocumentItem(HistoryItem*);
-    void loadDifferentDocumentItem(HistoryItem*, FrameLoadType, FormSubmissionCacheLoadPolicy);
+    void loadSameDocumentItem(HistoryItem&);
+    void loadDifferentDocumentItem(HistoryItem&, FrameLoadType, FormSubmissionCacheLoadPolicy);
     
     void loadProvisionalItemFromCachedPage();
 
@@ -320,7 +321,7 @@ private:
     bool handleBeforeUnloadEvent(Chrome&, FrameLoader* frameLoaderBeingNavigated);
 
     void continueLoadAfterNavigationPolicy(const ResourceRequest&, PassRefPtr<FormState>, bool shouldContinue, AllowNavigationToInvalidURL);
-    void continueLoadAfterNewWindowPolicy(const ResourceRequest&, PassRefPtr<FormState>, const String& frameName, const NavigationAction&, bool shouldContinue, AllowNavigationToInvalidURL);
+    void continueLoadAfterNewWindowPolicy(const ResourceRequest&, PassRefPtr<FormState>, const String& frameName, const NavigationAction&, bool shouldContinue, AllowNavigationToInvalidURL, NewFrameOpenerPolicy);
     void continueFragmentScrollAfterNavigationPolicy(const ResourceRequest&, bool shouldContinue);
 
     bool shouldPerformFragmentNavigation(bool isFormSubmission, const String& httpMethod, FrameLoadType, const URL&);
@@ -350,9 +351,9 @@ private:
         LockHistory, FrameLoadType, PassRefPtr<FormState>, AllowNavigationToInvalidURL);
 
     void loadPostRequest(const ResourceRequest&, const String& referrer,                // Called by loadFrameRequest, calls loadWithNavigationAction
-        const String& frameName, LockHistory, FrameLoadType, PassRefPtr<Event>, PassRefPtr<FormState>, AllowNavigationToInvalidURL);
+        const String& frameName, LockHistory, FrameLoadType, PassRefPtr<Event>, PassRefPtr<FormState>, AllowNavigationToInvalidURL, NewFrameOpenerPolicy);
     void loadURL(const URL&, const String& referrer, const String& frameName,          // Called by loadFrameRequest, calls loadWithNavigationAction or dispatches to navigation policy delegate
-        LockHistory, FrameLoadType, PassRefPtr<Event>, PassRefPtr<FormState>, AllowNavigationToInvalidURL);
+        LockHistory, FrameLoadType, PassRefPtr<Event>, PassRefPtr<FormState>, AllowNavigationToInvalidURL, NewFrameOpenerPolicy);
 
     bool shouldReload(const URL& currentURL, const URL& destinationURL);
 
@@ -406,7 +407,7 @@ private:
 
     bool m_quickRedirectComing;
     bool m_sentRedirectNotification;
-    WEBCORE_EXPORT bool m_inStopAllLoaders;
+    bool m_inStopAllLoaders;
 
     String m_outgoingReferrer;
 
@@ -423,7 +424,7 @@ private:
 
     URL m_submittedFormURL;
 
-    Timer<FrameLoader> m_checkTimer;
+    Timer m_checkTimer;
     bool m_shouldCallCheckCompleted;
     bool m_shouldCallCheckLoadComplete;
 
@@ -431,7 +432,6 @@ private:
     HashSet<Frame*> m_openedFrames;
 
     bool m_loadingFromCachedPage;
-    bool m_suppressOpenerInNewFrame;
 
     bool m_currentNavigationHasShownBeforeUnloadConfirmPanel;
 
@@ -441,9 +441,12 @@ private:
 
     RefPtr<FrameNetworkingContext> m_networkingContext;
 
+    Optional<ResourceRequestCachePolicy> m_overrideCachePolicyForTesting;
+    Optional<ResourceLoadPriority> m_overrideResourceLoadPriorityForTesting;
+
     URL m_previousURL;
     RefPtr<HistoryItem> m_requestedHistoryItem;
-    std::unique_ptr<PageActivityAssertionToken> m_activityAssertion;
+    PageActivityAssertionToken m_activityAssertion;
 };
 
 // This function is called by createWindow() in JSDOMWindowBase.cpp, for example, for

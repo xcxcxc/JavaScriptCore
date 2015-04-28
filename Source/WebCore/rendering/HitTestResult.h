@@ -27,7 +27,7 @@
 #include "HitTestLocation.h"
 #include "HitTestRequest.h"
 #include "LayoutRect.h"
-#include "TextDirection.h"
+#include "TextFlags.h"
 #include <memory>
 #include <wtf/Forward.h>
 #include <wtf/ListHashSet.h>
@@ -49,14 +49,14 @@ class HitTestResult {
 public:
     typedef ListHashSet<RefPtr<Node>> NodeSet;
 
-    HitTestResult();
+    WEBCORE_EXPORT HitTestResult();
     WEBCORE_EXPORT explicit HitTestResult(const LayoutPoint&);
     // Pass non-negative padding values to perform a rect-based hit test.
     WEBCORE_EXPORT HitTestResult(const LayoutPoint& centerPoint, unsigned topPadding, unsigned rightPadding, unsigned bottomPadding, unsigned leftPadding);
-    explicit HitTestResult(const HitTestLocation&);
+    WEBCORE_EXPORT explicit HitTestResult(const HitTestLocation&);
     WEBCORE_EXPORT HitTestResult(const HitTestResult&);
     WEBCORE_EXPORT ~HitTestResult();
-    HitTestResult& operator=(const HitTestResult&);
+    WEBCORE_EXPORT HitTestResult& operator=(const HitTestResult&);
 
     Node* innerNode() const { return m_innerNode.get(); }
     WEBCORE_EXPORT Element* innerElement() const;
@@ -82,11 +82,11 @@ public:
     const LayoutPoint& localPoint() const { return m_localPoint; }
     void setLocalPoint(const LayoutPoint& p) { m_localPoint = p; }
 
-    void setToNonShadowAncestor();
+    WEBCORE_EXPORT void setToNonShadowAncestor();
 
     const HitTestLocation& hitTestLocation() const { return m_hitTestLocation; }
 
-    void setInnerNode(Node*);
+    WEBCORE_EXPORT void setInnerNode(Node*);
     void setInnerNonSharedNode(Node*);
     void setURLElement(Element*);
     void setScrollbar(Scrollbar*);
@@ -94,6 +94,7 @@ public:
 
     WEBCORE_EXPORT Frame* targetFrame() const;
     WEBCORE_EXPORT bool isSelected() const;
+    WEBCORE_EXPORT String selectedText() const;
     WEBCORE_EXPORT String spellingToolTip(TextDirection&) const;
     String replacedString() const;
     WEBCORE_EXPORT String title(TextDirection&) const;
@@ -106,8 +107,10 @@ public:
     WEBCORE_EXPORT URL absolutePDFURL() const;
     WEBCORE_EXPORT URL absoluteMediaURL() const;
     WEBCORE_EXPORT URL absoluteLinkURL() const;
+#if ENABLE(ATTACHMENT_ELEMENT)
+    WEBCORE_EXPORT URL absoluteAttachmentURL() const;
+#endif
     WEBCORE_EXPORT String textContent() const;
-    WEBCORE_EXPORT bool isLiveLink() const;
     bool isOverLink() const;
     WEBCORE_EXPORT bool isContentEditable() const;
     void toggleMediaControlsDisplay() const;
@@ -124,6 +127,9 @@ public:
     WEBCORE_EXPORT bool mediaIsVideo() const;
     bool mediaMuted() const;
     void toggleMediaMuteState() const;
+    WEBCORE_EXPORT bool isDownloadableMedia() const;
+    WEBCORE_EXPORT bool isOverTextInsideFormControlElement() const;
+    WEBCORE_EXPORT bool allowsCopy() const;
 
     // Returns true if it is rect-based hit test and needs to continue until the rect is fully
     // enclosed by the boundaries of a node.

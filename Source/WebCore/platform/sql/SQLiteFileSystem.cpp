@@ -50,7 +50,7 @@ SQLiteFileSystem::SQLiteFileSystem()
 
 int SQLiteFileSystem::openDatabase(const String& filename, sqlite3** database, bool)
 {
-    return sqlite3_open(filename.utf8().data(), database);
+    return sqlite3_open(fileSystemRepresentation(filename).data(), database);
 }
 
 String SQLiteFileSystem::getFileNameForNewDatabase(const String& dbDir, const String&,
@@ -59,13 +59,13 @@ String SQLiteFileSystem::getFileNameForNewDatabase(const String& dbDir, const St
     // try to get the next sequence number from the given database
     // if we can't get a number, return an empty string
     SQLiteStatement sequenceStatement(*db, "SELECT seq FROM sqlite_sequence WHERE name='Databases';");
-    if (sequenceStatement.prepare() != SQLResultOk)
+    if (sequenceStatement.prepare() != SQLITE_OK)
         return String();
     int result = sequenceStatement.step();
     int64_t seq = 0;
-    if (result == SQLResultRow)
+    if (result == SQLITE_ROW)
         seq = sequenceStatement.getColumnInt64(0);
-    else if (result != SQLResultDone)
+    else if (result != SQLITE_DONE)
         return String();
     sequenceStatement.finalize();
 

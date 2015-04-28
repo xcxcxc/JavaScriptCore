@@ -33,7 +33,7 @@
 #import <WebKit/WebPreferenceKeysPrivate.h>
 #import <WebKit/WebViewPrivate.h>
 
-@interface WK1BrowserWindowController ()
+@interface WK1BrowserWindowController () <WebFrameLoadDelegate, WebPolicyDelegate, WebResourceLoadDelegate, WebUIDelegate>
 @end
 
 @implementation WK1BrowserWindowController
@@ -50,6 +50,8 @@
 
     [[WebPreferences standardPreferences] setFullScreenEnabled:YES];
     [[WebPreferences standardPreferences] setDeveloperExtrasEnabled:YES];
+    [[WebPreferences standardPreferences] setImageControlsEnabled:YES];
+    [[WebPreferences standardPreferences] setServiceControlsEnabled:YES];
 
     [self didChangeSettings];
 
@@ -96,6 +98,11 @@
         [containerView addSubview:_webView];
         [_webView release];
     }
+}
+
+- (IBAction)setScale:(id)sender
+{
+    
 }
 
 - (IBAction)reload:(id)sender
@@ -164,7 +171,7 @@
 
 - (void)windowWillClose:(NSNotification *)notification
 {
-    [(BrowserAppDelegate *)[NSApp delegate] browserWindowWillClose:self.window];
+    [(BrowserAppDelegate *)[[NSApplication sharedApplication] delegate] browserWindowWillClose:self.window];
     [self autorelease];
 }
 
@@ -236,6 +243,7 @@
 
     [[WebPreferences standardPreferences] setSubpixelCSSOMElementMetricsEnabled:settings.subPixelCSSOMMetricsEnabled];
     [[WebPreferences standardPreferences] setShowDebugBorders:settings.layerBordersVisible];
+    [[WebPreferences standardPreferences] setSimpleLineLayoutDebugBordersEnabled:settings.simpleLineLayoutDebugBordersEnabled];
     [[WebPreferences standardPreferences] setShowRepaintCounter:settings.layerBordersVisible];
 
     BOOL useTransparentWindows = settings.useTransparentWindows;

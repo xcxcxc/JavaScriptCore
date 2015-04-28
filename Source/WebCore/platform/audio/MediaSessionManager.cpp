@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013-2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,6 +28,7 @@
 
 #if ENABLE(VIDEO)
 
+#include "AudioSession.h"
 #include "Logging.h"
 #include "NotImplemented.h"
 #include "MediaSession.h"
@@ -44,7 +45,6 @@ MediaSessionManager& MediaSessionManager::sharedManager()
 
 MediaSessionManager::MediaSessionManager()
     : m_systemSleepListener(SystemSleepListener::create(*this))
-    , m_interrupted(false)
 {
     resetRestrictions();
 }
@@ -166,7 +166,7 @@ MediaSessionManager::SessionRestrictions MediaSessionManager::restrictions(Media
     return m_restrictions[type];
 }
 
-void MediaSessionManager::sessionWillBeginPlayback(MediaSession& session)
+bool MediaSessionManager::sessionWillBeginPlayback(MediaSession& session)
 {
     LOG(Media, "MediaSessionManager::sessionWillBeginPlayback - %p", &session);
     
@@ -174,20 +174,27 @@ void MediaSessionManager::sessionWillBeginPlayback(MediaSession& session)
 
     MediaSession::MediaType sessionType = session.mediaType();
     SessionRestrictions restrictions = m_restrictions[sessionType];
-    if (!restrictions & ConcurrentPlaybackNotPermitted)
-        return;
+    if (session.state() == MediaSession::Interrupted && restrictions & InterruptedPlaybackNotPermitted)
+        return false;
+
+#if USE(AUDIO_SESSION)
+    if (activeAudioSessionRequired() && !AudioSession::sharedSession().tryToSetActive(true))
+        return false;
+#endif
+
+    if (m_interrupted)
+        endInterruption(MediaSession::NoFlags);
 
     Vector<MediaSession*> sessions = m_sessions;
     for (auto* oneSession : sessions) {
         if (oneSession == &session)
             continue;
-        if (oneSession->mediaType() != sessionType)
-            continue;
-        if (restrictions & ConcurrentPlaybackNotPermitted)
+        if (oneSession->mediaType() == sessionType && restrictions & ConcurrentPlaybackNotPermitted)
             oneSession->pauseSession();
     }
-    
+
     updateSessionState();
+    return true;
 }
     
 void MediaSessionManager::sessionWillEndPlayback(MediaSession& session)
@@ -260,12 +267,17 @@ bool MediaSessionManager::sessionRestrictsInlineVideoPlayback(const MediaSession
     return m_restrictions[sessionType] & InlineVideoPlaybackRestricted;
 }
 
+bool MediaSessionManager::sessionCanLoadMedia(const MediaSession& session) const
+{
+    return session.state() == MediaSession::Playing || !session.isHidden() || session.isPlayingToWirelessPlaybackTarget();
+}
+
 void MediaSessionManager::applicationWillEnterBackground() const
 {
     LOG(Media, "MediaSessionManager::applicationWillEnterBackground");
     Vector<MediaSession*> sessions = m_sessions;
     for (auto* session : sessions) {
-        if (m_restrictions[session->mediaType()] & BackgroundPlaybackNotPermitted)
+        if (m_restrictions[session->mediaType()] & BackgroundProcessPlaybackRestricted)
             session->beginInterruption(MediaSession::EnteringBackground);
     }
 }
@@ -275,14 +287,9 @@ void MediaSessionManager::applicationWillEnterForeground() const
     LOG(Media, "MediaSessionManager::applicationWillEnterForeground");
     Vector<MediaSession*> sessions = m_sessions;
     for (auto* session : sessions) {
-        if (m_restrictions[session->mediaType()] & BackgroundPlaybackNotPermitted)
+        if (m_restrictions[session->mediaType()] & BackgroundProcessPlaybackRestricted)
             session->endInterruption(MediaSession::MayResumePlaying);
     }
-}
-
-void MediaSessionManager::wirelessRoutesAvailableChanged()
-{
-    notImplemented();
 }
 
 #if !PLATFORM(COCOA)

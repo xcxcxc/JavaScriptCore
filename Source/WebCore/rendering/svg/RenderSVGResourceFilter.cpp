@@ -39,14 +39,11 @@
 #include "SVGNames.h"
 #include "SVGRenderingContext.h"
 #include "Settings.h"
-#include "SourceAlpha.h"
 #include "SourceGraphic.h"
 
 namespace WebCore {
 
-RenderSVGResourceType RenderSVGResourceFilter::s_resourceType = FilterResourceType;
-
-RenderSVGResourceFilter::RenderSVGResourceFilter(SVGFilterElement& element, PassRef<RenderStyle> style)
+RenderSVGResourceFilter::RenderSVGResourceFilter(SVGFilterElement& element, Ref<RenderStyle>&& style)
     : RenderSVGResourceContainer(element, WTF::move(style))
 {
 }
@@ -74,12 +71,16 @@ void RenderSVGResourceFilter::removeClientFromCache(RenderElement& client, bool 
     markClientForInvalidation(client, markForInvalidation ? BoundariesInvalidation : ParentOnlyInvalidation);
 }
 
-std::unique_ptr<SVGFilterBuilder> RenderSVGResourceFilter::buildPrimitives(SVGFilter* filter) const
+std::unique_ptr<SVGFilterBuilder> RenderSVGResourceFilter::buildPrimitives(SVGFilter& filter) const
 {
-    FloatRect targetBoundingBox = filter->targetBoundingBox();
+    static const unsigned maxCountChildNodes = 200;
+    if (filterElement().countChildNodes() > maxCountChildNodes)
+        return nullptr;
+
+    FloatRect targetBoundingBox = filter.targetBoundingBox();
 
     // Add effects to the builder
-    auto builder = std::make_unique<SVGFilterBuilder>(SourceGraphic::create(filter), SourceAlpha::create(filter));
+    auto builder = std::make_unique<SVGFilterBuilder>(SourceGraphic::create(filter));
     for (auto& element : childrenOfType<SVGFilterPrimitiveStandardAttributes>(filterElement())) {
         RefPtr<FilterEffect> effect = element.build(builder.get(), filter);
         if (!effect) {
@@ -149,7 +150,7 @@ bool RenderSVGResourceFilter::applyResource(RenderElement& renderer, const Rende
     filterData->filter = SVGFilter::create(filterData->shearFreeAbsoluteTransform, absoluteDrawingRegion, targetBoundingBox, filterData->boundaries, primitiveBoundingBoxMode);
 
     // Create all relevant filter primitives.
-    filterData->builder = buildPrimitives(filterData->filter.get());
+    filterData->builder = buildPrimitives(*filterData->filter);
     if (!filterData->builder)
         return false;
 
@@ -172,17 +173,18 @@ bool RenderSVGResourceFilter::applyResource(RenderElement& renderer, const Rende
     // Set the scale level in SVGFilter.
     filterData->filter->setFilterResolution(scale);
 
+    static const unsigned maxTotalOfEffectInputs = 100;
     FilterEffect* lastEffect = filterData->builder->lastEffect();
-    if (!lastEffect)
+    if (!lastEffect || lastEffect->totalNumberOfEffectInputs() > maxTotalOfEffectInputs)
         return false;
 
-    RenderSVGResourceFilterPrimitive::determineFilterPrimitiveSubregion(lastEffect);
+    RenderSVGResourceFilterPrimitive::determineFilterPrimitiveSubregion(*lastEffect);
     FloatRect subRegion = lastEffect->maxEffectRect();
     // At least one FilterEffect has a too big image size,
     // recalculate the effect sizes with new scale factors.
     if (!fitsInMaximumImageSize(subRegion.size(), scale)) {
         filterData->filter->setFilterResolution(scale);
-        RenderSVGResourceFilterPrimitive::determineFilterPrimitiveSubregion(lastEffect);
+        RenderSVGResourceFilterPrimitive::determineFilterPrimitiveSubregion(*lastEffect);
     }
 
     // If the drawingRegion is empty, we have something like <g filter=".."/>.

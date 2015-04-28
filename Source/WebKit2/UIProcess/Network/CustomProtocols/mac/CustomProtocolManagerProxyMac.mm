@@ -26,8 +26,6 @@
 #import "config.h"
 #import "CustomProtocolManagerProxy.h"
 
-#if ENABLE(CUSTOM_PROTOCOLS)
-
 #import "ChildProcessProxy.h"
 #import "Connection.h"
 #import "CustomProtocolManagerMessages.h"
@@ -68,8 +66,11 @@ using namespace WebKit;
     _customProtocolID = customProtocolID;
     _connection = connection;
     _storagePolicy = NSURLCacheStorageNotAllowed;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     _urlConnection = [[NSURLConnection alloc] initWithRequest:request delegate:self startImmediately:YES];
-    
+#pragma clang diagnostic pop
+
     return self;
 }
 
@@ -122,9 +123,9 @@ using namespace WebKit;
 
 namespace WebKit {
 
-CustomProtocolManagerProxy::CustomProtocolManagerProxy(ChildProcessProxy* childProcessProxy, WebContext& webContext)
+CustomProtocolManagerProxy::CustomProtocolManagerProxy(ChildProcessProxy* childProcessProxy, WebProcessPool& processPool)
     : m_childProcessProxy(childProcessProxy)
-    , m_webContext(webContext)
+    , m_processPool(processPool)
 {
     ASSERT(m_childProcessProxy);
     m_childProcessProxy->addMessageReceiver(Messages::CustomProtocolManagerProxy::messageReceiverName(), *this);
@@ -149,5 +150,3 @@ void CustomProtocolManagerProxy::stopLoading(uint64_t customProtocolID)
 }
 
 } // namespace WebKit
-
-#endif // ENABLE(CUSTOM_PROTOCOLS)

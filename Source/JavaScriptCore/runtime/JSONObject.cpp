@@ -226,7 +226,8 @@ Stringifier::Stringifier(ExecState* exec, const Local<Unknown>& replacer, const 
             if (name.isObject()) {
                 if (!asObject(name)->inherits(NumberObject::info()) && !asObject(name)->inherits(StringObject::info()))
                     continue;
-            }
+            } else if (!name.isNumber() && !name.isString())
+                continue;
 
             m_arrayReplacerPropertyNames.add(name.toString(exec)->toIdentifier(exec));
         }
@@ -303,26 +304,21 @@ static void appendStringToStringBuilder(StringBuilder& builder, const CharType* 
     }
 }
 
-void escapeStringToBuilder(StringBuilder& builder, const String& message)
+void appendQuotedJSONStringToBuilder(StringBuilder& builder, const String& message)
 {
+    builder.append('"');
+
     if (message.is8Bit())
         appendStringToStringBuilder(builder, message.characters8(), message.length());
     else
         appendStringToStringBuilder(builder, message.characters16(), message.length());
+
+    builder.append('"');
 }
 
 void Stringifier::appendQuotedString(StringBuilder& builder, const String& value)
 {
-    int length = value.length();
-
-    builder.append('"');
-
-    if (value.is8Bit())
-        appendStringToStringBuilder<LChar>(builder, value.characters8(), length);
-    else
-        appendStringToStringBuilder<UChar>(builder, value.characters16(), length);
-
-    builder.append('"');
+    appendQuotedJSONStringToBuilder(builder, value);
 }
 
 inline JSValue Stringifier::toJSON(JSValue value, const PropertyNameForFunctionCall& propertyName)
@@ -494,7 +490,7 @@ bool Stringifier::Holder::appendNextProperty(Stringifier& stringifier, StringBui
                 m_propertyNames = stringifier.m_arrayReplacerPropertyNames.data();
             else {
                 PropertyNameArray objectPropertyNames(exec);
-                m_object->methodTable()->getOwnPropertyNames(m_object.get(), exec, objectPropertyNames, ExcludeDontEnumProperties);
+                m_object->methodTable()->getOwnPropertyNames(m_object.get(), exec, objectPropertyNames, EnumerationMode());
                 m_propertyNames = objectPropertyNames.releaseData();
             }
             m_size = m_propertyNames->propertyNameVector().size();
@@ -711,7 +707,7 @@ NEVER_INLINE JSValue Walker::walk(JSValue unfiltered)
                 objectStack.push(object);
                 indexStack.append(0);
                 propertyStack.append(PropertyNameArray(m_exec));
-                object->methodTable()->getOwnPropertyNames(object, m_exec, propertyStack.last(), ExcludeDontEnumProperties);
+                object->methodTable()->getOwnPropertyNames(object, m_exec, propertyStack.last(), EnumerationMode());
             }
             objectStartVisitMember:
             FALLTHROUGH;

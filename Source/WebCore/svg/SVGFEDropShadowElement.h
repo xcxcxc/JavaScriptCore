@@ -28,17 +28,16 @@ namespace WebCore {
     
 class SVGFEDropShadowElement final : public SVGFilterPrimitiveStandardAttributes {
 public:
-    static PassRefPtr<SVGFEDropShadowElement> create(const QualifiedName&, Document&);
+    static Ref<SVGFEDropShadowElement> create(const QualifiedName&, Document&);
     
     void setStdDeviation(float stdDeviationX, float stdDeviationY);
     
 private:
     SVGFEDropShadowElement(const QualifiedName&, Document&);
     
-    bool isSupportedAttribute(const QualifiedName&);
     virtual void parseAttribute(const QualifiedName&, const AtomicString&) override;
     virtual void svgAttributeChanged(const QualifiedName&) override;
-    virtual PassRefPtr<FilterEffect> build(SVGFilterBuilder*, Filter*) override;
+    virtual RefPtr<FilterEffect> build(SVGFilterBuilder*, Filter&) override;
     
     static const AtomicString& stdDeviationXIdentifier();
     static const AtomicString& stdDeviationYIdentifier();

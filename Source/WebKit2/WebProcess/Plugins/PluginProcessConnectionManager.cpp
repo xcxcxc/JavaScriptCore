@@ -58,7 +58,7 @@ PluginProcessConnectionManager::~PluginProcessConnectionManager()
 
 void PluginProcessConnectionManager::initializeConnection(IPC::Connection* connection)
 {
-    connection->addWorkQueueMessageReceiver(Messages::PluginProcessConnectionManager::messageReceiverName(), m_queue.get(), this);
+    connection->addWorkQueueMessageReceiver(Messages::PluginProcessConnectionManager::messageReceiverName(), &m_queue.get(), this);
 }
 
 PluginProcessConnection* PluginProcessConnectionManager::getPluginProcessConnection(uint64_t pluginProcessToken)
@@ -70,19 +70,17 @@ PluginProcessConnection* PluginProcessConnectionManager::getPluginProcessConnect
 
     IPC::Attachment encodedConnectionIdentifier;
     bool supportsAsynchronousInitialization;
-    if (!WebProcess::shared().parentProcessConnection()->sendSync(Messages::WebProcessProxy::GetPluginProcessConnection(pluginProcessToken),
+    if (!WebProcess::singleton().parentProcessConnection()->sendSync(Messages::WebProcessProxy::GetPluginProcessConnection(pluginProcessToken),
                                                      Messages::WebProcessProxy::GetPluginProcessConnection::Reply(encodedConnectionIdentifier, supportsAsynchronousInitialization), 0))
         return 0;
 
 #if OS(DARWIN)
     IPC::Connection::Identifier connectionIdentifier(encodedConnectionIdentifier.port());
-    if (IPC::Connection::identifierIsNull(connectionIdentifier))
-        return 0;
 #elif USE(UNIX_DOMAIN_SOCKETS)
-    IPC::Connection::Identifier connectionIdentifier = encodedConnectionIdentifier.fileDescriptor();
-    if (connectionIdentifier == -1)
-        return 0;
+    IPC::Connection::Identifier connectionIdentifier = encodedConnectionIdentifier.releaseFileDescriptor();
 #endif
+    if (IPC::Connection::identifierIsNull(connectionIdentifier))
+        return nullptr;
 
     RefPtr<PluginProcessConnection> pluginProcessConnection = PluginProcessConnection::create(this, pluginProcessToken, connectionIdentifier, supportsAsynchronousInitialization);
     m_pluginProcessConnections.append(pluginProcessConnection);

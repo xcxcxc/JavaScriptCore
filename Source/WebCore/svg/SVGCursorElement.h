@@ -36,7 +36,7 @@ class SVGCursorElement final : public SVGElement,
                                public SVGExternalResourcesRequired,
                                public SVGURIReference {
 public:
-    static PassRefPtr<SVGCursorElement> create(const QualifiedName&, Document&);
+    static Ref<SVGCursorElement> create(const QualifiedName&, Document&);
 
     virtual ~SVGCursorElement();
 
@@ -49,7 +49,7 @@ private:
 
     virtual bool isValid() const override { return SVGTests::isValid(); }
 
-    bool isSupportedAttribute(const QualifiedName&);
+    static bool isSupportedAttribute(const QualifiedName&);
     virtual void parseAttribute(const QualifiedName&, const AtomicString&) override;
     virtual void svgAttributeChanged(const QualifiedName&) override;
 
@@ -71,8 +71,6 @@ private:
 
     HashSet<SVGElement*> m_clients;
 };
-
-NODE_TYPE_CASTS(SVGCursorElement)
 
 } // namespace WebCore
 

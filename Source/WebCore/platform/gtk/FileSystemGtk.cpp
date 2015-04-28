@@ -24,6 +24,7 @@
 #include "FileSystem.h"
 
 #include "FileMetadata.h"
+#include "NotImplemented.h"
 #include "UUID.h"
 #include <gio/gio.h>
 #include <glib.h>
@@ -127,6 +128,12 @@ bool getFileSize(const String& path, long long& resultSize)
 
     resultSize = statResult.st_size;
     return true;
+}
+
+bool getFileSize(PlatformFileHandle, long long&)
+{
+    notImplemented();
+    return false;
 }
 
 bool getFileCreationTime(const String&, time_t&)

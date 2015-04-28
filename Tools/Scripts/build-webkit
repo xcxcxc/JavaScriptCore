@@ -88,15 +88,14 @@ Usage: $programName [options] [options to pass to build system]
   --debug                           Compile with Debug configuration
   --release                         Compile with Release configuration
   --sdk=<sdk>                       Use a specific Xcode SDK (iOS and Mac only)
-  --device                          Use the current iphoneos.internal SDK (iOS only)
-  --simulator                       Use the current iphonesimulator SDK (iOS only)
+  --device                          Use "iphoneos.internal" SDK if installed, else "iphoneos" SDK (iOS only)
+  --ios-simulator                   Use the current iphonesimulator SDK (iOS only)
   --coverage                        Enable code coverage support (Mac only)
   --analyze                         Enable static anaylsis (iOS and Mac only)
 
   --efl                             Build the EFL port
   --gtk                             Build the GTK+ port
   --wincairo                        Build using Cairo (rather than CoreGraphics) on Windows
-  --wince                           Build the WinCE port
 
   --inspector-frontend              Copy Web Inspector user interface resources to the build directory
 
@@ -142,18 +141,6 @@ checkRequiredSystemConfig();
 setConfiguration();
 
 my $productDir = productDir();
-
-sub unlinkZeroFiles()
-{
-    my $file = $File::Find::name;
-    # Remove 0 byte sized files, except
-    # - directories (Because they are always 0 byte sized on Windows)
-    # - .d files used for dependency tracking
-    if (! -d $file && ! -s $file && $file !~ m/\.d$/) {
-        unlink $file;
-        print "0 byte sized file removed from build directory: $file\n";
-    }
-}
 
 # Check that all the project directories are there.
 my @projects = ("Source/JavaScriptCore", "Source/WebCore", "Source/WebKit");
@@ -208,7 +195,7 @@ if (isAppleMacWebKit()) {
     } else {
         my @copyLibrariesArgs = (
             "perl", "Tools/Scripts/copy-webkitlibraries-to-product-directory",
-            "--sdk", xcodeSDK(), "--llvm", "--prefer-system-llvm",
+            "--sdk", xcodeSDK(), "--wksi", "--llvm", "--prefer-system-llvm",
             "--llvm-subdirectory", "internal-llvm", productDir(),
             "--llvm-prefix", "/usr/local"
         );
@@ -242,11 +229,9 @@ if (isInspectorFrontend()) {
 if (isCMakeBuild()) {
 
     # By default we build using all of the available CPUs.
-    if (!isWinCE()) {
-        $makeArgs .= ($makeArgs ? " " : "") . "-j" . numberOfCPUs() if $makeArgs !~ /-j\s*\d+/;
-        my $maxCPULoad = maxCPULoad() if $makeArgs !~ /-l\s*\d+\.?\d*/;
-        $makeArgs .= " -l" . maxCPULoad() if defined $maxCPULoad;
-    }
+    $makeArgs .= ($makeArgs ? " " : "") . "-j" . numberOfCPUs() if $makeArgs !~ /-j\s*\d+/;
+    my $maxCPULoad = maxCPULoad() if $makeArgs !~ /-l\s*\d+\.?\d*/;
+    $makeArgs .= " -l" . maxCPULoad() if defined $maxCPULoad;
 
     # We remove CMakeCache to avoid the bots to reuse cached flags when
     # we enable new features. This forces a reconfiguration.

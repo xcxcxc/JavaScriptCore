@@ -23,8 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-var hasEWS = typeof ews !== "undefined";
-var EWSCategory = "ews";
+var hasBubbles = typeof bubbleQueueServer != "undefined";
 
 var analyzer = new Analyzer;
 
@@ -64,25 +63,6 @@ for (var i = 0; i < buildbots.length; ++i) {
             buildQueues = category[buildType] = [];
 
         buildQueues.push(queue);
-    }
-}
-
-if (hasEWS) {
-    for (var id in ews.queues) {
-        var queue = ews.queues[id];
-        var platform = categorizedQueuesByPlatformAndBuildType[queue.platform];
-        if (!platform)
-            platform = categorizedQueuesByPlatformAndBuildType[queue.platform] = {};
-        if (!platform.builders)
-            platform.builders = {};
-
-        var categoryName = EWSCategory;
-
-        platformQueues = platform[categoryName];
-        if (!platformQueues)
-            platformQueues = platform[categoryName] = [];
-
-        platformQueues.push(queue);
     }
 }
 
@@ -174,12 +154,6 @@ function buildAggregateTable()
     header.textContent = "All queues";
     row.appendChild(header);
 
-    if (hasEWS) {
-        var header = document.createElement("th");
-        header.textContent = "EWS";
-        row.appendChild(header);
-    }
-
     table.appendChild(row);
 
     var row = document.createElement("tr");
@@ -225,12 +199,6 @@ function buildQueuesTable()
     for (var testerKey in Buildbot.TestCategory) {
         var header = document.createElement("th");
         header.textContent = testNames[Buildbot.TestCategory[testerKey]];
-        row.appendChild(header);
-    }
-
-    if (hasEWS) {
-        var header = document.createElement("th");
-        header.textContent = "EWS";
         row.appendChild(header);
     }
 
@@ -286,19 +254,41 @@ function buildQueuesTable()
             row.appendChild(cell);
         }
 
-        if (hasEWS) {
-            var cell = document.createElement("td");
-
-            if (platformQueues[EWSCategory]) {
-                var view = new EWSQueueView(platformQueues[EWSCategory]);
-                cell.appendChild(view.element);
-            }
-
-            row.appendChild(cell);
-        }
-
         table.appendChild(row);
     }
+
+    document.body.appendChild(table);
+
+    return table;
+}
+
+function buildBubbleQueuesTable()
+{
+    var table = document.createElement("table");
+    table.classList.add("queue-grid");
+
+    var row = document.createElement("tr");
+    row.classList.add("headers");
+
+    for (id in bubbleQueueServer.queues) {
+        var header = document.createElement("th");
+        header.textContent = bubbleQueueServer.queues[id].shortName;
+        row.appendChild(header);
+    }
+
+    table.appendChild(row);
+
+    row = document.createElement("tr");
+    row.classList.add("platform");
+
+    for (id in bubbleQueueServer.queues) {
+        var cell = document.createElement("td");
+        var view = new MetricsBubbleView(analyzer, bubbleQueueServer.queues[id]);
+        cell.appendChild(view.element);
+        row.appendChild(cell);
+    }
+
+    table.appendChild(row);
 
     document.body.appendChild(table);
 
@@ -347,6 +337,12 @@ function documentReady()
     }, this);
 
     buildAggregateTable();
+    if (hasBubbles) {
+        var tablesDivider = document.createElement("div");
+        tablesDivider.classList.add("tables-divider");
+        document.body.appendChild(tablesDivider);
+        buildBubbleQueuesTable();
+    }
 
     var tablesDivider = document.createElement("div");
     tablesDivider.classList.add("tables-divider");

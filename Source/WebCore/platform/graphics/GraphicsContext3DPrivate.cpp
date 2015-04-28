@@ -19,7 +19,7 @@
 
 #include "config.h"
 
-#if USE(3D_GRAPHICS)
+#if ENABLE(GRAPHICS_CONTEXT_3D)
 #include "GraphicsContext3DPrivate.h"
 
 #include "HostWindow.h"
@@ -131,13 +131,13 @@ void GraphicsContext3DPrivate::paintToTextureMapper(TextureMapper* textureMapper
 #if USE(TEXTURE_MAPPER_GL)
     if (m_context->m_attrs.antialias && m_context->m_state.boundFBO == m_context->m_multisampleFBO) {
         GLContext* previousActiveContext = GLContext::getCurrent();
-        if (previousActiveContext != m_glContext)
+        if (previousActiveContext != m_glContext.get())
             m_context->makeContextCurrent();
 
         m_context->resolveMultisamplingIfNecessary();
         ::glBindFramebuffer(GraphicsContext3D::FRAMEBUFFER, m_context->m_state.boundFBO);
 
-        if (previousActiveContext && previousActiveContext != m_glContext)
+        if (previousActiveContext && previousActiveContext != m_glContext.get())
             previousActiveContext->makeContextCurrent();
     }
 
@@ -151,4 +151,4 @@ void GraphicsContext3DPrivate::paintToTextureMapper(TextureMapper* textureMapper
 
 } // namespace WebCore
 
-#endif // USE(3D_GRAPHICS)
+#endif // ENABLE(GRAPHICS_CONTEXT_3D)

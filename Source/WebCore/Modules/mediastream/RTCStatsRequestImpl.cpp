@@ -81,7 +81,7 @@ void RTCStatsRequestImpl::requestSucceeded(PassRefPtr<RTCStatsResponseBase> resp
 void RTCStatsRequestImpl::requestFailed(const String& error)
 {
     if (m_errorCallback)
-        m_errorCallback->handleEvent(DOMError::create(error).get());
+        m_errorCallback->handleEvent(DOMError::create(error).ptr());
 
     clear();
 }
@@ -89,6 +89,17 @@ void RTCStatsRequestImpl::requestFailed(const String& error)
 void RTCStatsRequestImpl::stop()
 {
     clear();
+}
+
+const char* RTCStatsRequestImpl::activeDOMObjectName() const
+{
+    return "RTCStatsRequestImpl";
+}
+
+bool RTCStatsRequestImpl::canSuspendForPageCache() const
+{
+    // FIXME: We should try and do better here.
+    return false;
 }
 
 void RTCStatsRequestImpl::clear()

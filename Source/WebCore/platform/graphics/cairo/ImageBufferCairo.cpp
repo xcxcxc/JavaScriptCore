@@ -29,6 +29,8 @@
 #include "config.h"
 #include "ImageBuffer.h"
 
+#if USE(CAIRO)
+
 #include "BitmapImage.h"
 #include "CairoUtilities.h"
 #include "Color.h"
@@ -99,6 +101,8 @@ ImageBuffer::ImageBuffer(const FloatSize& size, float /* resolutionScale */, Col
     , m_logicalSize(size)
 {
     success = false;  // Make early return mean error.
+    if (m_size.isEmpty())
+        return;
 
 #if ENABLE(ACCELERATED_2D_CANVAS)
     if (renderingMode == Accelerated)
@@ -114,7 +118,7 @@ ImageBuffer::ImageBuffer(const FloatSize& size, float /* resolutionScale */, Col
 
     RefPtr<cairo_t> cr = adoptRef(cairo_create(m_data.m_surface.get()));
     m_data.m_platformContext.setCr(cr.get());
-    m_context = adoptPtr(new GraphicsContext(&m_data.m_platformContext));
+    m_data.m_context = std::make_unique<GraphicsContext>(&m_data.m_platformContext);
     success = true;
 }
 
@@ -124,10 +128,10 @@ ImageBuffer::~ImageBuffer()
 
 GraphicsContext* ImageBuffer::context() const
 {
-    return m_context.get();
+    return m_data.m_context.get();
 }
 
-PassRefPtr<Image> ImageBuffer::copyImage(BackingStoreCopy copyBehavior, ScaleBehavior) const
+RefPtr<Image> ImageBuffer::copyImage(BackingStoreCopy copyBehavior, ScaleBehavior) const
 {
     if (copyBehavior == CopyBackingStore)
         return BitmapImage::create(copyCairoImageSurface(m_data.m_surface.get()));
@@ -418,3 +422,5 @@ PlatformLayer* ImageBuffer::platformLayer() const
 }
 
 } // namespace WebCore
+
+#endif // USE(CAIRO)

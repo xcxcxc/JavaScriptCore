@@ -22,7 +22,7 @@
 #include "RenderFileUploadControl.h"
 
 #include "FileList.h"
-#include "Font.h"
+#include "FontCascade.h"
 #include "GraphicsContext.h"
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
@@ -58,7 +58,7 @@ const int defaultWidthNumChars = 38;
 #endif
 const int buttonShadowHeight = 2;
 
-RenderFileUploadControl::RenderFileUploadControl(HTMLInputElement& input, PassRef<RenderStyle> style)
+RenderFileUploadControl::RenderFileUploadControl(HTMLInputElement& input, Ref<RenderStyle>&& style)
     : RenderBlockFlow(input, WTF::move(style))
     , m_canReceiveDroppedFiles(input.canReceiveDroppedFiles())
 {
@@ -70,7 +70,7 @@ RenderFileUploadControl::~RenderFileUploadControl()
 
 HTMLInputElement& RenderFileUploadControl::inputElement() const
 {
-    return toHTMLInputElement(nodeForNonAnonymous());
+    return downcast<HTMLInputElement>(nodeForNonAnonymous());
 }
 
 void RenderFileUploadControl::updateFromElement()
@@ -132,8 +132,8 @@ void RenderFileUploadControl::paintObject(PaintInfo& paintInfo, const LayoutPoin
 
     if (paintInfo.phase == PaintPhaseForeground) {
         const String& displayedFilename = fileTextValue();
-        const Font& font = style().font();
-        TextRun textRun = constructTextRun(this, font, displayedFilename, style(), TextRun::AllowTrailingExpansion, RespectDirection | RespectDirectionOverride);
+        const FontCascade& font = style().fontCascade();
+        TextRun textRun = constructTextRun(this, font, displayedFilename, style(), AllowTrailingExpansion, RespectDirection | RespectDirectionOverride);
         textRun.disableRoundingHacks();
 
 #if PLATFORM(IOS)
@@ -158,7 +158,7 @@ void RenderFileUploadControl::paintObject(PaintInfo& paintInfo, const LayoutPoin
         LayoutUnit textY = 0;
         // We want to match the button's baseline
         // FIXME: Make this work with transforms.
-        if (RenderButton* buttonRenderer = toRenderButton(button->renderer()))
+        if (RenderButton* buttonRenderer = downcast<RenderButton>(button->renderer()))
             textY = paintOffset.y() + borderTop() + paddingTop() + buttonRenderer->baselinePosition(AlphabeticBaseline, true, HorizontalLine, PositionOnContainingLine);
         else
             textY = baselinePosition(AlphabeticBaseline, true, HorizontalLine, PositionOnContainingLine);
@@ -178,7 +178,7 @@ void RenderFileUploadControl::paintObject(PaintInfo& paintInfo, const LayoutPoin
                 iconX = contentLeft + contentWidth() - buttonWidth - afterButtonSpacing - iconWidth;
 
 #if PLATFORM(IOS)
-            if (RenderButton* buttonRenderer = toRenderButton(button->renderer())) {
+            if (RenderButton* buttonRenderer = downcast<RenderButton>(button->renderer())) {
                 // Draw the file icon and decorations.
                 IntRect iconRect(iconX, iconY, iconWidth, iconHeight);
                 RenderTheme::FileUploadDecorations decorationsType = inputElement().files()->length() == 1 ? RenderTheme::SingleFile : RenderTheme::MultipleFiles;
@@ -186,7 +186,7 @@ void RenderFileUploadControl::paintObject(PaintInfo& paintInfo, const LayoutPoin
             }
 #else
             // Draw the file icon
-            inputElement().icon()->paint(paintInfo.context, IntRect(roundToInt(iconX), roundToInt(iconY), iconWidth, iconHeight));
+            inputElement().icon()->paint(*paintInfo.context, IntRect(roundToInt(iconX), roundToInt(iconY), iconWidth, iconHeight));
 #endif
         }
     }
@@ -201,13 +201,13 @@ void RenderFileUploadControl::computeIntrinsicLogicalWidths(LayoutUnit& minLogic
     // (using "0" as the nominal character).
     const UChar character = '0';
     const String characterAsString = String(&character, 1);
-    const Font& font = style().font();
+    const FontCascade& font = style().fontCascade();
     // FIXME: Remove the need for this const_cast by making constructTextRun take a const RenderObject*.
     RenderFileUploadControl* renderer = const_cast<RenderFileUploadControl*>(this);
-    float minDefaultLabelWidth = defaultWidthNumChars * font.width(constructTextRun(renderer, font, characterAsString, style(), TextRun::AllowTrailingExpansion));
+    float minDefaultLabelWidth = defaultWidthNumChars * font.width(constructTextRun(renderer, font, characterAsString, style(), AllowTrailingExpansion));
 
     const String label = theme().fileListDefaultLabel(inputElement().multiple());
-    float defaultLabelWidth = font.width(constructTextRun(renderer, font, label, style(), TextRun::AllowTrailingExpansion));
+    float defaultLabelWidth = font.width(constructTextRun(renderer, font, label, style(), AllowTrailingExpansion));
     if (HTMLInputElement* button = uploadButton())
         if (RenderObject* buttonRenderer = button->renderer())
             defaultLabelWidth += buttonRenderer->maxPreferredLogicalWidth() + afterButtonSpacing;
@@ -255,7 +255,7 @@ HTMLInputElement* RenderFileUploadControl::uploadButton() const
 {
     ASSERT(inputElement().shadowRoot());
     Node* buttonNode = inputElement().shadowRoot()->firstChild();
-    return buttonNode && buttonNode->isHTMLElement() && isHTMLInputElement(buttonNode) ? toHTMLInputElement(buttonNode) : 0;
+    return is<HTMLInputElement>(buttonNode) ? downcast<HTMLInputElement>(buttonNode) : nullptr;
 }
 
 String RenderFileUploadControl::buttonValue()
@@ -271,9 +271,9 @@ String RenderFileUploadControl::fileTextValue() const
     ASSERT(inputElement().files());
 #if PLATFORM(IOS)
     if (inputElement().files()->length())
-        return StringTruncator::rightTruncate(inputElement().displayString(), maxFilenameWidth(), style().font(), StringTruncator::EnableRoundingHacks);
+        return StringTruncator::rightTruncate(inputElement().displayString(), maxFilenameWidth(), style().fontCascade(), StringTruncator::EnableRoundingHacks);
 #endif
-    return theme().fileListNameForWidth(inputElement().files(), style().font(), maxFilenameWidth(), inputElement().multiple());
+    return theme().fileListNameForWidth(inputElement().files(), style().fontCascade(), maxFilenameWidth(), inputElement().multiple());
 }
     
 } // namespace WebCore

@@ -27,10 +27,9 @@
 #define CDMSessionAVFoundationObjC_h
 
 #include "CDMSession.h"
-#include <wtf/PassOwnPtr.h>
 #include <wtf/RetainPtr.h>
 
-#if ENABLE(ENCRYPTED_MEDIA_V2) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
+#if ENABLE(ENCRYPTED_MEDIA_V2)
 
 OBJC_CLASS AVAssetResourceLoadingRequest;
 

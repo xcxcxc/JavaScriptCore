@@ -217,7 +217,7 @@ DEFINE_DEBUG_ONLY_GLOBAL(WTF::RefCountedLeakCounter, netscapePluginInstanceProxy
 NetscapePluginInstanceProxy::NetscapePluginInstanceProxy(NetscapePluginHostProxy* pluginHostProxy, WebHostedNetscapePluginView *pluginView, bool fullFramePlugin)
     : m_pluginHostProxy(pluginHostProxy)
     , m_pluginView(pluginView)
-    , m_requestTimer(this, &NetscapePluginInstanceProxy::requestTimerFired)
+    , m_requestTimer(*this, &NetscapePluginInstanceProxy::requestTimerFired)
     , m_currentURLRequestID(0)
     , m_renderContextID(0)
     , m_rendererType(UseSoftwareRenderer)
@@ -735,7 +735,7 @@ void NetscapePluginInstanceProxy::evaluateJavaScript(PluginRequest* pluginReques
     }
 }
 
-void NetscapePluginInstanceProxy::requestTimerFired(Timer<NetscapePluginInstanceProxy>*)
+void NetscapePluginInstanceProxy::requestTimerFired()
 {
     ASSERT(!m_pluginRequests.isEmpty());
     ASSERT(m_pluginView);
@@ -1231,7 +1231,7 @@ bool NetscapePluginInstanceProxy::enumerate(uint32_t objectID, data_t& resultDat
     JSLockHolder lock(exec);
  
     PropertyNameArray propertyNames(exec);
-    object->methodTable()->getPropertyNames(object, exec, propertyNames, ExcludeDontEnumProperties);
+    object->methodTable()->getPropertyNames(object, exec, propertyNames, EnumerationMode());
 
     RetainPtr<NSMutableArray*> array = adoptNS([[NSMutableArray alloc] init]);
     for (unsigned i = 0; i < propertyNames.size(); i++) {

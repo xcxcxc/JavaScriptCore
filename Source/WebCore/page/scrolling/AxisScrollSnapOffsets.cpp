@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,8 +26,10 @@
 #include "config.h"
 #include "AxisScrollSnapOffsets.h"
 
+#include "ElementChildIterator.h"
 #include "HTMLCollection.h"
 #include "HTMLElement.h"
+#include "Length.h"
 #include "RenderBox.h"
 #include "ScrollableArea.h"
 #include "StyleScrollSnapPoints.h"
@@ -38,16 +40,16 @@ namespace WebCore {
 
 static void appendChildSnapOffsets(HTMLElement& parent, bool shouldAddHorizontalChildOffsets, Vector<LayoutUnit>& horizontalSnapOffsetSubsequence, bool shouldAddVerticalChildOffsets, Vector<LayoutUnit>& verticalSnapOffsetSubsequence)
 {
-    Element* child = parent.children()->collectionBegin();
     // FIXME: Instead of traversing all children, register children with snap coordinates before appending to snapOffsetSubsequence.
-    while (child) {
-        if (RenderBox* box = child->renderBox()) {
+    for (auto& child : childrenOfType<Element>(parent)) {
+        if (RenderBox* box = child.renderBox()) {
             LayoutUnit viewWidth = box->width();
             LayoutUnit viewHeight = box->height();
 #if PLATFORM(IOS)
-            // FIXME: Investigate why using localToContainerPoint gives the wrong offsets for iOS mainframe. Also, these offsets won't take transforms into account (make sure to test this!)
-            float left = child->offsetLeft();
-            float top = child->offsetTop();
+            // FIXME: Dangerous to call offsetLeft and offsetTop because they call updateLayoutIgnorePendingStylesheets, which can invalidate the RenderBox pointer we are holding.
+            // FIXME: Investigate why using localToContainerPoint gives the wrong offsets for iOS main frame. Also, these offsets won't take transforms into account (make sure to test this!).
+            float left = child.offsetLeft();
+            float top = child.offsetTop();
 #else
             // FIXME: Check that localToContainerPoint works with CSS rotations.
             FloatPoint position = box->localToContainerPoint(FloatPoint(), parent.renderBox());
@@ -64,46 +66,66 @@ static void appendChildSnapOffsets(HTMLElement& parent, bool shouldAddHorizontal
                     verticalSnapOffsetSubsequence.append(lastPotentialSnapPositionY);
             }
         }
-        child = child->nextElementSibling();
     }
 }
 
+static LayoutUnit destinationOffsetForViewSize(ScrollEventAxis axis, const LengthSize& destination, LayoutUnit viewSize)
+{
+    const Length& dimension = (axis == ScrollEventAxis::Horizontal) ? destination.width() : destination.height();
+    return valueForLength(dimension, viewSize);
+}
+    
 static void updateFromStyle(Vector<LayoutUnit>& snapOffsets, const RenderStyle& style, ScrollEventAxis axis, LayoutUnit viewSize, LayoutUnit scrollSize, Vector<LayoutUnit>& snapOffsetSubsequence)
 {
     std::sort(snapOffsetSubsequence.begin(), snapOffsetSubsequence.end());
-    if (!snapOffsetSubsequence.size())
+    if (snapOffsetSubsequence.isEmpty())
         snapOffsetSubsequence.append(0);
 
-    bool isHorizontalAxis = axis == ScrollEventAxis::Horizontal;
-    auto& points = isHorizontalAxis ? style.scrollSnapPointsX() : style.scrollSnapPointsY();
-    auto& destination = style.scrollSnapDestination();
-    bool hasRepeat = points.hasRepeat;
-    LayoutUnit repeatOffset = valueForLength(points.repeatOffset, viewSize);
-    LayoutUnit destinationOffset = valueForLength(isHorizontalAxis ? destination.width() : destination.height(), viewSize);
+    // Always put a snap point on the zero offset.
+    snapOffsets.append(0);
+
+    auto* points = (axis == ScrollEventAxis::Horizontal) ? style.scrollSnapPointsX() : style.scrollSnapPointsY();
+    bool hasRepeat = points ? points->hasRepeat : false;
+    LayoutUnit repeatOffset = points ? valueForLength(points->repeatOffset, viewSize) : LayoutUnit();
+    LayoutUnit destinationOffset = destinationOffsetForViewSize(axis, style.scrollSnapDestination(), viewSize);
     LayoutUnit curSnapPositionShift = 0;
     LayoutUnit maxScrollOffset = scrollSize - viewSize;
     LayoutUnit lastSnapPosition = curSnapPositionShift;
-    snapOffsets.append(0);
     do {
         for (auto& snapPosition : snapOffsetSubsequence) {
             LayoutUnit potentialSnapPosition = curSnapPositionShift + snapPosition - destinationOffset;
-            if (potentialSnapPosition <= 0)
+            if (potentialSnapPosition < 0)
                 continue;
 
             if (potentialSnapPosition >= maxScrollOffset)
                 break;
 
-            snapOffsets.append(potentialSnapPosition);
+            // Don't add another zero offset value.
+            if (potentialSnapPosition)
+                snapOffsets.append(potentialSnapPosition);
+
             lastSnapPosition = potentialSnapPosition + destinationOffset;
         }
         curSnapPositionShift = lastSnapPosition + repeatOffset;
     } while (hasRepeat && curSnapPositionShift < maxScrollOffset);
+
     // Always put a snap point on the maximum scroll offset.
     // Not a part of the spec, but necessary to prevent unreachable content when snapping.
     if (snapOffsets.last() != maxScrollOffset)
         snapOffsets.append(maxScrollOffset);
 }
 
+static bool styleUsesElements(ScrollEventAxis axis, const RenderStyle& style)
+{
+    const ScrollSnapPoints* scrollSnapPoints = (axis == ScrollEventAxis::Horizontal) ? style.scrollSnapPointsX() : style.scrollSnapPointsY();
+    if (scrollSnapPoints)
+        return scrollSnapPoints->usesElements;
+
+    const Length& destination = (axis == ScrollEventAxis::Horizontal) ? style.scrollSnapDestination().width() : style.scrollSnapDestination().height();
+
+    return !destination.isUndefined();
+}
+    
 void updateSnapOffsetsForScrollableArea(ScrollableArea& scrollableArea, HTMLElement& scrollingElement, const RenderBox& scrollingElementBox, const RenderStyle& scrollingElementStyle)
 {
     if (scrollingElementStyle.scrollSnapType() == ScrollSnapType::None) {
@@ -130,19 +152,22 @@ void updateSnapOffsetsForScrollableArea(ScrollableArea& scrollableArea, HTMLElem
     Vector<LayoutUnit> horizontalSnapOffsetSubsequence;
     Vector<LayoutUnit> verticalSnapOffsetSubsequence;
 
-    if (scrollingElementStyle.scrollSnapPointsX().usesElements || scrollingElementStyle.scrollSnapPointsY().usesElements) {
-        bool shouldAddHorizontalChildOffsets = scrollingElementStyle.scrollSnapPointsX().usesElements && canComputeHorizontalOffsets;
-        bool shouldAddVerticalChildOffsets = scrollingElementStyle.scrollSnapPointsY().usesElements && canComputeVerticalOffsets;
+    bool scrollSnapPointsXUsesElements = styleUsesElements(ScrollEventAxis::Horizontal, scrollingElementStyle);
+    bool scrollSnapPointsYUsesElements = styleUsesElements(ScrollEventAxis::Vertical , scrollingElementStyle);
+
+    if (scrollSnapPointsXUsesElements || scrollSnapPointsYUsesElements) {
+        bool shouldAddHorizontalChildOffsets = scrollSnapPointsXUsesElements && canComputeHorizontalOffsets;
+        bool shouldAddVerticalChildOffsets = scrollSnapPointsYUsesElements && canComputeVerticalOffsets;
         appendChildSnapOffsets(scrollingElement, shouldAddHorizontalChildOffsets, horizontalSnapOffsetSubsequence, shouldAddVerticalChildOffsets, verticalSnapOffsetSubsequence);
     }
 
-    if (!scrollingElementStyle.scrollSnapPointsX().usesElements && canComputeHorizontalOffsets) {
-        for (auto& snapLength : scrollingElementStyle.scrollSnapPointsX().offsets)
+    if (scrollingElementStyle.scrollSnapPointsX() && !scrollSnapPointsXUsesElements && canComputeHorizontalOffsets) {
+        for (auto& snapLength : scrollingElementStyle.scrollSnapPointsX()->offsets)
             horizontalSnapOffsetSubsequence.append(valueForLength(snapLength, viewWidth));
     }
 
-    if (!scrollingElementStyle.scrollSnapPointsY().usesElements && canComputeVerticalOffsets) {
-        for (auto& snapLength : scrollingElementStyle.scrollSnapPointsY().offsets)
+    if (scrollingElementStyle.scrollSnapPointsY() && !scrollSnapPointsYUsesElements && canComputeVerticalOffsets) {
+        for (auto& snapLength : scrollingElementStyle.scrollSnapPointsY()->offsets)
             verticalSnapOffsetSubsequence.append(valueForLength(snapLength, viewHeight));
     }
 

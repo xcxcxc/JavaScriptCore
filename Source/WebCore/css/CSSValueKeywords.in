@@ -45,6 +45,9 @@ small-caption
 -apple-system-short-footnote
 -apple-system-short-caption1
 -apple-system-tall-body
+-apple-system-title1
+-apple-system-title2
+-apple-system-title3
 #endif
 
 // This has to go after the -apple-system versions.
@@ -162,6 +165,7 @@ buttonface
 buttonhighlight
 buttonshadow
 buttontext
+activebuttontext
 captiontext
 graytext
 highlight
@@ -382,8 +386,8 @@ alias
 progress
 no-drop
 not-allowed
--webkit-zoom-in
--webkit-zoom-out
+zoom-in
+zoom-out
 e-resize
 ne-resize
 nw-resize
@@ -404,6 +408,8 @@ help
 all-scroll
 -webkit-grab
 -webkit-grabbing
+-webkit-zoom-in
+-webkit-zoom-out
 // none
 //
 // CSS_PROP_CURSOR_VISIBILITY:
@@ -452,6 +458,7 @@ hand
 hide
 higher
 invert
+inverted
 -webkit-isolate
 -webkit-isolate-override
 -webkit-plaintext
@@ -536,6 +543,7 @@ space-around
 // flex-end
 // center
 // baseline
+last-baseline
 // stretch
 
 // CSS_PROP_JUSTIFY_CONTENT
@@ -545,10 +553,11 @@ space-around
 // space-between
 // space-around
 
-// CSS_PROP_JUSTIFY_SELF
+// CSS_PROP_JUSTIFY_ITEMS / CSS_PROP_JUSTIFY_SELF
 // auto
 // stretch
 // baseline
+// last-baseline
 // center
 // start
 // end
@@ -560,6 +569,7 @@ self-end
 // right
 true
 safe
+legacy
 
 // CSS_PROP_FLEX_FLOW
 row
@@ -689,28 +699,30 @@ default-button
 inner-spin-button
 listbox
 listitem
+media-controls-background
+media-controls-dark-bar-background
+media-controls-fullscreen-background
+media-controls-light-bar-background
+media-current-time-display
 media-enter-fullscreen-button
 media-exit-fullscreen-button
 media-fullscreen-volume-slider
 media-fullscreen-volume-slider-thumb
 media-mute-button
-media-play-button
 media-overlay-play-button
+media-play-button
+media-return-to-realtime-button
+media-rewind-button
 media-seek-back-button
 media-seek-forward-button
-media-rewind-button
-media-return-to-realtime-button
-media-toggle-closed-captions-button
 media-slider
 media-sliderthumb
-media-volume-slider-container
-media-volume-slider
-media-volume-sliderthumb
-media-volume-slider-mute-button
-media-controls-background
-media-controls-fullscreen-background
-media-current-time-display
 media-time-remaining-display
+media-toggle-closed-captions-button
+media-volume-slider
+media-volume-slider-container
+media-volume-slider-mute-button
+media-volume-sliderthumb
 menulist
 menulist-button
 menulist-text
@@ -738,7 +750,9 @@ rating-level-indicator
 image-controls-button
 #endif
 textarea
-// An appearance value that should not be accepted by the parser:
+#if defined(ENABLE_ATTACHMENT_ELEMENT) && ENABLE_ATTACHMENT_ELEMENT
+attachment
+#endif
 caps-lock-indicator
 
 //
@@ -1023,6 +1037,11 @@ alphabetic
 coarse
 fine
 
+// (hover:) media feature.
+// none
+hover
+on-demand
+
 // blend modes
 // normal
 multiply
@@ -1040,6 +1059,8 @@ hue
 saturation
 color
 luminosity
+// plus-darker
+// plus-lighter
 
 // isolation
 // auto
@@ -1072,7 +1093,6 @@ span
 
 // -webkit-grid-auto-flow
 dense
-stack
 
 #if defined(ENABLE_CSS3_TEXT) && ENABLE_CSS3_TEXT
 // text-indent
@@ -1086,3 +1106,12 @@ balance
 // -webkit-aspect-ratio
 from-dimensions
 from-intrinsic
+
+#if defined(ENABLE_CSS_TRAILING_WORD) && ENABLE_CSS_TRAILING_WORD
+// -apple-trailing-word
+-webkit-partially-balanced
+#endif
+
+// font-synthesis
+weight
+style

@@ -33,6 +33,8 @@
 #import "DOMCSSCharsetRule.h"
 #import "DOMCSSFontFaceRule.h"
 #import "DOMCSSImportRule.h"
+#import "DOMCSSKeyframeRule.h"
+#import "DOMCSSKeyframesRule.h"
 #import "DOMCSSMediaRule.h"
 #import "DOMCSSPageRule.h"
 #import "DOMCSSPrimitiveValue.h"
@@ -40,17 +42,13 @@
 #import "DOMCSSStyleDeclaration.h"
 #import "DOMCSSStyleRule.h"
 #import "DOMCSSStyleSheet.h"
-#if ENABLE(CSS3_CONDITIONAL_RULES)
 #import "DOMCSSSupportsRule.h"
-#endif
 #import "DOMCSSUnknownRule.h"
 #import "DOMCSSValueInternal.h"
 #import "DOMCSSValueList.h"
 #import "DOMInternal.h"
 #import "DOMStyleSheetInternal.h"
 #import "DOMWebKitCSSFilterValue.h"
-#import "DOMWebKitCSSKeyframeRule.h"
-#import "DOMWebKitCSSKeyframesRule.h"
 #import "DOMWebKitCSSTransformValue.h"
 
 #if ENABLE(CSS_REGIONS)
@@ -91,14 +89,12 @@ Class kitClass(WebCore::CSSRule* impl)
             return [DOMCSSFontFaceRule class];
         case DOM_PAGE_RULE:
             return [DOMCSSPageRule class];
-        case DOM_WEBKIT_KEYFRAMES_RULE:
-            return [DOMWebKitCSSKeyframesRule class];
-        case DOM_WEBKIT_KEYFRAME_RULE:
-            return [DOMWebKitCSSKeyframeRule class];
-#if ENABLE(CSS3_CONDITIONAL_RULES)
+        case DOM_KEYFRAMES_RULE:
+            return [DOMCSSKeyframesRule class];
+        case DOM_KEYFRAME_RULE:
+            return [DOMCSSKeyframeRule class];
         case DOM_SUPPORTS_RULE:
             return [DOMCSSSupportsRule class];
-#endif
 #if ENABLE(CSS_DEVICE_ADAPTATION)
         case DOM_WEBKIT_VIEWPORT_RULE:
             return [DOMWebKitCSSViewportRule class];

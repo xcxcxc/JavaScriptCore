@@ -28,6 +28,7 @@
 #define SQLiteDatabase_h
 
 #include <functional>
+#include <sqlite3.h>
 #include <wtf/Threading.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/WTFString.h>
@@ -43,15 +44,6 @@ namespace WebCore {
 class DatabaseAuthorizer;
 class SQLiteStatement;
 class SQLiteTransaction;
-
-extern const int SQLResultDone;
-extern const int SQLResultError;
-extern const int SQLResultOk;
-extern const int SQLResultRow;
-extern const int SQLResultSchema;
-extern const int SQLResultFull;
-extern const int SQLResultInterrupt;
-extern const int SQLResultConstraint;
 
 class SQLiteDatabase {
     WTF_MAKE_NONCOPYABLE(SQLiteDatabase);

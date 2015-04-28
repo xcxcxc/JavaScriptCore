@@ -80,8 +80,8 @@ enum PageSizeType {
 // actually uses one of these properties.
 class StyleRareNonInheritedData : public RefCounted<StyleRareNonInheritedData> {
 public:
-    static PassRef<StyleRareNonInheritedData> create() { return adoptRef(*new StyleRareNonInheritedData); }
-    PassRef<StyleRareNonInheritedData> copy() const;
+    static Ref<StyleRareNonInheritedData> create() { return adoptRef(*new StyleRareNonInheritedData); }
+    Ref<StyleRareNonInheritedData> copy() const;
     ~StyleRareNonInheritedData();
     
     bool operator==(const StyleRareNonInheritedData&) const;
@@ -94,7 +94,12 @@ public:
     bool animationDataEquivalent(const StyleRareNonInheritedData&) const;
     bool transitionDataEquivalent(const StyleRareNonInheritedData&) const;
     bool hasFilters() const;
+#if ENABLE(FILTERS_LEVEL_2)
+    bool hasBackdropFilters() const;
+#endif
     bool hasOpacity() const { return opacity < 1; }
+
+    bool hasAnimationsOrTransitions() const { return m_animations || m_transitions; }
 
     float opacity;
 
@@ -119,6 +124,9 @@ public:
     DataRef<StyleMultiColData> m_multiCol; //  CSS3 multicol properties
     DataRef<StyleTransformData> m_transform; // Transform properties (rotate, scale, skew, etc.)
     DataRef<StyleFilterData> m_filter; // Filter operations (url, sepia, blur, etc.)
+#if ENABLE(FILTERS_LEVEL_2)
+    DataRef<StyleFilterData> m_backdropFilter; // Filter operations (url, sepia, blur, etc.)
+#endif
 
 #if ENABLE(CSS_GRID_LAYOUT)
     DataRef<StyleGridData> m_grid;
@@ -182,12 +190,18 @@ public:
     unsigned m_backfaceVisibility : 1; // EBackfaceVisibility
 
     unsigned m_alignContent : 3; // EAlignContent
-    unsigned m_alignItems : 3; // EAlignItems
-    unsigned m_alignSelf : 3; // EAlignItems
+    unsigned m_alignItems : 4; // ItemPosition
+    unsigned m_alignItemsOverflowAlignment : 2; // OverflowAlignment
+    unsigned m_alignSelf : 4; // ItemPosition
+    unsigned m_alignSelfOverflowAlignment : 2; // OverflowAlignment
     unsigned m_justifyContent : 3; // EJustifyContent
 
-    unsigned m_justifySelf : 4; // EJustifySelf
-    unsigned m_justifySelfOverflowAlignment : 2; // EJustifySelfOverflowAlignment
+    unsigned m_justifyItems : 4; // ItemPosition
+    unsigned m_justifyItemsOverflowAlignment : 2; // OverflowAlignment
+    unsigned m_justifyItemsPositionType: 1; // Whether or not alignment uses the 'legacy' keyword.
+
+    unsigned m_justifySelf : 4; // ItemPosition
+    unsigned m_justifySelfOverflowAlignment : 2; // OverflowAlignment
 
     unsigned userDrag : 2; // EUserDrag
     unsigned textOverflow : 1; // Whether or not lines that spill out should be truncated with "..."

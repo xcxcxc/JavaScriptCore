@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Apple Inc. All rights reserved.
+ * Copyright (C) 2013, 2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,7 +32,7 @@ namespace JSC {
 
 template<typename Functor>
 void computeUsesForBytecodeOffset(
-    CodeBlock* codeBlock, unsigned bytecodeOffset, Functor& functor)
+    CodeBlock* codeBlock, unsigned bytecodeOffset, const Functor& functor)
 {
     Interpreter* interpreter = codeBlock->vm()->interpreter;
     Instruction* instructionsBegin = codeBlock->instructions().begin();
@@ -44,30 +44,24 @@ void computeUsesForBytecodeOffset(
     case op_new_array_buffer:
     case op_throw_static_error:
     case op_debug:
-    case op_resolve_scope:
-    case op_pop_scope:
     case op_jneq_ptr:
-    case op_new_func_exp:
     case op_loop_hint:
     case op_jmp:
     case op_new_object:
-    case op_init_lazy_reg:
-    case op_get_callee:
     case op_enter:
     case op_catch:
-    case op_touch_entry:
+    case op_profile_control_flow:
+    case op_create_direct_arguments:
+    case op_create_out_of_band_arguments:
         return;
-    case op_new_func:
-    case op_new_captured_func:
-    case op_create_lexical_environment: 
-    case op_create_arguments:
+    case op_get_scope:
     case op_to_this:
-    case op_tear_off_lexical_environment:
+    case op_check_tdz:
+    case op_pop_scope:
     case op_profile_will_call:
     case op_profile_did_call:
     case op_profile_type:
     case op_throw:
-    case op_push_with_scope:
     case op_end:
     case op_ret:
     case op_jtrue:
@@ -79,7 +73,6 @@ void computeUsesForBytecodeOffset(
         functor(codeBlock, instruction, opcodeID, instruction[1].u.operand);
         return;
     }
-    case op_ret_object_or_this:
     case op_jlesseq:
     case op_jgreater:
     case op_jgreatereq:
@@ -106,7 +99,8 @@ void computeUsesForBytecodeOffset(
     case op_put_by_id_transition_normal_out_of_line:
     case op_put_by_id_out_of_line:
     case op_put_by_id:
-    case op_put_to_scope: {
+    case op_put_to_scope:
+    case op_put_to_arguments: {
         functor(codeBlock, instruction, opcodeID, instruction[1].u.operand);
         functor(codeBlock, instruction, opcodeID, instruction[3].u.operand);
         return;
@@ -117,44 +111,51 @@ void computeUsesForBytecodeOffset(
         functor(codeBlock, instruction, opcodeID, instruction[4].u.operand);
         return;
     }
+    case op_create_lexical_environment:
+    case op_get_property_enumerator:
     case op_get_enumerable_length:
+    case op_new_func_exp:
     case op_to_index_string:
     case op_init_global_const_nop:
     case op_init_global_const:
     case op_push_name_scope:
+    case op_push_with_scope:
+    case op_resolve_scope:
     case op_get_from_scope:
     case op_to_primitive:
     case op_get_by_id:
     case op_get_by_id_out_of_line:
     case op_get_array_length:
-    case op_get_arguments_length:
     case op_typeof:
     case op_is_undefined:
     case op_is_boolean:
     case op_is_number:
     case op_is_string:
     case op_is_object:
+    case op_is_object_or_null:
     case op_is_function:
     case op_to_number:
+    case op_to_string:
     case op_negate:
     case op_neq_null:
     case op_eq_null:
     case op_not:
     case op_mov:
-    case op_captured_mov:
     case op_new_array_with_size:
     case op_create_this:
     case op_del_by_id:
-    case op_unsigned: {
+    case op_unsigned:
+    case op_new_func:
+    case op_create_scoped_arguments:
+    case op_get_from_arguments: {
         functor(codeBlock, instruction, opcodeID, instruction[2].u.operand);
         return;
     }
     case op_has_generic_property:
-    case op_get_structure_property_enumerator:
     case op_has_indexed_property:
-    case op_next_enumerator_pname:
+    case op_enumerator_structure_pname:
+    case op_enumerator_generic_pname:
     case op_get_by_val:
-    case op_get_argument_by_val:
     case op_in:
     case op_instanceof:
     case op_check_has_instance:
@@ -183,7 +184,6 @@ void computeUsesForBytecodeOffset(
         return;
     }
     case op_has_structure_property:
-    case op_get_generic_property_enumerator:
     case op_construct_varargs:
     case op_call_varargs: {
         functor(codeBlock, instruction, opcodeID, instruction[2].u.operand);
@@ -219,14 +219,8 @@ void computeUsesForBytecodeOffset(
         int argCount = instruction[3].u.operand;
         int registerOffset = -instruction[4].u.operand;
         int lastArg = registerOffset + CallFrame::thisArgumentOffset();
-        for (int i = opcodeID == op_construct ? 1 : 0; i < argCount; i++)
+        for (int i = 0; i < argCount; i++)
             functor(codeBlock, instruction, opcodeID, lastArg + i);
-        return;
-    }
-    case op_tear_off_arguments: {
-        functor(codeBlock, instruction, opcodeID, instruction[1].u.operand);
-        functor(codeBlock, instruction, opcodeID, unmodifiedArgumentsRegister(VirtualRegister(instruction[1].u.operand)).offset());
-        functor(codeBlock, instruction, opcodeID, instruction[2].u.operand);
         return;
     }
     default:
@@ -236,7 +230,7 @@ void computeUsesForBytecodeOffset(
 }
 
 template<typename Functor>
-void computeDefsForBytecodeOffset(CodeBlock* codeBlock, unsigned bytecodeOffset, Functor& functor)
+void computeDefsForBytecodeOffset(CodeBlock* codeBlock, unsigned bytecodeOffset, const Functor& functor)
 {
     Interpreter* interpreter = codeBlock->vm()->interpreter;
     Instruction* instructionsBegin = codeBlock->instructions().begin();
@@ -246,10 +240,7 @@ void computeDefsForBytecodeOffset(CodeBlock* codeBlock, unsigned bytecodeOffset,
     // These don't define anything.
     case op_init_global_const:
     case op_init_global_const_nop:
-    case op_push_name_scope:
-    case op_push_with_scope:
     case op_put_to_scope:
-    case op_pop_scope:
     case op_end:
     case op_profile_will_call:
     case op_profile_did_call:
@@ -257,7 +248,6 @@ void computeDefsForBytecodeOffset(CodeBlock* codeBlock, unsigned bytecodeOffset,
     case op_throw_static_error:
     case op_debug:
     case op_ret:
-    case op_ret_object_or_this:
     case op_jmp:
     case op_jtrue:
     case op_jfalse:
@@ -286,26 +276,28 @@ void computeDefsForBytecodeOffset(CodeBlock* codeBlock, unsigned bytecodeOffset,
     case op_put_by_val:
     case op_put_by_val_direct:
     case op_put_by_index:
-    case op_tear_off_arguments:
     case op_profile_type:
-    case op_touch_entry:
+    case op_profile_control_flow:
+    case op_put_to_arguments:
 #define LLINT_HELPER_OPCODES(opcode, length) case opcode:
         FOR_EACH_LLINT_OPCODE_EXTENSION(LLINT_HELPER_OPCODES);
 #undef LLINT_HELPER_OPCODES
         return;
     // These all have a single destination for the first argument.
     case op_to_index_string:
-    case op_get_generic_property_enumerator:
     case op_get_enumerable_length:
     case op_has_indexed_property:
     case op_has_structure_property:
     case op_has_generic_property:
     case op_get_direct_pname:
-    case op_get_structure_property_enumerator:
-    case op_next_enumerator_pname:
+    case op_get_property_enumerator:
+    case op_enumerator_structure_pname:
+    case op_enumerator_generic_pname:
+    case op_pop_scope:
+    case op_push_name_scope:
+    case op_push_with_scope:
     case op_resolve_scope:
     case op_strcat:
-    case op_tear_off_lexical_environment:
     case op_to_primitive:
     case op_catch:
     case op_create_this:
@@ -314,7 +306,6 @@ void computeDefsForBytecodeOffset(CodeBlock* codeBlock, unsigned bytecodeOffset,
     case op_new_array_with_size:
     case op_new_regexp:
     case op_new_func:
-    case op_new_captured_func:
     case op_new_func_exp:
     case op_call_varargs:
     case op_construct_varargs:
@@ -328,17 +319,17 @@ void computeDefsForBytecodeOffset(CodeBlock* codeBlock, unsigned bytecodeOffset,
     case op_check_has_instance:
     case op_instanceof:
     case op_get_by_val:
-    case op_get_argument_by_val:
-    case op_get_arguments_length:
     case op_typeof:
     case op_is_undefined:
     case op_is_boolean:
     case op_is_number:
     case op_is_string:
     case op_is_object:
+    case op_is_object_or_null:
     case op_is_function:
     case op_in:
     case op_to_number:
+    case op_to_string:
     case op_negate:
     case op_add:
     case op_mul:
@@ -365,17 +356,23 @@ void computeDefsForBytecodeOffset(CodeBlock* codeBlock, unsigned bytecodeOffset,
     case op_eq_null:
     case op_not:
     case op_mov:
-    case op_captured_mov:
     case op_new_object:
     case op_to_this:
-    case op_get_callee:
-    case op_init_lazy_reg:
-    case op_create_lexical_environment:
-    case op_create_arguments:
+    case op_check_tdz:
+    case op_get_scope:
+    case op_create_direct_arguments:
+    case op_create_scoped_arguments:
+    case op_create_out_of_band_arguments:
     case op_del_by_id:
     case op_del_by_val:
-    case op_unsigned: {
+    case op_unsigned:
+    case op_get_from_arguments: {
         functor(codeBlock, instruction, opcodeID, instruction[1].u.operand);
+        return;
+    }
+    case op_create_lexical_environment: {
+        functor(codeBlock, instruction, opcodeID, instruction[1].u.operand);
+        functor(codeBlock, instruction, opcodeID, instruction[2].u.operand);
         return;
     }
     case op_enter: {

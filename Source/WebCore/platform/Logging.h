@@ -42,11 +42,14 @@ namespace WebCore {
     M(Archives) \
     M(BackForward) \
     M(Compositing) \
+    M(ContentFiltering) \
+    M(DOMTimers) \
     M(Editing) \
     M(Events) \
     M(FTP) \
     M(FileAPI) \
     M(Frames) \
+    M(Fullscreen) \
     M(Gamepad) \
     M(History) \
     M(IconDatabase) \
@@ -66,6 +69,7 @@ namespace WebCore {
     M(RemoteInspector) \
     M(ResourceLoading) \
     M(SQLDatabase) \
+    M(Services) \
     M(SpellingAndGrammar) \
     M(StorageAPI) \
     M(Threading) \
@@ -74,7 +78,7 @@ namespace WebCore {
     M(WebReplay) \
 
 #define DECLARE_LOG_CHANNEL(name) \
-    extern WTFLogChannel JOIN_LOG_CHANNEL_WITH_PREFIX(LOG_CHANNEL_PREFIX, name);
+    WEBCORE_EXPORT extern WTFLogChannel JOIN_LOG_CHANNEL_WITH_PREFIX(LOG_CHANNEL_PREFIX, name);
 
 WEBCORE_LOG_CHANNELS(DECLARE_LOG_CHANNEL)
 

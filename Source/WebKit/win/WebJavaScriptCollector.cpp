@@ -23,7 +23,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#include "config.h"
 #include "WebKitDLL.h"
 #include "WebJavaScriptCollector.h"
 
@@ -42,13 +41,13 @@ WebJavaScriptCollector::WebJavaScriptCollector()
 : m_refCount(0)
 {
     gClassCount++;
-    gClassNameCount.add("WebJavaScriptCollector");
+    gClassNameCount().add("WebJavaScriptCollector");
 }
 
 WebJavaScriptCollector::~WebJavaScriptCollector()
 {
     gClassCount--;
-    gClassNameCount.remove("WebJavaScriptCollector");
+    gClassNameCount().remove("WebJavaScriptCollector");
 }
 
 WebJavaScriptCollector* WebJavaScriptCollector::createInstance()

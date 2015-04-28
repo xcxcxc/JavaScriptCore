@@ -36,7 +36,7 @@ namespace WebCore {
 
 typedef void (*TransferType)(unsigned char*, const ComponentTransferFunction&);
 
-FEComponentTransfer::FEComponentTransfer(Filter* filter, const ComponentTransferFunction& redFunc, const ComponentTransferFunction& greenFunc,
+FEComponentTransfer::FEComponentTransfer(Filter& filter, const ComponentTransferFunction& redFunc, const ComponentTransferFunction& greenFunc,
                                          const ComponentTransferFunction& blueFunc, const ComponentTransferFunction& alphaFunc)
     : FilterEffect(filter)
     , m_redFunc(redFunc)
@@ -46,10 +46,10 @@ FEComponentTransfer::FEComponentTransfer(Filter* filter, const ComponentTransfer
 {
 }
 
-PassRefPtr<FEComponentTransfer> FEComponentTransfer::create(Filter* filter, const ComponentTransferFunction& redFunc, 
+Ref<FEComponentTransfer> FEComponentTransfer::create(Filter& filter, const ComponentTransferFunction& redFunc,
     const ComponentTransferFunction& greenFunc, const ComponentTransferFunction& blueFunc, const ComponentTransferFunction& alphaFunc)
 {
-    return adoptRef(new FEComponentTransfer(filter, redFunc, greenFunc, blueFunc, alphaFunc));
+    return adoptRef(*new FEComponentTransfer(filter, redFunc, greenFunc, blueFunc, alphaFunc));
 }
 
 ComponentTransferFunction FEComponentTransfer::redFunction() const

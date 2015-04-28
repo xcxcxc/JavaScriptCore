@@ -44,13 +44,16 @@
     z-index: 500;
 }
 
+body.window-inactive .find-banner {
+    border-bottom-color: rgb(219, 219, 219);
+}
+
 .find-banner.showing {
     top: 0;
     transition-timing-function: ease-out;
 }
 
-.find-banner.no-find-banner-transition,
-.supports-find-banner.no-find-banner-transition {
+.no-find-banner-transition:matches(.find-banner, .supports-find-banner) {
     transition-duration: 0 !important;
 }
 

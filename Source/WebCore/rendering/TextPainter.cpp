@@ -31,7 +31,7 @@
 
 namespace WebCore {
 
-TextPainter::TextPainter(GraphicsContext& context, bool paintSelectedTextOnly, bool paintSelectedTextSeparately, const Font& font,
+TextPainter::TextPainter(GraphicsContext& context, bool paintSelectedTextOnly, bool paintSelectedTextSeparately, const FontCascade& font,
     int startPositionInTextRun, int endPositionInTextBoxString, int length, const AtomicString& emphasisMark, RenderCombineText* combinedText, TextRun& textRun,
     FloatRect& boxRect, FloatPoint& textOrigin, int emphasisMarkOffset, const ShadowData* textShadow, const ShadowData* selectionShadow,
     bool textBoxIsHorizontal, TextPaintStyle& textPaintStyle, TextPaintStyle& selectionPaintStyle)
@@ -56,7 +56,7 @@ TextPainter::TextPainter(GraphicsContext& context, bool paintSelectedTextOnly, b
 {
 }
 
-static void drawTextOrEmphasisMarks(GraphicsContext& context, const Font& font, const TextRun& textRun, const AtomicString& emphasisMark,
+static void drawTextOrEmphasisMarks(GraphicsContext& context, const FontCascade& font, const TextRun& textRun, const AtomicString& emphasisMark,
     int emphasisMarkOffset, const FloatPoint& point, const int from, const int to)
 {
     if (emphasisMark.isEmpty())
@@ -65,34 +65,74 @@ static void drawTextOrEmphasisMarks(GraphicsContext& context, const Font& font, 
         context.drawEmphasisMarks(font, textRun, emphasisMark, point + IntSize(0, emphasisMarkOffset), from, to);
 }
 
-static bool isEmptyShadow(const ShadowData* shadow)
+ShadowApplier::ShadowApplier(GraphicsContext& context, const ShadowData* shadow, const FloatRect& textRect, bool lastShadowIterationShouldDrawText, bool opaque, FontOrientation orientation)
+    : m_context(context)
+    , m_shadow(shadow)
+    , m_onlyDrawsShadow(!isLastShadowIteration() || !lastShadowIterationShouldDrawText)
+    , m_avoidDrawingShadow(shadowIsCompletelyCoveredByText(opaque))
+    , m_nothingToDraw(shadow && m_avoidDrawingShadow && m_onlyDrawsShadow)
+    , m_didSaveContext(false)
 {
-    if (!shadow)
-        return false;
-    return shadow->location() == IntPoint() && !shadow->radius();
+    if (!shadow || m_nothingToDraw) {
+        m_shadow = nullptr;
+        return;
+    }
+
+    int shadowX = orientation == Horizontal ? shadow->x() : shadow->y();
+    int shadowY = orientation == Horizontal ? shadow->y() : -shadow->x();
+    FloatSize shadowOffset(shadowX, shadowY);
+    int shadowRadius = shadow->radius();
+    const Color& shadowColor = shadow->color();
+
+    // When drawing shadows, we usually clip the context to the area the shadow will reside, and then
+    // draw the text itself outside the clipped area (so only the shadow shows up). However, we can
+    // often draw the *last* shadow and the text itself in a single call.
+    if (m_onlyDrawsShadow) {
+        FloatRect shadowRect(textRect);
+        shadowRect.inflate(shadow->paintingExtent());
+        shadowRect.move(shadowOffset);
+        context.save();
+        context.clip(shadowRect);
+
+        m_didSaveContext = true;
+        m_extraOffset = FloatSize(0, 2 * textRect.height() + std::max(0.0f, shadowOffset.height()) + shadowRadius);
+        shadowOffset -= m_extraOffset;
+    }
+
+    if (!m_avoidDrawingShadow)
+        context.setShadow(shadowOffset, shadowRadius, shadowColor, context.fillColorSpace());
 }
 
-static void paintTextWithShadows(GraphicsContext& context, const Font& font, const TextRun& textRun, const AtomicString& emphasisMark,
+ShadowApplier::~ShadowApplier()
+{
+    if (!m_shadow)
+        return;
+    if (m_onlyDrawsShadow)
+        m_context.restore();
+    else if (!m_avoidDrawingShadow)
+        m_context.clearShadow();
+}
+
+static void paintTextWithShadows(GraphicsContext& context, const FontCascade& font, const TextRun& textRun, const AtomicString& emphasisMark,
     int emphasisMarkOffset, int startOffset, int endOffset, int truncationPoint, const FloatPoint& textOrigin, const FloatRect& boxRect,
     const ShadowData* shadow, bool stroked, bool horizontal)
 {
     Color fillColor = context.fillColor();
     ColorSpace fillColorSpace = context.fillColorSpace();
     bool opaque = !fillColor.hasAlpha();
+    bool lastShadowIterationShouldDrawText = !stroked && opaque;
     if (!opaque)
         context.setFillColor(Color::black, fillColorSpace);
 
     do {
-        if (isEmptyShadow(shadow)) {
+        ShadowApplier shadowApplier(context, shadow, boxRect, lastShadowIterationShouldDrawText, opaque, horizontal ? Horizontal : Vertical);
+        if (shadowApplier.nothingToDraw()) {
             shadow = shadow->next();
             continue;
         }
 
-        IntSize extraOffset;
-        bool didSaveContext = false;
-        if (shadow)
-            extraOffset = roundedIntSize(InlineTextBox::applyShadowToGraphicsContext(context, shadow, boxRect, stroked, opaque, horizontal, didSaveContext));
-        else if (!opaque)
+        IntSize extraOffset = roundedIntSize(shadowApplier.extraOffset());
+        if (!shadow && !opaque)
             context.setFillColor(fillColor, fillColorSpace);
 
         if (startOffset <= endOffset)
@@ -107,13 +147,8 @@ static void paintTextWithShadows(GraphicsContext& context, const Font& font, con
         if (!shadow)
             break;
 
-        if (didSaveContext)
-            context.restore();
-        else
-            context.clearShadow();
-
         shadow = shadow->next();
-    } while (shadow || stroked || !opaque);
+    } while (shadow || !lastShadowIterationShouldDrawText);
 }
 
 void TextPainter::paintText()

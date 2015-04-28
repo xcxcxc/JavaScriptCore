@@ -76,6 +76,8 @@ AccessibilityUIElement::~AccessibilityUIElement()
 - (void)accessibilitySetPostedNotificationCallback:(AXPostedNotificationCallback)function withContext:(void*)context;
 - (CGFloat)_accessibilityMinValue;
 - (CGFloat)_accessibilityMaxValue;
+- (void)_accessibilitySetValue:(NSString *)value;
+- (void)_accessibilityActivate;
 @end
 
 @interface NSObject (WebAccessibilityObjectWrapperPrivate)
@@ -191,8 +193,10 @@ void AccessibilityUIElement::getChildren(Vector<AccessibilityUIElement>& element
 
 void AccessibilityUIElement::getChildrenWithRange(Vector<AccessibilityUIElement>& elementVector, unsigned location, unsigned length)
 {
-    NSUInteger childCount = [m_element accessibilityElementCount];
-    for (NSUInteger k = location; k < childCount && k < (location+length); ++k)
+    // accessibilityElementAtIndex: takes an NSInteger.
+    // We want to preserve that in order to test against invalid indexes being input.
+    NSInteger maxValue = static_cast<NSInteger>(location + length);
+    for (NSInteger k = location; k < maxValue; ++k)
         elementVector.append(AccessibilityUIElement([m_element accessibilityElementAtIndex:k]));    
 }
 
@@ -524,6 +528,11 @@ double AccessibilityUIElement::maxValue()
     return [m_element _accessibilityMaxValue];
 }
 
+void AccessibilityUIElement::setValue(JSStringRef valueText)
+{
+    [m_element _accessibilitySetValue:[NSString stringWithJSStringRef:valueText]];
+}
+
 JSStringRef AccessibilityUIElement::valueDescription()
 {
     return JSStringCreateWithCharacters(0, 0);
@@ -696,6 +705,7 @@ void AccessibilityUIElement::showMenu()
 
 void AccessibilityUIElement::press()
 {
+    [m_element _accessibilityActivate];
 }
 
 JSStringRef AccessibilityUIElement::accessibilityValue() const

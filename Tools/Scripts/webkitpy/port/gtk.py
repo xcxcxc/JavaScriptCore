@@ -32,6 +32,7 @@ import subprocess
 import uuid
 import logging
 
+from webkitpy.common.system import path
 from webkitpy.common.memoized import memoized
 from webkitpy.layout_tests.models.test_configuration import TestConfiguration
 from webkitpy.port.base import Port
@@ -80,6 +81,9 @@ class GtkPort(Port):
             return XorgDriver
         return XvfbDriver
 
+    def supports_per_test_timeout(self):
+        return True
+
     def default_timeout_ms(self):
         # Starting an application under Valgrind takes a lot longer than normal
         # so increase the timeout (empirically 10x is enough to avoid timeouts).
@@ -110,7 +114,7 @@ class GtkPort(Port):
         environment['GSETTINGS_BACKEND'] = 'memory'
         environment['LIBOVERLAY_SCROLLBAR'] = '0'
         environment['TEST_RUNNER_INJECTED_BUNDLE_FILENAME'] = self._build_path('lib', 'libTestRunnerInjectedBundle.so')
-        environment['TEST_RUNNER_TEST_PLUGIN_PATH'] = self._build_path('lib')
+        environment['TEST_RUNNER_TEST_PLUGIN_PATH'] = self._build_path('lib', 'plugins')
         self._copy_value_from_environ_if_set(environment, 'WEBKIT_OUTPUTDIR')
         if self._driver_class() == XvfbDriver and self._should_use_jhbuild():
             llvmpipe_libgl_path = self.host.executive.run_command(self._jhbuild_wrapper + ['printenv', 'LLVMPIPE_LIBGL_PATH'],
@@ -195,18 +199,14 @@ class GtkPort(Port):
             return
         self._leakdetector.parse_and_print_leaks_detail(leaks_files)
 
-    # FIXME: We should find a way to share this implmentation with Gtk,
-    # or teach run-launcher how to call run-safari and move this down to Port.
     def show_results_html_file(self, results_filename):
-        run_launcher_args = ["file://%s" % results_filename]
-        # FIXME: old-run-webkit-tests also added ["-graphicssystem", "raster", "-style", "windows"]
-        # FIXME: old-run-webkit-tests converted results_filename path for cygwin.
-        self._run_script("run-launcher", run_launcher_args)
+        self._run_script("run-minibrowser", [path.abspath_to_uri(self.host.platform, results_filename)])
 
     def check_sys_deps(self, needs_http):
         return super(GtkPort, self).check_sys_deps(needs_http) and self._driver_class().check_driver(self)
 
     def _get_crash_log(self, name, pid, stdout, stderr, newer_than):
+        name = "WebKitWebProcess" if name == "WebProcess" else name
         return GDBCrashLogGenerator(name, pid, newer_than, self._filesystem, self._path_to_driver).generate_crash_log(stdout, stderr)
 
     def test_expectations_file_position(self):

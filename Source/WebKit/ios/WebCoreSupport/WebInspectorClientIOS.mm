@@ -46,7 +46,6 @@ WebInspectorClient::WebInspectorClient(WebView *webView)
     : m_webView(webView)
     , m_highlighter(adoptNS([[WebNodeHighlighter alloc] initWithInspectedWebView:webView]))
     , m_frontendPage(0)
-    , m_frontendClient(0)
 {
 }
 
@@ -139,6 +138,7 @@ void WebInspectorFrontendClient::setAttachedWindowWidth(unsigned) { }
 void WebInspectorFrontendClient::setToolbarHeight(unsigned) { }
 void WebInspectorFrontendClient::inspectedURLChanged(const String&) { }
 void WebInspectorFrontendClient::updateWindowTitle() const { }
+void WebInspectorFrontendClient::save(const String&, const String&, bool, bool) { }
 void WebInspectorFrontendClient::append(const String&, const String&) { }
 
 #endif // PLATFORM(IOS)

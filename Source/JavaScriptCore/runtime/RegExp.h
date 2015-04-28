@@ -42,13 +42,13 @@ class VM;
 
 JS_EXPORT_PRIVATE RegExpFlags regExpFlags(const String&);
 
-class RegExp : public JSCell {
+class RegExp final : public JSCell {
 public:
     typedef JSCell Base;
+    static const unsigned StructureFlags = Base::StructureFlags | StructureIsImmortal;
 
     JS_EXPORT_PRIVATE static RegExp* create(VM&, const String& pattern, RegExpFlags);
     static const bool needsDestruction = true;
-    static const bool hasImmortalStructure = true;
     static void destroy(JSCell*);
 
     bool global() const { return m_flags & FlagGlobal; }
@@ -85,8 +85,6 @@ public:
     RegExpKey key() { return RegExpKey(m_flags, m_patternString); }
 
 protected:
-    static const unsigned StructureFlags = StructureIsImmortal;
-
     void finishCreation(VM&);
 
 private:
@@ -130,7 +128,7 @@ private:
 #if ENABLE(YARR_JIT)
     Yarr::YarrCodeBlock m_regExpJITCode;
 #endif
-    OwnPtr<Yarr::BytecodePattern> m_regExpBytecode;
+    std::unique_ptr<Yarr::BytecodePattern> m_regExpBytecode;
 };
 
 } // namespace JSC

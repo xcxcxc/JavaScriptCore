@@ -29,6 +29,7 @@
 
 #include "CDM.h"
 
+#include "CDMPrivateClearKey.h"
 #include "CDMPrivateMediaPlayer.h"
 #include "CDMSession.h"
 #include "MediaKeyError.h"
@@ -65,11 +66,16 @@ static Vector<CDMFactory*>& installedCDMFactories()
     if (!queriedCDMs) {
         queriedCDMs = true;
 
+        cdms.get().append(new CDMFactory([](CDM* cdm) { return std::make_unique<CDMPrivateClearKey>(cdm); },
+            CDMPrivateClearKey::supportsKeySystem, CDMPrivateClearKey::supportsKeySystemAndMimeType));
+
         // FIXME: initialize specific UA CDMs. http://webkit.org/b/109318, http://webkit.org/b/109320
-        cdms.get().append(new CDMFactory(CDMPrivateMediaPlayer::create, CDMPrivateMediaPlayer::supportsKeySystem, CDMPrivateMediaPlayer::supportsKeySystemAndMimeType));
+        cdms.get().append(new CDMFactory([](CDM* cdm) { return std::make_unique<CDMPrivateMediaPlayer>(cdm); },
+            CDMPrivateMediaPlayer::supportsKeySystem, CDMPrivateMediaPlayer::supportsKeySystemAndMimeType));
 
 #if PLATFORM(MAC) && ENABLE(MEDIA_SOURCE)
-        cdms.get().append(new CDMFactory(CDMPrivateMediaSourceAVFObjC::create, CDMPrivateMediaSourceAVFObjC::supportsKeySystem, CDMPrivateMediaSourceAVFObjC::supportsKeySystemAndMimeType));
+        cdms.get().append(new CDMFactory([](CDM* cdm) { return std::make_unique<CDMPrivateMediaSourceAVFObjC>(cdm); },
+            CDMPrivateMediaSourceAVFObjC::supportsKeySystem, CDMPrivateMediaSourceAVFObjC::supportsKeySystemAndMimeType));
 #endif
     }
 

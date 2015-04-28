@@ -49,11 +49,25 @@ Trac.prototype = {
     constructor: Trac,
     __proto__: BaseObject.prototype,
 
+    get oldestRecordedRevisionNumber()
+    {
+        if (!this.recordedCommits.length)
+            return undefined;
+        return this.recordedCommits[0].revisionNumber;
+    },
+
     get latestRecordedRevisionNumber()
     {
         if (!this.recordedCommits.length)
             return undefined;
         return this.recordedCommits[this.recordedCommits.length - 1].revisionNumber;
+    },
+
+    commitsOnBranch: function(branch, filter)
+    {
+        return this.recordedCommits.filter(function(commit) {
+            return (!commit.containsBranchLocation || commit.branch === branch) && filter(commit);
+        });
     },
 
     revisionURL: function(revision)
@@ -63,14 +77,6 @@ Trac.prototype = {
 
     _xmlTimelineURL: function(fromDate, toDate)
     {
-        if (typeof fromDate === "undefined") {
-            fromDate = new Date();
-            toDate = new Date(fromDate);
-            // By default, get at least one full day of changesets, as the current day may have only begun.
-            fromDate.setDate(fromDate.getDate() - 1);
-        } else if (typeof toDate === "undefined")
-            toDate = fromDate;
-
         console.assert(fromDate <= toDate);
 
         var fromDay = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
@@ -102,7 +108,7 @@ Trac.prototype = {
         parsedDescription.innerHTML = description;
 
         var location = "";
-        if (parsedDescription.firstChild.className === "changes") {
+        if (parsedDescription.firstChild && parsedDescription.firstChild.className === "changes") {
             // We can extract branch information when trac.ini contains "changeset_show_files=location".
             location = doc.evaluate("//strong", parsedDescription.firstChild, null, XPathResult.STRING_TYPE).stringValue
             parsedDescription.removeChild(parsedDescription.firstChild);
@@ -110,7 +116,7 @@ Trac.prototype = {
 
         // The feed contains a <title>, but it's not parsed as well as what we are getting from description.
         var title = document.createElement("div");
-        var node = parsedDescription.firstChild.firstChild;
+        var node = parsedDescription.firstChild ? parsedDescription.firstChild.firstChild : null;
         while (node && node.tagName != "BR") {
             title.appendChild(node.cloneNode(true));
             node = node.nextSibling;
@@ -141,9 +147,12 @@ Trac.prototype = {
                 result.release = location.substr(9, location.indexOf("/", 9) - 9);
             else if (location.startsWith("trunk/"))
                 result.branch = "trunk";
+            else if (location.startsWith("submissions/"))
+                ; // These changes are never relevant to the dashboard.
             else {
+                // result.containsBranchLocation remains true, because this commit does
+                // not match any explicitly specified branches.
                 console.assert(false);
-                result.containsBranchLocation = false;
             }
         }
 
@@ -193,14 +202,52 @@ Trac.prototype = {
         }.bind(this), this._needsAuthentication ? { withCredentials: true } : {});
     },
 
-    update: function()
+    _update: function()
     {
-        loadXML(this._xmlTimelineURL(), this._loaded.bind(this), this._needsAuthentication ? { withCredentials: true } : {});
+        var fromDate = new Date(this._latestLoadedDate);
+        var toDate = new Date();
+
+        this._latestLoadedDate = toDate;
+
+        loadXML(this._xmlTimelineURL(fromDate, toDate), this._loaded.bind(this), this._needsAuthentication ? { withCredentials: true } : {});
     },
 
     startPeriodicUpdates: function()
     {
-        this.update();
-        this.updateTimer = setInterval(this.update.bind(this), Trac.UpdateInterval);
-    }
+        console.assert(!this._oldestHistoricalDate);
+
+        var today = new Date();
+
+        this._oldestHistoricalDate = today;
+        this._latestLoadedDate = today;
+
+        this._loadingHistoricalData = true;
+        loadXML(this._xmlTimelineURL(today, today), function(dataDocument) {
+            this._loadingHistoricalData = false;
+            this._loaded(dataDocument);
+        }.bind(this), this._needsAuthentication ? { withCredentials: true } : {});
+
+        this.updateTimer = setInterval(this._update.bind(this), Trac.UpdateInterval);
+    },
+
+    loadMoreHistoricalData: function()
+    {
+        console.assert(this._oldestHistoricalDate);
+
+        if (this._loadingHistoricalData)
+            return;
+
+        // Load one more day of historical data.
+        var fromDate = new Date(this._oldestHistoricalDate);
+        fromDate.setDate(fromDate.getDate() - 1);
+        var toDate = new Date(fromDate);
+
+        this._oldestHistoricalDate = fromDate;
+
+        this._loadingHistoricalData = true;
+        loadXML(this._xmlTimelineURL(fromDate, toDate), function(dataDocument) {
+            this._loadingHistoricalData = false;
+            this._loaded(dataDocument);
+        }.bind(this), this._needsAuthentication ? { withCredentials: true } : {});
+    },
 };

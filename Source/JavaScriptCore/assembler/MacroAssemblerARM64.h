@@ -34,7 +34,7 @@
 
 namespace JSC {
 
-class MacroAssemblerARM64 : public AbstractMacroAssembler<ARM64Assembler> {
+class MacroAssemblerARM64 : public AbstractMacroAssembler<ARM64Assembler, MacroAssemblerARM64> {
     static const RegisterID dataTempRegister = ARM64Registers::ip0;
     static const RegisterID memoryTempRegister = ARM64Registers::ip1;
     static const ARM64Registers::FPRegisterID fpTempRegister = ARM64Registers::q31;
@@ -689,6 +689,26 @@ public:
         urshift32(dest, imm, dest);
     }
 
+    void urshift64(RegisterID src, RegisterID shiftAmount, RegisterID dest)
+    {
+        m_assembler.lsr<64>(dest, src, shiftAmount);
+    }
+    
+    void urshift64(RegisterID src, TrustedImm32 imm, RegisterID dest)
+    {
+        m_assembler.lsr<64>(dest, src, imm.m_value & 0x1f);
+    }
+
+    void urshift64(RegisterID shiftAmount, RegisterID dest)
+    {
+        urshift64(dest, shiftAmount, dest);
+    }
+    
+    void urshift64(TrustedImm32 imm, RegisterID dest)
+    {
+        urshift64(dest, imm, dest);
+    }
+
     void xor32(RegisterID src, RegisterID dest)
     {
         xor32(dest, src, dest);
@@ -898,16 +918,16 @@ public:
         load16(address, dest);
     }
 
-    void load16Signed(BaseIndex address, RegisterID dest)
+    void load16SignedExtendTo32(BaseIndex address, RegisterID dest)
     {
         if (!address.offset && (!address.scale || address.scale == 1)) {
-            m_assembler.ldrsh<64>(dest, address.base, address.index, ARM64Assembler::UXTX, address.scale);
+            m_assembler.ldrsh<32>(dest, address.base, address.index, ARM64Assembler::UXTX, address.scale);
             return;
         }
 
         signExtend32ToPtr(TrustedImm32(address.offset), getCachedMemoryTempRegisterIDAndInvalidate());
         m_assembler.add<64>(memoryTempRegister, memoryTempRegister, address.index, ARM64Assembler::UXTX, address.scale);
-        m_assembler.ldrsh<64>(dest, address.base, memoryTempRegister);
+        m_assembler.ldrsh<32>(dest, address.base, memoryTempRegister);
     }
 
     void load8(ImplicitAddress address, RegisterID dest)
@@ -939,16 +959,16 @@ public:
             m_cachedMemoryTempRegister.invalidate();
     }
 
-    void load8Signed(BaseIndex address, RegisterID dest)
+    void load8SignedExtendTo32(BaseIndex address, RegisterID dest)
     {
         if (!address.offset && !address.scale) {
-            m_assembler.ldrsb<64>(dest, address.base, address.index, ARM64Assembler::UXTX, address.scale);
+            m_assembler.ldrsb<32>(dest, address.base, address.index, ARM64Assembler::UXTX, address.scale);
             return;
         }
 
         signExtend32ToPtr(TrustedImm32(address.offset), getCachedMemoryTempRegisterIDAndInvalidate());
         m_assembler.add<64>(memoryTempRegister, memoryTempRegister, address.index, ARM64Assembler::UXTX, address.scale);
-        m_assembler.ldrsb<64>(dest, address.base, memoryTempRegister);
+        m_assembler.ldrsb<32>(dest, address.base, memoryTempRegister);
     }
 
     void store64(RegisterID src, ImplicitAddress address)

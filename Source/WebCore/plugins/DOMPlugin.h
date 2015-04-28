@@ -23,9 +23,8 @@
 #include "FrameDestructionObserver.h"
 #include "DOMMimeType.h"
 #include "ScriptWrappable.h"
-#include <wtf/Forward.h>
-#include <wtf/RefPtr.h>
 #include <wtf/RefCounted.h>
+#include <wtf/RefPtr.h>
 
 namespace WebCore {
 
@@ -34,7 +33,7 @@ class PluginData;
 
 class DOMPlugin : public ScriptWrappable, public RefCounted<DOMPlugin>, public FrameDestructionObserver {
 public:
-    static PassRefPtr<DOMPlugin> create(PluginData* pluginData, Frame* frame, unsigned index) { return adoptRef(new DOMPlugin(pluginData, frame, index)); }
+    static Ref<DOMPlugin> create(PluginData* pluginData, Frame* frame, unsigned index) { return adoptRef(*new DOMPlugin(pluginData, frame, index)); }
     ~DOMPlugin();
 
     String name() const;
@@ -48,7 +47,7 @@ public:
     PassRefPtr<DOMMimeType> namedItem(const AtomicString& propertyName);
 
 private:
-    const PluginInfo& pluginInfo() const { return m_pluginData->plugins()[m_index]; }
+    PluginInfo pluginInfo() const;
 
     DOMPlugin(PluginData*, Frame*, unsigned index);
     RefPtr<PluginData> m_pluginData;
@@ -57,4 +56,4 @@ private:
 
 } // namespace WebCore
 
-#endif // Plugin_h
+#endif // DOMPlugin_h

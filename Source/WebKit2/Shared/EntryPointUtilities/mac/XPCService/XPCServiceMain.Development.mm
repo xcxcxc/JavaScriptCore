@@ -32,14 +32,13 @@
 #import <stdio.h>
 #import <stdlib.h>
 #import <wtf/OSObjectPtr.h>
-#import <xpc/xpc.h>
+#import <wtf/spi/darwin/XPCSPI.h>
 
 namespace WebKit {
 
 struct ReexecInfo {
     bool executableHeap;
     char** environment;
-    cpu_type_t cpuType;
 };
 
 static NO_RETURN void reexec(ReexecInfo *info)
@@ -64,9 +63,6 @@ static NO_RETURN void reexec(ReexecInfo *info)
         flags |= allowExecutableHeapFlag;
 
     posix_spawnattr_setflags(&attr, flags);
-
-    size_t outCount = 0;
-    posix_spawnattr_setbinpref_np(&attr, 1, &info->cpuType, &outCount);
 
     char path[4 * PATH_MAX];
     uint32_t pathLength = sizeof(path);
@@ -107,7 +103,6 @@ static void XPCServiceEventHandler(xpc_connection_t peer)
                 ReexecInfo *info = static_cast<ReexecInfo *>(malloc(sizeof(ReexecInfo)));
 
                 info->executableHeap = xpc_dictionary_get_bool(event, "executable-heap");
-                info->cpuType = (cpu_type_t)xpc_dictionary_get_uint64(event, "architecture");
 
                 xpc_object_t environmentArray = xpc_dictionary_get_value(event, "environment");
                 size_t numberOfEnvironmentVariables = xpc_array_get_count(environmentArray);
@@ -164,6 +159,14 @@ using namespace WebKit;
 
 int main(int argc, char** argv)
 {
+#if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101000
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    // Workaround for <rdar://problem/20653234>, make XPC transactions work after re-exec.
+    xpc_track_activity();
+#pragma clang diagnostic pop
+#endif
+
     xpc_main(XPCServiceEventHandler);
     return 0;
 }

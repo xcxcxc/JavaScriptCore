@@ -27,14 +27,15 @@
 
 #if WK_API_ENABLED
 
+#import "SameDocumentNavigationType.h"
 #import <wtf/RefPtr.h>
 #import <wtf/RetainPtr.h>
 
 #if PLATFORM(IOS)
+#import "UIKitSPI.h"
 #import "WKContentView.h"
 #import "WKContentViewInteraction.h"
 #import <WebCore/FloatRect.h>
-#import <UIKit/UIScrollView_Private.h>
 #endif
 
 #if PLATFORM(IOS)
@@ -45,9 +46,7 @@
 #define WK_WEB_VIEW_PROTOCOLS
 #endif
 
-namespace WebCore {
-struct Highlight;
-}
+typedef const struct OpaqueWKPage* WKPageRef;
 
 namespace WebKit {
 class ViewSnapshot;
@@ -63,12 +62,13 @@ struct PrintInfo;
     RetainPtr<WKWebViewConfiguration> _configuration;
 
     RefPtr<WebKit::WebPageProxy> _page;
+
+#if PLATFORM(IOS)
+    NSUInteger _activeFocusedStateRetainCount;
+#endif
 }
 
 #if PLATFORM(IOS)
-
-@property (nonatomic, setter=_setUsesMinimalUI:) BOOL _usesMinimalUI;
-
 - (void)_processDidExit;
 
 - (void)_didCommitLoadForMainFrame;
@@ -84,7 +84,7 @@ struct PrintInfo;
 - (BOOL)_scrollToRect:(WebCore::FloatRect)targetRect origin:(WebCore::FloatPoint)origin minimumScrollDistance:(float)minimumScrollDistance;
 - (void)_zoomToFocusRect:(WebCore::FloatRect)focusedElementRect selectionRect:(WebCore::FloatRect)selectionRectInDocumentCoordinates fontSize:(float)fontSize minimumScale:(double)minimumScale maximumScale:(double)maximumScale allowScaling:(BOOL)allowScaling forceScroll:(BOOL)forceScroll;
 - (BOOL)_zoomToRect:(WebCore::FloatRect)targetRect withOrigin:(WebCore::FloatPoint)origin fitEntireRect:(BOOL)fitEntireRect minimumScale:(double)minimumScale maximumScale:(double)maximumScale minimumScrollDistance:(float)minimumScrollDistance;
-- (void)_zoomOutWithOrigin:(WebCore::FloatPoint)origin;
+- (void)_zoomOutWithOrigin:(WebCore::FloatPoint)origin animated:(BOOL)animated;
 
 - (void)_setHasCustomContentView:(BOOL)hasCustomContentView loadedMIMEType:(const WTF::String&)mimeType;
 - (void)_didFinishLoadingDataForCustomContentProviderWithSuggestedFilename:(const WTF::String&)suggestedFilename data:(NSData *)data;
@@ -95,8 +95,21 @@ struct PrintInfo;
 
 - (void)_updateVisibleContentRects;
 
+- (void)_didFinishLoadForMainFrame;
+- (void)_didSameDocumentNavigationForMainFrame:(WebKit::SameDocumentNavigationType)navigationType;
+
+- (BOOL)_isShowingVideoOptimized;
+- (BOOL)_mayAutomaticallyShowVideoOptimized;
+
+- (void)_updateScrollViewBackground;
+
 @property (nonatomic, readonly) UIEdgeInsets _computedContentInset;
+#else
+@property (nonatomic, setter=_setIgnoresNonWheelEvents:) BOOL _ignoresNonWheelEvents;
 #endif
+
+- (WKPageRef)_pageForTesting;
+
 @end
 
 WKWebView* fromWebPageProxy(WebKit::WebPageProxy&);

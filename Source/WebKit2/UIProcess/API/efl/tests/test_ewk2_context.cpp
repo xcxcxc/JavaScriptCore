@@ -66,6 +66,23 @@ protected:
     }
 };
 
+class EWK2ContextTestWithExtension : public EWK2UnitTestBase {
+public:
+    static void messageReceivedCallback(const char* name, const Eina_Value* body, void* userData)
+    {
+        bool* handled = static_cast<bool*>(userData);
+        ASSERT_STREQ("pong", name);
+
+        *handled = true;
+    }
+
+protected:
+    EWK2ContextTestWithExtension()
+    {
+        m_withExtension = true;
+    }
+};
+
 TEST_F(EWK2ContextTest, ewk_context_default_get)
 {
     Ewk_Context* defaultContext = ewk_context_default_get();
@@ -115,12 +132,10 @@ TEST_F(EWK2ContextTest, ewk_context_storage_manager_get)
 
 TEST_F(EWK2ContextTest, ewk_context_url_scheme_register)
 {
-#if ENABLE(CUSTOM_PROTOCOL)
-    ewk_context_url_scheme_register(ewk_view_context_get(webView()), "fooscheme", schemeRequestCallback, 0);
+    ewk_context_url_scheme_register(ewk_view_context_get(webView()), "fooscheme", schemeRequestCallback, nullptr);
     ewk_view_url_set(webView(), "fooscheme:MyPath");
 
     ASSERT_TRUE(waitUntilTrue(finishTest, testTimeoutSeconds));
-#endif
 }
 
 TEST_F(EWK2ContextTest, ewk_context_cache_model)
@@ -195,12 +210,12 @@ TEST_F(EWK2ContextTest, ewk_context_network_process_model)
 
     ASSERT_EQ(webView1WebProcessID, webView2WebProcessID);
 
-    ASSERT_TRUE(toImpl(EWKViewGetWKView(webView1))->page()->process().context().networkProcess() == nullptr);
-    ASSERT_TRUE(toImpl(EWKViewGetWKView(webView2))->page()->process().context().networkProcess() == nullptr);
+    ASSERT_TRUE(toImpl(EWKViewGetWKView(webView1))->page()->process().processPool().networkProcess() == nullptr);
+    ASSERT_TRUE(toImpl(EWKViewGetWKView(webView2))->page()->process().processPool().networkProcess() == nullptr);
 }
 
 
-TEST_F(EWK2ContextTestMultipleProcesses, ewk_context_network_process_model)
+TEST_F(EWK2ContextTestMultipleProcesses, DISABLED_ewk_context_network_process_model)
 {
     Ewk_Context* context = ewk_view_context_get(webView());
 
@@ -215,8 +230,8 @@ TEST_F(EWK2ContextTestMultipleProcesses, ewk_context_network_process_model)
 
     PlatformProcessIdentifier webView1WebProcessID = toImpl(EWKViewGetWKView(webView1))->page()->process().processIdentifier();
     PlatformProcessIdentifier webView2WebProcessID = toImpl(EWKViewGetWKView(webView2))->page()->process().processIdentifier();
-    PlatformProcessIdentifier webView1NetworkProcessID = toImpl(EWKViewGetWKView(webView1))->page()->process().context().networkProcess()->processIdentifier();
-    PlatformProcessIdentifier webView2NetworkProcessID = toImpl(EWKViewGetWKView(webView2))->page()->process().context().networkProcess()->processIdentifier();
+    PlatformProcessIdentifier webView1NetworkProcessID = toImpl(EWKViewGetWKView(webView1))->page()->process().processPool().networkProcess()->processIdentifier();
+    PlatformProcessIdentifier webView2NetworkProcessID = toImpl(EWKViewGetWKView(webView2))->page()->process().processPool().networkProcess()->processIdentifier();
 
     ASSERT_NE(webView1WebProcessID, webView2WebProcessID);
     ASSERT_NE(webView1WebProcessID, webView1NetworkProcessID);
@@ -230,11 +245,22 @@ TEST_F(EWK2ContextTest, ewk_context_new)
     ewk_object_unref(context);
 }
 
-TEST_F(EWK2ContextTest, ewk_context_new_with_injected_bundle_path)
+TEST_F(EWK2ContextTestWithExtension, ewk_context_new_with_extensions_path)
 {
-    Ewk_Context* context = ewk_context_new_with_injected_bundle_path(environment->injectedBundleSample());
-    ASSERT_TRUE(context);
-    ewk_object_unref(context);
+    bool received = false;
+    Ewk_Context* context = ewk_view_context_get(webView());
+
+    ewk_context_message_from_extensions_callback_set(context, messageReceivedCallback, &received);
+
+    ewk_view_url_set(webView(), environment->defaultTestPageUrl());
+    ASSERT_TRUE(waitUntilLoadFinished());
+
+    Eina_Value* body = eina_value_new(EINA_VALUE_TYPE_STRING);
+    eina_value_set(body, "From UIProcess");
+    ewk_context_message_post_to_extensions(context, "ping", body);
+    eina_value_free(body);
+
+    ASSERT_TRUE(waitUntilTrue(received, testTimeoutSeconds));
 }
 
 TEST_F(EWK2ContextTest, ewk_context_additional_plugin_path_set)

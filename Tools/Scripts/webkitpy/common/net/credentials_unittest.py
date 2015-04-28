@@ -28,7 +28,8 @@
 
 import os
 import tempfile
-import unittest2 as unittest
+import unittest
+
 from webkitpy.common.net.credentials import Credentials
 from webkitpy.common.system.executive import Executive
 from webkitpy.common.system.outputcapture import OutputCapture
@@ -109,7 +110,7 @@ password: "SECRETSAUCE"
         # by the test case CredentialsTest._assert_security_call (below).
         outputCapture = OutputCapture()
         outputCapture.capture_output()
-        self.assertIsNone(credentials._run_security_tool())
+        self.assertIsNone(credentials._run_security_tool("find-internet-password"))
         outputCapture.restore_output()
 
     def _assert_security_call(self, username=None):
@@ -117,7 +118,7 @@ password: "SECRETSAUCE"
         credentials = MockedCredentials("example.com", executive=executive_mock)
 
         expected_logs = "Reading Keychain for example.com account and password.  Click \"Allow\" to continue...\n"
-        OutputCapture().assert_outputs(self, credentials._run_security_tool, [username], expected_logs=expected_logs)
+        OutputCapture().assert_outputs(self, credentials._run_security_tool, ["find-internet-password", username], expected_logs=expected_logs)
 
         security_args = ["/usr/bin/security", "find-internet-password", "-g", "-s", "example.com"]
         if username:

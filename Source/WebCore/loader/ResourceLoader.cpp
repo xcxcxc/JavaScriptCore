@@ -31,18 +31,19 @@
 #include "ResourceLoader.h"
 
 #include "ApplicationCacheHost.h"
-#include "AsyncFileStream.h"
 #include "AuthenticationChallenge.h"
+#include "DiagnosticLoggingClient.h"
+#include "DiagnosticLoggingKeys.h"
 #include "DocumentLoader.h"
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
 #include "InspectorInstrumentation.h"
 #include "LoaderStrategy.h"
+#include "MainFrame.h"
 #include "Page.h"
 #include "PlatformStrategies.h"
 #include "ProgressTracker.h"
-#include "ResourceBuffer.h"
 #include "ResourceError.h"
 #include "ResourceHandle.h"
 #include "ResourceLoadScheduler.h"
@@ -50,6 +51,11 @@
 #include "Settings.h"
 #include "SharedBuffer.h"
 #include <wtf/Ref.h>
+
+#if ENABLE(CONTENT_EXTENSIONS)
+#include "ResourceLoadInfo.h"
+#include "UserContentController.h"
+#endif
 
 namespace WebCore {
 
@@ -63,6 +69,9 @@ ResourceLoader::ResourceLoader(Frame* frame, ResourceLoaderOptions options)
     , m_defersLoading(frame->page()->defersLoading())
     , m_options(options)
     , m_isQuickLookResource(false)
+#if ENABLE(CONTENT_EXTENSIONS)
+    , m_resourceType(ResourceType::Invalid)
+#endif
 {
 }
 
@@ -160,6 +169,7 @@ void ResourceLoader::start()
     ASSERT(!m_handle);
     ASSERT(!m_request.isNull());
     ASSERT(m_deferredRequest.isNull());
+    ASSERT(frameLoader());
 
 #if ENABLE(WEB_ARCHIVE) || ENABLE(MHTML)
     if (m_documentLoader->scheduleArchiveLoad(this, m_request))
@@ -174,8 +184,10 @@ void ResourceLoader::start()
         return;
     }
 
-    if (!m_reachedTerminalState)
-        m_handle = ResourceHandle::create(m_frame->loader().networkingContext(), m_request, this, m_defersLoading, m_options.sniffContent() == SniffContent);
+    if (!m_reachedTerminalState) {
+        FrameLoader& loader = m_request.url().protocolIsData() ? dataProtocolFrameLoader() : *frameLoader();
+        m_handle = ResourceHandle::create(loader.networkingContext(), m_request, this, m_defersLoading, m_options.sniffContent() == SniffContent);
+    }
 }
 
 void ResourceLoader::setDefersLoading(bool defers)
@@ -197,6 +209,15 @@ FrameLoader* ResourceLoader::frameLoader() const
     if (!m_frame)
         return 0;
     return &m_frame->loader();
+}
+
+// This function should only be called when frameLoader() is non-null.
+FrameLoader& ResourceLoader::dataProtocolFrameLoader() const
+{
+    FrameLoader* loader = frameLoader();
+    ASSERT(loader);
+    FrameLoader* dataProtocolLoader = loader->client().dataProtocolLoader();
+    return *(dataProtocolLoader ? dataProtocolLoader : loader);
 }
 
 void ResourceLoader::setDataBufferingPolicy(DataBufferingPolicy dataBufferingPolicy)
@@ -222,12 +243,12 @@ void ResourceLoader::addDataOrBuffer(const char* data, unsigned length, SharedBu
         return;
 
     if (dataPayloadType == DataPayloadWholeResource) {
-        m_resourceData = buffer ? ResourceBuffer::adoptSharedBuffer(buffer) : ResourceBuffer::create(data, length);
+        m_resourceData = buffer ? buffer : SharedBuffer::create(data, length);
         return;
     }
         
     if (!m_resourceData)
-        m_resourceData = buffer ? ResourceBuffer::adoptSharedBuffer(buffer) : ResourceBuffer::create(data, length);
+        m_resourceData = buffer ? buffer : SharedBuffer::create(data, length);
     else {
         if (buffer)
             m_resourceData->append(buffer);
@@ -254,18 +275,16 @@ void ResourceLoader::willSendRequest(ResourceRequest& request, const ResourceRes
     Ref<ResourceLoader> protect(*this);
 
     ASSERT(!m_reachedTerminalState);
-    
-#if PLATFORM(IOS)
-    // Ensure an identifier is always set. This ensures that this assetion is not hit:
-    // <rdar://problem/11059794> ASSERTION FAILED: !HashTranslator::equal(KeyTraits::emptyValue(), key) in WebFrameLoaderClient::canAuthenticateAgainstProtectionSpace loading the attached web archive
-    // This is not needed in WebKit2, as it doesn't use m_identifier in WebFrameLoaderClient::canAuthenticateAgainstProtectionSpace
-    if (!m_identifier) {
-        m_identifier = m_frame->page()->progress().createUniqueIdentifier();
-        frameLoader()->notifier().assignIdentifierToInitialRequest(m_identifier, documentLoader(), request);
 
-        // If this ResourceLoader was stopped as a result of assignIdentifierToInitialRequest, bail out
-        if (m_reachedTerminalState)
-            return;
+#if ENABLE(CONTENT_EXTENSIONS)
+    ASSERT(m_resourceType != ResourceType::Invalid);
+
+    if (frameLoader() && frameLoader()->frame().page() && frameLoader()->frame().page()->userContentController() && m_documentLoader)
+        frameLoader()->frame().page()->userContentController()->processContentExtensionRulesForLoad(request, m_resourceType, *m_documentLoader);
+
+    if (request.isNull()) {
+        didFail(cannotShowURLError());
+        return;
     }
 #endif
 
@@ -280,12 +299,16 @@ void ResourceLoader::willSendRequest(ResourceRequest& request, const ResourceRes
         if (createdResourceIdentifier)
             frameLoader()->notifier().assignIdentifierToInitialRequest(m_identifier, documentLoader(), request);
 
+#if PLATFORM(IOS)
+        // If this ResourceLoader was stopped as a result of assignIdentifierToInitialRequest, bail out
+        if (m_reachedTerminalState)
+            return;
+#endif
+
         frameLoader()->notifier().willSendRequest(this, request, redirectResponse);
     }
-#if ENABLE(INSPECTOR)
     else
         InspectorInstrumentation::willSendRequest(m_frame.get(), m_identifier, m_frame->loader().documentLoader(), request, redirectResponse);
-#endif
 
     if (!redirectResponse.isNull())
         platformStrategies()->loaderStrategy()->resourceLoadScheduler()->crossOriginRedirectReceived(this, request.url());
@@ -296,8 +319,37 @@ void ResourceLoader::willSendRequest(ResourceRequest& request, const ResourceRes
         frameLoader()->client().dispatchDidReceiveServerRedirectForProvisionalLoad();
 }
 
+void ResourceLoader::willSendRequest(ResourceRequest&& request, const ResourceResponse& redirectResponse, std::function<void(ResourceRequest&)> callback)
+{
+    willSendRequest(request, redirectResponse);
+    callback(request);
+}
+
 void ResourceLoader::didSendData(unsigned long long, unsigned long long)
 {
+}
+
+static void logResourceResponseSource(Frame* frame, ResourceResponse::Source source)
+{
+    if (!frame)
+        return;
+
+    String sourceKey;
+    switch (source) {
+    case ResourceResponse::Source::Network:
+        sourceKey = DiagnosticLoggingKeys::networkKey();
+        break;
+    case ResourceResponse::Source::DiskCache:
+        sourceKey = DiagnosticLoggingKeys::diskCacheKey();
+        break;
+    case ResourceResponse::Source::DiskCacheAfterValidation:
+        sourceKey = DiagnosticLoggingKeys::diskCacheAfterValidationKey();
+        break;
+    case ResourceResponse::Source::Unknown:
+        return;
+    }
+
+    frame->mainFrame().diagnosticLoggingClient().logDiagnosticMessageWithValue(DiagnosticLoggingKeys::resourceResponseKey(), DiagnosticLoggingKeys::sourceKey(), sourceKey, ShouldSample::Yes);
 }
 
 void ResourceLoader::didReceiveResponse(const ResourceResponse& r)
@@ -307,6 +359,8 @@ void ResourceLoader::didReceiveResponse(const ResourceResponse& r)
     // Protect this in this delegate method since the additional processing can do
     // anything including possibly derefing this; one example of this is Radar 3266216.
     Ref<ResourceLoader> protect(*this);
+
+    logResourceResponseSource(m_frame.get(), r.source());
 
     m_response = r;
 
@@ -495,16 +549,12 @@ void ResourceLoader::didReceiveResponse(ResourceHandle*, const ResourceResponse&
 
 void ResourceLoader::didReceiveData(ResourceHandle*, const char* data, unsigned length, int encodedDataLength)
 {
-    InspectorInstrumentationCookie cookie = InspectorInstrumentation::willReceiveResourceData(m_frame.get(), identifier(), encodedDataLength);
     didReceiveData(data, length, encodedDataLength, DataPayloadBytes);
-    InspectorInstrumentation::didReceiveResourceData(cookie);
 }
 
 void ResourceLoader::didReceiveBuffer(ResourceHandle*, PassRefPtr<SharedBuffer> buffer, int encodedDataLength)
 {
-    InspectorInstrumentationCookie cookie = InspectorInstrumentation::willReceiveResourceData(m_frame.get(), identifier(), encodedDataLength);
     didReceiveBuffer(buffer, encodedDataLength, DataPayloadBytes);
-    InspectorInstrumentation::didReceiveResourceData(cookie);
 }
 
 void ResourceLoader::didFinishLoading(ResourceHandle*, double finishTime)

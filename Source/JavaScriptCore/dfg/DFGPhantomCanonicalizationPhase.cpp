@@ -38,7 +38,6 @@
 namespace JSC { namespace DFG {
 
 static const NodeFlags NodeNeedsPhantom = NodeMiscFlag1;
-static const NodeFlags NodeNeedsHardPhantom = NodeMiscFlag2;
 
 class PhantomCanonicalizationPhase : public Phase {
 public:
@@ -51,19 +50,8 @@ public:
     {
         ASSERT(m_graph.m_form == SSA);
         
-        m_graph.clearFlagsOnAllNodes(NodeNeedsPhantom | NodeNeedsHardPhantom | NodeRelevantToOSR);
-        
-        for (BlockIndex blockIndex = m_graph.numBlocks(); blockIndex--;) {
-            BasicBlock* block = m_graph.block(blockIndex);
-            if (!block)
-                continue;
-            
-            for (unsigned i = block->size(); i--;) {
-                Node* node = block->at(i);
-                if (node->op() == MovHint)
-                    node->child1()->mergeFlags(NodeRelevantToOSR);
-            }
-        }
+        m_graph.clearFlagsOnAllNodes(NodeNeedsPhantom | NodeRelevantToOSR);
+        m_graph.mergeRelevantToOSR();
         
         for (BlockIndex blockIndex = m_graph.numBlocks(); blockIndex--;) {
             BasicBlock* block = m_graph.block(blockIndex);
@@ -74,13 +62,11 @@ public:
             unsigned targetIndex = 0;
             while (sourceIndex < block->size()) {
                 Node* node = block->at(sourceIndex++);
-                if (node->op() == HardPhantom || node->op() == Phantom || node->op() == Check) {
+                if (node->op() == Phantom || node->op() == Check) {
                     for (unsigned i = 0; i < AdjacencyList::Size; ++i) {
                         Edge edge = node->children.child(i);
                         if (!edge)
                             break;
-                        if (node->op() == HardPhantom)
-                            edge->mergeFlags(NodeNeedsHardPhantom);
                         if ((edge->flags() & NodeRelevantToOSR) && node->op() == Phantom) {
                             // A Phantom on a node that is RelevantToOSR means that we need to keep
                             // a Phantom on this node instead of just having a Check.
@@ -112,10 +98,7 @@ public:
             
             for (unsigned nodeIndex = 0; nodeIndex < block->size(); ++nodeIndex) {
                 Node* node = block->at(nodeIndex);
-                if (node->flags() & NodeNeedsHardPhantom) {
-                    insertionSet.insertNode(
-                        nodeIndex + 1, SpecNone, HardPhantom, node->origin, node->defaultEdge());
-                } else if (node->flags() & NodeNeedsPhantom) {
+                if (node->flags() & NodeNeedsPhantom) {
                     insertionSet.insertNode(
                         nodeIndex + 1, SpecNone, Phantom, node->origin, node->defaultEdge());
                 }

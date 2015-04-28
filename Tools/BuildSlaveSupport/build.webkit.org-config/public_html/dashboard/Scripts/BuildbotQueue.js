@@ -33,18 +33,25 @@ BuildbotQueue = function(buildbot, id, info)
     this.buildbot = buildbot;
     this.id = id;
 
-    this.branch = info.branch || null;
+    this.branch = info.branch || { openSource: "trunk", internal: "trunk" };
     this.platform = info.platform.name || "unknown";
     this.debug = info.debug || false;
     this.builder = info.builder || false;
     this.tester = info.tester || false;
     this.performance = info.performance || false;
+    this.leaks = info.leaks || false;
     this.architecture = info.architecture || null;
     this.testCategory = info.testCategory || null;
-    this.performanceTestName = info.performanceTestName || null;
+    this.heading = info.heading || null;
+    this.crashesOnly = info.crashesOnly || false;
 
     this.iterations = [];
     this._knownIterations = {};
+
+    // Some queues process changes out of order, but we need to display results for the latest commit,
+    // not the latest build. BuildbotQueue ensures that at least one productive iteration
+    // that was run in order gets loaded (if the queue had any productive iterations, of course).
+    this._hasLoadedIterationForInOrderResult = false;
 };
 
 BaseObject.addConstructorFunctions(BuildbotQueue);
@@ -136,6 +143,8 @@ BuildbotQueue.prototype = {
                 callback(data);
             }.bind(this),
             function(data) {
+                if (data.errorType !== JSON.LoadError || data.errorHTTPCode !== 401)
+                    return;
                 if (this.buildbot.isAuthenticated) {
                     // FIXME (128006): Safari/WebKit should coalesce authentication requests with the same origin and authentication realm.
                     // In absence of the fix, Safari presents additional authentication dialogs regardless of whether an earlier authentication
@@ -145,10 +154,9 @@ BuildbotQueue.prototype = {
                     this._load(url, callback);
                     return;
                 }
-                if (data.errorType === JSON.LoadError && data.errorHTTPCode === 401) {
-                    this.buildbot.isAuthenticated = false;
-                    this.dispatchEventToListeners(BuildbotQueue.Event.UnauthorizedAccess, { });
-                }
+
+                this.buildbot.isAuthenticated = false;
+                this.dispatchEventToListeners(BuildbotQueue.Event.UnauthorizedAccess, { });
             }.bind(this),
             {withCredentials: this.buildbot.needsAuthentication}
         );
@@ -175,6 +183,8 @@ BuildbotQueue.prototype = {
             if (!iteration.loaded) {
                 if (indexOfFirstNewlyLoadingIteration === undefined)
                     indexOfFirstNewlyLoadingIteration = i;
+                if (!this._hasLoadedIterationForInOrderResult)
+                    iteration.addEventListener(BuildbotIteration.Event.Updated, this._checkForInOrderResult.bind(this));
                 iteration.update();
             }
         }
@@ -203,8 +213,11 @@ BuildbotQueue.prototype = {
                     this._knownIterations[iteration.id] = iteration;
                 }
 
-                if (i >= loadingStop && (!iteration.finished || !iteration.loaded))
+                if (i >= loadingStop && (!iteration.finished || !iteration.loaded)) {
+                    if (!this._hasLoadedIterationForInOrderResult)
+                        iteration.addEventListener(BuildbotIteration.Event.Updated, this._checkForInOrderResult.bind(this));
                     iteration.update();
+                }
             }
 
             if (!newIterations.length)
@@ -214,6 +227,22 @@ BuildbotQueue.prototype = {
 
             this.dispatchEventToListeners(BuildbotQueue.Event.IterationsAdded, {addedIterations: newIterations});
         }.bind(this));
+    },
+
+    _checkForInOrderResult: function(event)
+    {
+        if (this._hasLoadedIterationForInOrderResult)
+            return;
+        var iterationsInOriginalOrder = this.iterations.concat().sort(function(a, b) { return b.id - a.id; });
+        for (var i = 0; i < iterationsInOriginalOrder.length - 1; ++i) {
+            var i1 = iterationsInOriginalOrder[i];
+            var i2 = iterationsInOriginalOrder[i + 1];
+            if (i1.productive && i2.loaded && this.compareIterationsByRevisions(i1, i2) < 0) {
+                this._hasLoadedIterationForInOrderResult = true;
+                return;
+            }
+        }
+        this.loadMoreHistoricalIterations();
     },
 
     loadAll: function(callback)
@@ -229,25 +258,45 @@ BuildbotQueue.prototype = {
 
             this.sortIterations();
 
+            this._hasLoadedIterationForInOrderResult = true;
+
             callback(this);
         }.bind(this));
     },
 
+    compareIterations: function(a, b)
+    {
+        var result = b.openSourceRevision - a.openSourceRevision;
+        if (result)
+            return result;
+
+        result = b.internalRevision - a.internalRevision;
+        if (result)
+            return result;
+
+        // A loaded iteration may not have revision numbers if it failed early, before svn steps finished.
+        result = b.loaded - a.loaded;
+        if (result)
+            return result;
+
+        return b.id - a.id;
+    },
+
+    compareIterationsByRevisions: function(a, b)
+    {
+        var result = b.openSourceRevision - a.openSourceRevision;
+        if (result)
+            return result;
+
+        result = b.internalRevision - a.internalRevision;
+        if (result)
+            return result;
+
+        return 0;
+    },
+
     sortIterations: function()
     {
-        function compareIterations(a, b)
-        {
-            var result = b.openSourceRevision - a.openSourceRevision;
-            if (result)
-                return result;
-
-            result = b.internalRevision - a.internalRevision;
-            if (result)
-                return result;
-
-            return b.id - a.id;
-        }
-
-        this.iterations.sort(compareIterations);
+        this.iterations.sort(this.compareIterations);
     }
 };

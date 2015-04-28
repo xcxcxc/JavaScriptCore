@@ -1,17 +1,25 @@
 list(APPEND WTF_SOURCES
+    text/cf/AtomicStringCF.cpp
+    text/cf/StringCF.cpp
+    text/cf/StringImplCF.cpp
+    text/cf/StringViewCF.cpp
+
     threads/win/BinarySemaphoreWin.cpp
 
     win/MainThreadWin.cpp
     win/RunLoopWin.cpp
+    win/WTFDLL.cpp
+    win/WorkItemWin.cpp
+    win/WorkQueueWin.cpp
 )
 
-if (WINCE)
+list(APPEND WTF_LIBRARIES
+    winmm
+)
+
+if (${WTF_PLATFORM_WIN_CAIRO})
     list(APPEND WTF_LIBRARIES
-        mmtimer
-    )
-else ()
-    list(APPEND WTF_LIBRARIES
-        winmm
+        cflite
     )
 endif ()
 

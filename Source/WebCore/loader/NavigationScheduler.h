@@ -41,6 +41,7 @@ class FormSubmission;
 class Frame;
 class ScheduledNavigation;
 class SecurityOrigin;
+class SubstituteData;
 class URL;
 
 class NavigationDisablerForBeforeUnload {
@@ -73,6 +74,7 @@ public:
     void scheduleFormSubmission(PassRefPtr<FormSubmission>);
     void scheduleRefresh();
     void scheduleHistoryNavigation(int steps);
+    void scheduleSubstituteDataLoad(const URL& baseURL, const SubstituteData&);
 
     void startTimer();
 
@@ -83,13 +85,13 @@ private:
     bool shouldScheduleNavigation() const;
     bool shouldScheduleNavigation(const URL&) const;
 
-    void timerFired(Timer<NavigationScheduler>&);
+    void timerFired();
     void schedule(std::unique_ptr<ScheduledNavigation>);
 
     static LockBackForwardList mustLockBackForwardList(Frame& targetFrame);
 
     Frame& m_frame;
-    Timer<NavigationScheduler> m_timer;
+    Timer m_timer;
     std::unique_ptr<ScheduledNavigation> m_redirect;
 };
 

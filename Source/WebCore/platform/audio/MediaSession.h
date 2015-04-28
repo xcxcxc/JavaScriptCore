@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2014-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,15 +26,25 @@
 #ifndef MediaSession_h
 #define MediaSession_h
 
+#include "MediaProducer.h"
 #include "Timer.h"
 #include <wtf/Noncopyable.h>
 #include <wtf/text/WTFString.h>
 
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+#include "MediaPlaybackTargetClient.h"
+#endif
+
 namespace WebCore {
 
+class MediaPlaybackTarget;
 class MediaSessionClient;
 
-class MediaSession {
+class MediaSession
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    : public MediaPlaybackTargetClient
+#endif
+{
 public:
     static std::unique_ptr<MediaSession> create(MediaSessionClient&);
 
@@ -99,17 +109,41 @@ public:
     bool canReceiveRemoteControlCommands() const;
     void didReceiveRemoteControlCommand(RemoteControlCommandType);
 
+    enum DisplayType {
+        Normal,
+        Fullscreen,
+        Optimized,
+    };
+    DisplayType displayType() const;
+
+    bool isHidden() const;
+
+    virtual bool canPlayToWirelessPlaybackTarget() const { return false; }
+    virtual bool isPlayingToWirelessPlaybackTarget() const { return false; }
+
+#if ENABLE(WIRELESS_PLAYBACK_TARGET)
+    // MediaPlaybackTargetClient
+    virtual void setPlaybackTarget(Ref<MediaPlaybackTarget>&&) override { }
+    virtual void externalOutputDeviceAvailableDidChange(bool) override { }
+    virtual void setShouldPlayToPlaybackTarget(bool) override { }
+#endif
+
+#if PLATFORM(IOS)
+    virtual bool requiresPlaybackTargetRouteMonitoring() const { return false; }
+#endif
+
 protected:
     MediaSessionClient& client() const { return m_client; }
 
 private:
-    void clientDataBufferingTimerFired(Timer<MediaSession>&);
+    void clientDataBufferingTimerFired();
     void updateClientDataBuffering();
 
     MediaSessionClient& m_client;
-    Timer<MediaSession> m_clientDataBufferingTimer;
+    Timer m_clientDataBufferingTimer;
     State m_state;
     State m_stateToRestore;
+    int m_interruptionCount { 0 };
     bool m_notifyingClient;
 };
 
@@ -120,9 +154,10 @@ public:
     
     virtual MediaSession::MediaType mediaType() const = 0;
     virtual MediaSession::MediaType presentationType() const = 0;
+    virtual MediaSession::DisplayType displayType() const { return MediaSession::Normal; }
 
-    virtual void resumePlayback() = 0;
-    virtual void pausePlayback() = 0;
+    virtual void mayResumePlayback(bool shouldResume) = 0;
+    virtual void suspendPlayback() = 0;
 
     virtual String mediaSessionTitle() const;
     virtual double mediaSessionDuration() const;
@@ -135,6 +170,12 @@ public:
     virtual bool elementIsHidden() const { return false; }
 
     virtual bool overrideBackgroundPlaybackRestriction() const = 0;
+
+    virtual void wirelessRoutesAvailableDidChange() { }
+    virtual void setWirelessPlaybackTarget(Ref<MediaPlaybackTarget>&&) { }
+    virtual bool canPlayToWirelessPlaybackTarget() const { return false; }
+    virtual bool isPlayingToWirelessPlaybackTarget() const { return false; }
+    virtual void setShouldPlayToPlaybackTarget(bool) { }
 
 protected:
     virtual ~MediaSessionClient() { }

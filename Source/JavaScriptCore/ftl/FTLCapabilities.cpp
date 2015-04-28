@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -44,13 +44,14 @@ inline CapabilityLevel canCompile(Node* node)
     
     switch (node->op()) {
     case JSConstant:
-    case GetMyArgumentsLength:
     case GetLocal:
     case SetLocal:
+    case PutStack:
+    case KillStack:
+    case GetStack:
     case MovHint:
     case ZombieHint:
     case Phantom:
-    case HardPhantom:
     case Flush:
     case PhantomLocal:
     case SetArgument:
@@ -77,6 +78,7 @@ inline CapabilityLevel canCompile(Node* node)
     case PutGlobalVar:
     case ValueAdd:
     case ArithAdd:
+    case ArithClz32:
     case ArithSub:
     case ArithMul:
     case ArithDiv:
@@ -86,7 +88,9 @@ inline CapabilityLevel canCompile(Node* node)
     case ArithAbs:
     case ArithSin:
     case ArithCos:
+    case ArithPow:
     case ArithSqrt:
+    case ArithLog:
     case ArithFRound:
     case ArithNegate:
     case UInt32ToNumber:
@@ -97,27 +101,35 @@ inline CapabilityLevel canCompile(Node* node)
     case Upsilon:
     case ExtractOSREntryLocal:
     case LoopHint:
-    case GetMyScope:
     case SkipScope:
-    case GetClosureRegisters:
+    case CreateActivation:
+    case NewFunction:
     case GetClosureVar:
     case PutClosureVar:
+    case CreateDirectArguments:
+    case CreateScopedArguments:
+    case CreateClonedArguments:
+    case GetFromArguments:
+    case PutToArguments:
     case InvalidationPoint:
     case StringCharAt:
     case CheckCell:
     case CheckBadCell:
+    case CheckNotEmpty:
     case StringCharCodeAt:
     case AllocatePropertyStorage:
     case ReallocatePropertyStorage:
-    case FunctionReentryWatchpoint:
-    case TypedArrayWatchpoint:
     case GetTypedArrayByteOffset:
-    case VariableWatchpoint:
     case NotifyWrite:
     case StoreBarrier:
     case StoreBarrierWithNullCheck:
     case Call:
     case Construct:
+    case CallVarargs:
+    case CallForwardVarargs:
+    case ConstructVarargs:
+    case ConstructForwardVarargs:
+    case LoadVarargs:
     case NativeCall:
     case NativeConstruct:
     case ValueToInt32:
@@ -129,10 +141,10 @@ inline CapabilityLevel canCompile(Node* node)
     case CountExecution:
     case GetExecutable:
     case GetScope:
-    case AllocationProfileWatchpoint:
-    case CheckArgumentsNotCreated:
     case GetCallee:
+    case GetArgumentCount:
     case ToString:
+    case CallStringConstructor:
     case MakeRope:
     case NewArrayWithSize:
     case GetById:
@@ -140,16 +152,15 @@ inline CapabilityLevel canCompile(Node* node)
     case MultiGetByOffset:
     case MultiPutByOffset:
     case ToPrimitive:
-    case PhantomArguments:
     case Throw:
     case ThrowReferenceError:
     case Unreachable:
-    case GetMyArgumentByVal:
     case IsUndefined:
     case IsBoolean:
     case IsNumber:
     case IsString:
     case IsObject:
+    case IsObjectOrNull:
     case IsFunction:
     case CheckHasInstance:
     case InstanceOf:
@@ -163,17 +174,21 @@ inline CapabilityLevel canCompile(Node* node)
     case HasStructureProperty:
     case GetDirectPname:
     case GetEnumerableLength:
-    case GetStructurePropertyEnumerator:
-    case GetGenericPropertyEnumerator:
-    case GetEnumeratorPname:
+    case GetPropertyEnumerator:
+    case GetEnumeratorStructurePname:
+    case GetEnumeratorGenericPname:
     case ToIndexString:
     case BottomValue:
+    case PhantomNewObject:
+    case PhantomNewFunction:
+    case PutHint:
+    case CheckStructureImmediate:
+    case MaterializeNewObject:
+    case PhantomDirectArguments:
+    case PhantomClonedArguments:
+    case GetMyArgumentByVal:
+    case ForwardVarargs:
         // These are OK.
-        break;
-    case ProfiledCall:
-    case ProfiledConstruct:
-        // These are OK not because the FTL can support them, but because if the DFG sees one of
-        // these then the FTL will see a normal Call/Construct.
         break;
     case Identity:
         // No backend handles this because it will be optimized out. But we may check
@@ -201,6 +216,8 @@ inline CapabilityLevel canCompile(Node* node)
         case Array::Int32:
         case Array::Double:
         case Array::Contiguous:
+        case Array::DirectArguments:
+        case Array::ScopedArguments:
             break;
         default:
             if (isTypedView(node->arrayMode().typedArrayType()))
@@ -214,6 +231,8 @@ inline CapabilityLevel canCompile(Node* node)
         case Array::Double:
         case Array::Contiguous:
         case Array::String:
+        case Array::DirectArguments:
+        case Array::ScopedArguments:
             break;
         default:
             if (isTypedView(node->arrayMode().typedArrayType()))
@@ -240,6 +259,8 @@ inline CapabilityLevel canCompile(Node* node)
         case Array::Int32:
         case Array::Double:
         case Array::Contiguous:
+        case Array::DirectArguments:
+        case Array::ScopedArguments:
             break;
         default:
             if (isTypedView(node->arrayMode().typedArrayType()))
@@ -357,17 +378,6 @@ CapabilityLevel canCompile(Graph& graph)
     if (graph.m_codeBlock->codeType() != FunctionCode) {
         if (verboseCapabilities())
             dataLog("FTL rejecting ", *graph.m_codeBlock, " because it doesn't belong to a function.\n");
-        return CannotCompile;
-    }
-    
-    if (graph.m_codeBlock->needsActivation()) {
-        // Need this because although we also don't support
-        // CreateActivation/TearOffActivation, we might not see those nodes in case of
-        // OSR entry.
-        // FIXME: Support activations.
-        // https://bugs.webkit.org/show_bug.cgi?id=129576
-        if (verboseCapabilities())
-            dataLog("FTL rejecting ", *graph.m_codeBlock, " because it uses activations.\n");
         return CannotCompile;
     }
     

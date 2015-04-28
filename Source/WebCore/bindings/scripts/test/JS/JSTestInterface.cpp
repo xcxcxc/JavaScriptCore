@@ -26,7 +26,6 @@
 
 #include "ExceptionCode.h"
 #include "JSDOMBinding.h"
-#include "JSTestObj.h"
 #include "ScriptExecutionContext.h"
 #include "TestInterface.h"
 #include "TestObj.h"
@@ -36,12 +35,10 @@
 
 #if ENABLE(Condition11) || ENABLE(Condition12) || ENABLE(Condition22) || ENABLE(Condition23)
 #include "JSNode.h"
+#include "JSTestObj.h"
+#include "Node.h"
 #include "URL.h"
 #include <runtime/JSString.h>
-#endif
-
-#if ENABLE(Condition11) || ENABLE(Condition12) || ENABLE(Condition22) || ENABLE(Condition23)
-#include "Node.h"
 #endif
 
 using namespace JSC;
@@ -271,8 +268,8 @@ COMPILE_ASSERT(2 == TestSupplemental::CONST_IMPL, TestInterfaceEnumCONST_IMPLIsW
 
 EncodedJSValue JSC_HOST_CALL JSTestInterfaceConstructor::constructJSTestInterface(ExecState* exec)
 {
-    JSTestInterfaceConstructor* castedThis = jsCast<JSTestInterfaceConstructor*>(exec->callee());
-    if (exec->argumentCount() < 1)
+    auto* castedThis = jsCast<JSTestInterfaceConstructor*>(exec->callee());
+    if (UNLIKELY(exec->argumentCount() < 1))
         return throwVMError(exec, createNotEnoughArgumentsError(exec));
     ExceptionCode ec = 0;
     const String& str1(exec->argument(0).isEmpty() ? String() : exec->argument(0).toString(exec)->value(exec));
@@ -403,7 +400,7 @@ static const HashTableValue JSTestInterfacePrototypeTableValues[] =
 #endif
 };
 
-WEBCORE_EXPORT const ClassInfo JSTestInterfacePrototype::s_info = { "TestInterfacePrototype", &Base::s_info, 0, CREATE_METHOD_TABLE(JSTestInterfacePrototype) };
+const ClassInfo JSTestInterfacePrototype::s_info = { "TestInterfacePrototype", &Base::s_info, 0, CREATE_METHOD_TABLE(JSTestInterfacePrototype) };
 
 void JSTestInterfacePrototype::finishCreation(VM& vm)
 {
@@ -411,11 +408,11 @@ void JSTestInterfacePrototype::finishCreation(VM& vm)
     reifyStaticProperties(vm, JSTestInterfacePrototypeTableValues, *this);
 }
 
-WEBCORE_EXPORT const ClassInfo JSTestInterface::s_info = { "TestInterface", &Base::s_info, &JSTestInterfaceTable, CREATE_METHOD_TABLE(JSTestInterface) };
+const ClassInfo JSTestInterface::s_info = { "TestInterface", &Base::s_info, &JSTestInterfaceTable, CREATE_METHOD_TABLE(JSTestInterface) };
 
-JSTestInterface::JSTestInterface(Structure* structure, JSDOMGlobalObject* globalObject, PassRefPtr<TestInterface> impl)
+JSTestInterface::JSTestInterface(Structure* structure, JSDOMGlobalObject* globalObject, Ref<TestInterface>&& impl)
     : JSDOMWrapper(structure, globalObject)
-    , m_impl(impl.leakRef())
+    , m_impl(&impl.leakRef())
 {
 }
 
@@ -442,7 +439,7 @@ JSTestInterface::~JSTestInterface()
 
 bool JSTestInterface::getOwnPropertySlot(JSObject* object, ExecState* exec, PropertyName propertyName, PropertySlot& slot)
 {
-    JSTestInterface* thisObject = jsCast<JSTestInterface*>(object);
+    auto* thisObject = jsCast<JSTestInterface*>(object);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
     return getStaticValueSlot<JSTestInterface, Base>(exec, JSTestInterfaceTable, thisObject, propertyName, slot);
 }
@@ -483,7 +480,7 @@ EncodedJSValue jsTestInterfaceImplementsStr1(ExecState* exec, JSObject* slotBase
             return reportDeprecatedGetterError(*exec, "TestInterface", "implementsStr1");
         return throwGetterTypeError(*exec, "TestInterface", "implementsStr1");
     }
-    TestInterface& impl = castedThis->impl();
+    auto& impl = castedThis->impl();
     JSValue result = jsStringWithCache(exec, impl.implementsStr1());
     return JSValue::encode(result);
 }
@@ -502,7 +499,7 @@ EncodedJSValue jsTestInterfaceImplementsStr2(ExecState* exec, JSObject* slotBase
             return reportDeprecatedGetterError(*exec, "TestInterface", "implementsStr2");
         return throwGetterTypeError(*exec, "TestInterface", "implementsStr2");
     }
-    TestInterface& impl = castedThis->impl();
+    auto& impl = castedThis->impl();
     JSValue result = jsStringWithCache(exec, impl.implementsStr2());
     return JSValue::encode(result);
 }
@@ -515,7 +512,7 @@ EncodedJSValue jsTestInterfaceImplementsStr3(ExecState* exec, JSObject* slotBase
     UNUSED_PARAM(exec);
     UNUSED_PARAM(slotBase);
     UNUSED_PARAM(thisValue);
-    JSTestInterface* castedThis = jsCast<JSTestInterface*>(slotBase);
+    auto* castedThis = jsCast<JSTestInterface*>(slotBase);
     return JSValue::encode(castedThis->implementsStr3(exec));
 }
 
@@ -533,7 +530,7 @@ EncodedJSValue jsTestInterfaceImplementsNode(ExecState* exec, JSObject* slotBase
             return reportDeprecatedGetterError(*exec, "TestInterface", "implementsNode");
         return throwGetterTypeError(*exec, "TestInterface", "implementsNode");
     }
-    TestInterface& impl = castedThis->impl();
+    auto& impl = castedThis->impl();
     JSValue result = toJS(exec, castedThis->globalObject(), WTF::getPtr(impl.implementsNode()));
     return JSValue::encode(result);
 }
@@ -576,7 +573,7 @@ EncodedJSValue jsTestInterfaceSupplementalStr1(ExecState* exec, JSObject* slotBa
             return reportDeprecatedGetterError(*exec, "TestInterface", "supplementalStr1");
         return throwGetterTypeError(*exec, "TestInterface", "supplementalStr1");
     }
-    TestInterface& impl = castedThis->impl();
+    auto& impl = castedThis->impl();
     JSValue result = jsStringWithCache(exec, TestSupplemental::supplementalStr1(&impl));
     return JSValue::encode(result);
 }
@@ -595,7 +592,7 @@ EncodedJSValue jsTestInterfaceSupplementalStr2(ExecState* exec, JSObject* slotBa
             return reportDeprecatedGetterError(*exec, "TestInterface", "supplementalStr2");
         return throwGetterTypeError(*exec, "TestInterface", "supplementalStr2");
     }
-    TestInterface& impl = castedThis->impl();
+    auto& impl = castedThis->impl();
     JSValue result = jsStringWithCache(exec, TestSupplemental::supplementalStr2(&impl));
     return JSValue::encode(result);
 }
@@ -608,7 +605,7 @@ EncodedJSValue jsTestInterfaceSupplementalStr3(ExecState* exec, JSObject* slotBa
     UNUSED_PARAM(exec);
     UNUSED_PARAM(slotBase);
     UNUSED_PARAM(thisValue);
-    JSTestInterface* castedThis = jsCast<JSTestInterface*>(slotBase);
+    auto* castedThis = jsCast<JSTestInterface*>(slotBase);
     return JSValue::encode(castedThis->supplementalStr3(exec));
 }
 
@@ -626,7 +623,7 @@ EncodedJSValue jsTestInterfaceSupplementalNode(ExecState* exec, JSObject* slotBa
             return reportDeprecatedGetterError(*exec, "TestInterface", "supplementalNode");
         return throwGetterTypeError(*exec, "TestInterface", "supplementalNode");
     }
-    TestInterface& impl = castedThis->impl();
+    auto& impl = castedThis->impl();
     JSValue result = toJS(exec, castedThis->globalObject(), WTF::getPtr(TestSupplemental::supplementalNode(&impl)));
     return JSValue::encode(result);
 }
@@ -643,7 +640,7 @@ EncodedJSValue jsTestInterfaceConstructor(ExecState* exec, JSObject* baseValue, 
 
 void JSTestInterface::put(JSCell* cell, ExecState* exec, PropertyName propertyName, JSValue value, PutPropertySlot& slot)
 {
-    JSTestInterface* thisObject = jsCast<JSTestInterface*>(cell);
+    auto* thisObject = jsCast<JSTestInterface*>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
     if (thisObject->putDelegate(exec, propertyName, value, slot))
         return;
@@ -652,9 +649,9 @@ void JSTestInterface::put(JSCell* cell, ExecState* exec, PropertyName propertyNa
 
 void JSTestInterface::putByIndex(JSCell* cell, ExecState* exec, unsigned index, JSValue value, bool shouldThrow)
 {
-    JSTestInterface* thisObject = jsCast<JSTestInterface*>(cell);
+    auto* thisObject = jsCast<JSTestInterface*>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
-    PropertyName propertyName = Identifier::from(exec, index);
+    Identifier propertyName = Identifier::from(exec, index);
     PutPropertySlot slot(thisObject, shouldThrow);
     if (thisObject->putDelegate(exec, propertyName, value, slot))
         return;
@@ -687,7 +684,7 @@ void setJSTestInterfaceImplementsStr2(ExecState* exec, JSObject* baseObject, Enc
             throwSetterTypeError(*exec, "TestInterface", "implementsStr2");
         return;
     }
-    TestInterface& impl = castedThis->impl();
+    auto& impl = castedThis->impl();
     const String& nativeValue(value.isEmpty() ? String() : value.toString(exec)->value(exec));
     if (UNLIKELY(exec->hadException()))
         return;
@@ -702,7 +699,7 @@ void setJSTestInterfaceImplementsStr3(ExecState* exec, JSObject* baseObject, Enc
     JSValue value = JSValue::decode(encodedValue);
     UNUSED_PARAM(baseObject);
     UNUSED_PARAM(thisValue);
-    JSTestInterface* castedThis = jsCast<JSTestInterface*>(baseObject);
+    auto* castedThis = jsCast<JSTestInterface*>(baseObject);
     UNUSED_PARAM(thisValue);
     UNUSED_PARAM(exec);
     castedThis->setImplementsStr3(exec, value);
@@ -723,8 +720,8 @@ void setJSTestInterfaceImplementsNode(ExecState* exec, JSObject* baseObject, Enc
             throwSetterTypeError(*exec, "TestInterface", "implementsNode");
         return;
     }
-    TestInterface& impl = castedThis->impl();
-    Node* nativeValue(toNode(value));
+    auto& impl = castedThis->impl();
+    Node* nativeValue(JSNode::toWrapped(value));
     if (UNLIKELY(exec->hadException()))
         return;
     impl.setImplementsNode(nativeValue);
@@ -758,7 +755,7 @@ void setJSTestInterfaceSupplementalStr2(ExecState* exec, JSObject* baseObject, E
             throwSetterTypeError(*exec, "TestInterface", "supplementalStr2");
         return;
     }
-    TestInterface& impl = castedThis->impl();
+    auto& impl = castedThis->impl();
     const String& nativeValue(value.isEmpty() ? String() : value.toString(exec)->value(exec));
     if (UNLIKELY(exec->hadException()))
         return;
@@ -773,7 +770,7 @@ void setJSTestInterfaceSupplementalStr3(ExecState* exec, JSObject* baseObject, E
     JSValue value = JSValue::decode(encodedValue);
     UNUSED_PARAM(baseObject);
     UNUSED_PARAM(thisValue);
-    JSTestInterface* castedThis = jsCast<JSTestInterface*>(baseObject);
+    auto* castedThis = jsCast<JSTestInterface*>(baseObject);
     UNUSED_PARAM(thisValue);
     UNUSED_PARAM(exec);
     castedThis->setSupplementalStr3(exec, value);
@@ -794,8 +791,8 @@ void setJSTestInterfaceSupplementalNode(ExecState* exec, JSObject* baseObject, E
             throwSetterTypeError(*exec, "TestInterface", "supplementalNode");
         return;
     }
-    TestInterface& impl = castedThis->impl();
-    Node* nativeValue(toNode(value));
+    auto& impl = castedThis->impl();
+    Node* nativeValue(JSNode::toWrapped(value));
     if (UNLIKELY(exec->hadException()))
         return;
     TestSupplemental::setSupplementalNode(&impl, nativeValue);
@@ -816,7 +813,7 @@ EncodedJSValue JSC_HOST_CALL jsTestInterfacePrototypeFunctionImplementsMethod1(E
     if (UNLIKELY(!castedThis))
         return throwThisTypeError(*exec, "TestInterface", "implementsMethod1");
     ASSERT_GC_OBJECT_INHERITS(castedThis, JSTestInterface::info());
-    TestInterface& impl = castedThis->impl();
+    auto& impl = castedThis->impl();
     impl.implementsMethod1();
     return JSValue::encode(jsUndefined());
 }
@@ -831,17 +828,17 @@ EncodedJSValue JSC_HOST_CALL jsTestInterfacePrototypeFunctionImplementsMethod2(E
     if (UNLIKELY(!castedThis))
         return throwThisTypeError(*exec, "TestInterface", "implementsMethod2");
     ASSERT_GC_OBJECT_INHERITS(castedThis, JSTestInterface::info());
-    TestInterface& impl = castedThis->impl();
-    if (exec->argumentCount() < 2)
+    auto& impl = castedThis->impl();
+    if (UNLIKELY(exec->argumentCount() < 2))
         return throwVMError(exec, createNotEnoughArgumentsError(exec));
     ExceptionCode ec = 0;
-    ScriptExecutionContext* scriptContext = jsCast<JSDOMGlobalObject*>(exec->lexicalGlobalObject())->scriptExecutionContext();
+    auto* scriptContext = jsCast<JSDOMGlobalObject*>(exec->lexicalGlobalObject())->scriptExecutionContext();
     if (!scriptContext)
         return JSValue::encode(jsUndefined());
     const String& strArg(exec->argument(0).isEmpty() ? String() : exec->argument(0).toString(exec)->value(exec));
     if (UNLIKELY(exec->hadException()))
         return JSValue::encode(jsUndefined());
-    TestObj* objArg(toTestObj(exec->argument(1)));
+    TestObj* objArg(JSTestObj::toWrapped(exec->argument(1)));
     if (UNLIKELY(exec->hadException()))
         return JSValue::encode(jsUndefined());
     JSValue result = toJS(exec, castedThis->globalObject(), WTF::getPtr(impl.implementsMethod2(scriptContext, strArg, objArg, ec)));
@@ -882,7 +879,7 @@ EncodedJSValue JSC_HOST_CALL jsTestInterfacePrototypeFunctionSupplementalMethod1
     if (UNLIKELY(!castedThis))
         return throwThisTypeError(*exec, "TestInterface", "supplementalMethod1");
     ASSERT_GC_OBJECT_INHERITS(castedThis, JSTestInterface::info());
-    TestInterface& impl = castedThis->impl();
+    auto& impl = castedThis->impl();
     TestSupplemental::supplementalMethod1(&impl);
     return JSValue::encode(jsUndefined());
 }
@@ -897,17 +894,17 @@ EncodedJSValue JSC_HOST_CALL jsTestInterfacePrototypeFunctionSupplementalMethod2
     if (UNLIKELY(!castedThis))
         return throwThisTypeError(*exec, "TestInterface", "supplementalMethod2");
     ASSERT_GC_OBJECT_INHERITS(castedThis, JSTestInterface::info());
-    TestInterface& impl = castedThis->impl();
-    if (exec->argumentCount() < 2)
+    auto& impl = castedThis->impl();
+    if (UNLIKELY(exec->argumentCount() < 2))
         return throwVMError(exec, createNotEnoughArgumentsError(exec));
     ExceptionCode ec = 0;
-    ScriptExecutionContext* scriptContext = jsCast<JSDOMGlobalObject*>(exec->lexicalGlobalObject())->scriptExecutionContext();
+    auto* scriptContext = jsCast<JSDOMGlobalObject*>(exec->lexicalGlobalObject())->scriptExecutionContext();
     if (!scriptContext)
         return JSValue::encode(jsUndefined());
     const String& strArg(exec->argument(0).isEmpty() ? String() : exec->argument(0).toString(exec)->value(exec));
     if (UNLIKELY(exec->hadException()))
         return JSValue::encode(jsUndefined());
-    TestObj* objArg(toTestObj(exec->argument(1)));
+    TestObj* objArg(JSTestObj::toWrapped(exec->argument(1)));
     if (UNLIKELY(exec->hadException()))
         return JSValue::encode(jsUndefined());
     JSValue result = toJS(exec, castedThis->globalObject(), WTF::getPtr(TestSupplemental::supplementalMethod2(&impl, scriptContext, strArg, objArg, ec)));
@@ -942,7 +939,7 @@ EncodedJSValue JSC_HOST_CALL jsTestInterfaceConstructorFunctionSupplementalMetho
 
 bool JSTestInterfaceOwner::isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown> handle, void*, SlotVisitor& visitor)
 {
-    JSTestInterface* jsTestInterface = jsCast<JSTestInterface*>(handle.slot()->asCell());
+    auto* jsTestInterface = jsCast<JSTestInterface*>(handle.slot()->asCell());
     if (jsTestInterface->impl().hasPendingActivity())
         return true;
     UNUSED_PARAM(visitor);
@@ -951,8 +948,8 @@ bool JSTestInterfaceOwner::isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown> 
 
 void JSTestInterfaceOwner::finalize(JSC::Handle<JSC::Unknown> handle, void* context)
 {
-    JSTestInterface* jsTestInterface = jsCast<JSTestInterface*>(handle.slot()->asCell());
-    DOMWrapperWorld& world = *static_cast<DOMWrapperWorld*>(context);
+    auto* jsTestInterface = jsCast<JSTestInterface*>(handle.slot()->asCell());
+    auto& world = *static_cast<DOMWrapperWorld*>(context);
     uncacheWrapper(world, &jsTestInterface->impl(), jsTestInterface);
     jsTestInterface->releaseImpl();
 }
@@ -973,7 +970,7 @@ JSC::JSValue toJS(JSC::ExecState*, JSDOMGlobalObject* globalObject, TestInterfac
     return createNewWrapper<JSTestInterface>(globalObject, impl);
 }
 
-TestInterface* toTestInterface(JSC::JSValue value)
+TestInterface* JSTestInterface::toWrapped(JSC::JSValue value)
 {
     if (auto* wrapper = jsDynamicCast<JSTestInterface*>(value))
         return &wrapper->impl();

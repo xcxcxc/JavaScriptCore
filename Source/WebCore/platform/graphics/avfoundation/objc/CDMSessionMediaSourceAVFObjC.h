@@ -28,18 +28,18 @@
 
 #include "CDMSession.h"
 #include "SourceBufferPrivateAVFObjC.h"
-#include <wtf/PassOwnPtr.h>
 #include <wtf/RetainPtr.h>
 
 #if ENABLE(ENCRYPTED_MEDIA_V2) && ENABLE(MEDIA_SOURCE)
 
 OBJC_CLASS AVStreamSession;
+OBJC_CLASS CDMSessionMediaSourceAVFObjCObserver;
 
 namespace WebCore {
 
 class CDMSessionMediaSourceAVFObjC : public CDMSession, public SourceBufferPrivateAVFObjCErrorClient {
 public:
-    CDMSessionMediaSourceAVFObjC();
+    CDMSessionMediaSourceAVFObjC(const Vector<int>& protocolVersions);
     virtual ~CDMSessionMediaSourceAVFObjC();
 
     virtual CDMSessionType type() { return CDMSessionTypeMediaSourceAVFObjC; }
@@ -49,19 +49,31 @@ public:
     virtual void releaseKeys() override;
     virtual bool update(Uint8Array*, RefPtr<Uint8Array>& nextMessage, unsigned short& errorCode, unsigned long& systemCode) override;
 
-    virtual void layerDidReceiveError(AVSampleBufferDisplayLayer *, NSError *);
-    virtual void rendererDidReceiveError(AVSampleBufferAudioRenderer *, NSError *);
+    virtual void layerDidReceiveError(AVSampleBufferDisplayLayer *, NSError *, bool& shouldIgnore);
+    virtual void rendererDidReceiveError(AVSampleBufferAudioRenderer *, NSError *, bool& shouldIgnore);
+
+    void setStreamSession(AVStreamSession *);
 
     void addSourceBuffer(SourceBufferPrivateAVFObjC*);
     void removeSourceBuffer(SourceBufferPrivateAVFObjC*);
 
+    void setSessionId(const String& sessionId) { m_sessionId = sessionId; }
+
 protected:
+    String storagePath() const;
+    PassRefPtr<Uint8Array> generateKeyReleaseMessage(unsigned short& errorCode, unsigned long& systemCode);
+
     Vector<RefPtr<SourceBufferPrivateAVFObjC>> m_sourceBuffers;
     CDMSessionClient* m_client;
     RetainPtr<AVStreamSession> m_streamSession;
     RefPtr<Uint8Array> m_initData;
     RefPtr<Uint8Array> m_certificate;
+    RetainPtr<NSData> m_expiredSession;
+    RetainPtr<CDMSessionMediaSourceAVFObjCObserver> m_dataParserObserver;
+    Vector<int> m_protocolVersions;
     String m_sessionId;
+    enum { Normal, KeyRelease } m_mode;
+    bool m_stopped = { false };
 };
 
 inline CDMSessionMediaSourceAVFObjC* toCDMSessionMediaSourceAVFObjC(CDMSession* session)

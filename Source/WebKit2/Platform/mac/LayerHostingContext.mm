@@ -26,29 +26,20 @@
 #import "config.h"
 #import "LayerHostingContext.h"
 
+#import <WebCore/MachSendRight.h>
+#import <WebCore/QuartzCoreSPI.h>
 #import <WebKitSystemInterface.h>
 
-#if __has_include(<QuartzCore/QuartzCorePrivate.h>)
-#import <QuartzCore/QuartzCorePrivate.h>
-#else
-@interface CAContext : NSObject
-@end
-#endif
-
-@interface CAContext (Details)
-+ (CAContext *)remoteContextWithOptions:(NSDictionary *)dict;
-@end
-
-extern NSString * const kCAContextIgnoresHitTest;
+using namespace WebCore;
 
 namespace WebKit {
 
-std::unique_ptr<LayerHostingContext> LayerHostingContext::createForPort(mach_port_t serverPort)
+std::unique_ptr<LayerHostingContext> LayerHostingContext::createForPort(const MachSendRight& serverPort)
 {
     auto layerHostingContext = std::make_unique<LayerHostingContext>();
 
     layerHostingContext->m_layerHostingMode = LayerHostingMode::InProcess;
-    layerHostingContext->m_context = WKCAContextMakeRemoteWithServerPort(serverPort);
+    layerHostingContext->m_context = (CAContext *)WKCAContextMakeRemoteWithServerPort(serverPort.sendRight());
 
     return layerHostingContext;
 }
@@ -62,11 +53,11 @@ std::unique_ptr<LayerHostingContext> LayerHostingContext::createForExternalHosti
 #if PLATFORM(IOS)
     // Use a very large display ID to ensure that the context is never put on-screen 
     // without being explicitly parented. See <rdar://problem/16089267> for details.
-    layerHostingContext->m_context = (WKCAContextRef)[CAContext remoteContextWithOptions:@{
+    layerHostingContext->m_context = [CAContext remoteContextWithOptions:@{
         kCAContextIgnoresHitTest : @YES,
         kCAContextDisplayId : @10000 }];
 #else
-    layerHostingContext->m_context = WKCAContextMakeRemoteForWindowServer();
+    layerHostingContext->m_context = (CAContext *)WKCAContextMakeRemoteForWindowServer();
 #endif
     
     return layerHostingContext;
@@ -83,32 +74,39 @@ LayerHostingContext::~LayerHostingContext()
 
 void LayerHostingContext::setRootLayer(CALayer *rootLayer)
 {
-    WKCAContextSetLayer(m_context.get(), rootLayer);
+    [m_context setLayer:rootLayer];
 }
 
 CALayer *LayerHostingContext::rootLayer() const
 {
-    return WKCAContextGetLayer(m_context.get());
+    return [m_context layer];
 }
 
 uint32_t LayerHostingContext::contextID() const
 {
-    return WKCAContextGetContextId(m_context.get());
+    return [m_context contextId];
 }
 
 void LayerHostingContext::invalidate()
 {
-    WKCAContextInvalidate(m_context.get());
+    [m_context invalidate];
 }
 
 void LayerHostingContext::setColorSpace(CGColorSpaceRef colorSpace)
 {
-    WKCAContextSetColorSpace(m_context.get(), colorSpace);
+    [m_context setColorSpace:colorSpace];
 }
 
 CGColorSpaceRef LayerHostingContext::colorSpace() const
 {
-    return WKCAContextGetColorSpace(m_context.get());
+    return [m_context colorSpace];
 }
+
+#if PLATFORM(IOS) || __MAC_OS_X_VERSION_MIN_REQUIRED >= 101000
+void LayerHostingContext::setFencePort(mach_port_t fencePort)
+{
+    [m_context setFencePort:fencePort];
+}
+#endif
 
 } // namespace WebKit

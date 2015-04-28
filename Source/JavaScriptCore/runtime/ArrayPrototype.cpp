@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- *  Copyright (C) 2003, 2007, 2008, 2009, 2011, 2013 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003, 2007, 2008, 2009, 2011, 2013, 2015 Apple Inc. All rights reserved.
  *  Copyright (C) 2003 Peter Kelly (pmk@post.com)
  *  Copyright (C) 2006 Alexey Proskuryakov (ap@nypop.com)
  *
@@ -35,6 +35,7 @@
 #include "JSStringBuilder.h"
 #include "JSStringJoiner.h"
 #include "Lookup.h"
+#include "ObjectConstructor.h"
 #include "ObjectPrototype.h"
 #include "JSCInlines.h"
 #include "StringRecursionChecker.h"
@@ -60,7 +61,6 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncIndexOf(ExecState*);
 EncodedJSValue JSC_HOST_CALL arrayProtoFuncReduce(ExecState*);
 EncodedJSValue JSC_HOST_CALL arrayProtoFuncReduceRight(ExecState*);
 EncodedJSValue JSC_HOST_CALL arrayProtoFuncLastIndexOf(ExecState*);
-EncodedJSValue JSC_HOST_CALL arrayProtoFuncValues(ExecState*);
 EncodedJSValue JSC_HOST_CALL arrayProtoFuncKeys(ExecState*);
 EncodedJSValue JSC_HOST_CALL arrayProtoFuncEntries(ExecState*);
 
@@ -78,7 +78,7 @@ static inline bool isNumericCompareFunction(ExecState* exec, JSValue function, C
     FunctionExecutable* executable = callData.js.functionExecutable;
     JSScope* scope = callData.js.scope;
 
-    JSObject* error = executable->prepareForExecution(exec, jsCast<JSFunction*>(function), &scope, CodeForCall);
+    JSObject* error = executable->prepareForExecution(exec, jsCast<JSFunction*>(function), scope, CodeForCall);
     if (error)
         return false;
 
@@ -117,6 +117,7 @@ const ClassInfo ArrayPrototype::s_info = {"Array", &JSArray::s_info, &arrayProto
   keys           arrayProtoFuncKeys           DontEnum|Function 0
   find           arrayProtoFuncFind           DontEnum|Function 1
   findIndex      arrayProtoFuncFindIndex      DontEnum|Function 1
+  includes       arrayProtoFuncIncludes       DontEnum|Function 1
 @end
 */
 
@@ -138,7 +139,25 @@ void ArrayPrototype::finishCreation(VM& vm, JSGlobalObject* globalObject)
     Base::finishCreation(vm);
     ASSERT(inherits(info()));
     vm.prototypeMap.addPrototype(this);
-    JSC_NATIVE_FUNCTION(vm.propertyNames->iteratorPrivateName, arrayProtoFuncValues, DontEnum, 0);
+
+    putDirectWithoutTransition(vm, vm.propertyNames->values, globalObject->arrayProtoValuesFunction(), DontEnum);
+    putDirectWithoutTransition(vm, vm.propertyNames->iteratorSymbol, globalObject->arrayProtoValuesFunction(), DontEnum);
+
+    if (!globalObject->runtimeFlags().isSymbolDisabled()) {
+        JSObject* unscopables = constructEmptyObject(globalObject->globalExec(), globalObject->nullPrototypeObjectStructure());
+        const char* unscopableNames[] = {
+            "copyWithin",
+            "entries",
+            "fill",
+            "find",
+            "findIndex",
+            "keys",
+            "values"
+        };
+        for (const char* unscopableName : unscopableNames)
+            unscopables->putDirect(vm, Identifier::fromString(&vm, unscopableName), jsBoolean(true));
+        putDirectWithoutTransition(vm, vm.propertyNames->unscopablesSymbol, unscopables, DontEnum | ReadOnly);
+    }
 }
 
 bool ArrayPrototype::getOwnPropertySlot(JSObject* object, ExecState* exec, PropertyName propertyName, PropertySlot& slot)
@@ -530,7 +549,7 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncPush(ExecState* exec)
             thisObj->methodTable()->putByIndex(thisObj, exec, length + n, exec->uncheckedArgument(n), true);
         else {
             PutPropertySlot slot(thisObj);
-            Identifier propertyName(exec, JSValue(static_cast<int64_t>(length) + static_cast<int64_t>(n)).toWTFString(exec));
+            Identifier propertyName = Identifier::fromString(exec, JSValue(static_cast<int64_t>(length) + static_cast<int64_t>(n)).toWTFString(exec));
             thisObj->methodTable()->put(thisObj, exec, propertyName, exec->uncheckedArgument(n), slot);
         }
         if (exec->hadException())
@@ -735,17 +754,18 @@ EncodedJSValue JSC_HOST_CALL arrayProtoFuncSort(ExecState* exec)
         return JSValue::encode(jsUndefined());
     
     PropertyNameArray nameArray(exec);
-    thisObj->methodTable(exec->vm())->getPropertyNames(thisObj, exec, nameArray, IncludeDontEnumProperties);
+    thisObj->methodTable(exec->vm())->getPropertyNames(thisObj, exec, nameArray, EnumerationMode(DontEnumPropertiesMode::Include));
     if (exec->hadException())
         return JSValue::encode(jsUndefined());
 
     Vector<uint32_t, 0, UnsafeVectorOverflow> keys;
     for (size_t i = 0; i < nameArray.size(); ++i) {
         PropertyName name = nameArray[i];
-        uint32_t index = name.asIndex();
-        if (index == PropertyName::NotAnIndex)
+        Optional<uint32_t> optionalIndex = parseIndex(name);
+        if (!optionalIndex)
             continue;
-        
+
+        uint32_t index = optionalIndex.value();
         JSValue value = getOrHole(thisObj, exec, index);
         if (exec->hadException())
             return JSValue::encode(jsUndefined());

@@ -25,9 +25,7 @@
 #include "config.h"
 #include "SVGFilterElement.h"
 
-#include "Attr.h"
 #include "RenderSVGResourceFilter.h"
-#include "SVGElementInstance.h"
 #include "SVGFilterBuilder.h"
 #include "SVGFilterPrimitiveStandardAttributes.h"
 #include "SVGNames.h"
@@ -77,9 +75,9 @@ inline SVGFilterElement::SVGFilterElement(const QualifiedName& tagName, Document
     registerAnimatedPropertiesForSVGFilterElement();
 }
 
-PassRefPtr<SVGFilterElement> SVGFilterElement::create(const QualifiedName& tagName, Document& document)
+Ref<SVGFilterElement> SVGFilterElement::create(const QualifiedName& tagName, Document& document)
 {
-    return adoptRef(new SVGFilterElement(tagName, document));
+    return adoptRef(*new SVGFilterElement(tagName, document));
 }
 
 const AtomicString& SVGFilterElement::filterResXIdentifier()
@@ -125,9 +123,7 @@ void SVGFilterElement::parseAttribute(const QualifiedName& name, const AtomicStr
 {
     SVGParsingError parseError = NoError;
 
-    if (!isSupportedAttribute(name))
-        SVGElement::parseAttribute(name, value);
-    else if (name == SVGNames::filterUnitsAttr) {
+    if (name == SVGNames::filterUnitsAttr) {
         SVGUnitTypes::SVGUnitType propertyValue = SVGPropertyTraits<SVGUnitTypes::SVGUnitType>::fromString(value);
         if (propertyValue > 0)
             setFilterUnitsBaseValue(propertyValue);
@@ -149,13 +145,13 @@ void SVGFilterElement::parseAttribute(const QualifiedName& name, const AtomicStr
             setFilterResXBaseValue(x);
             setFilterResYBaseValue(y);
         }
-    } else if (SVGURIReference::parseAttribute(name, value)
-             || SVGLangSpace::parseAttribute(name, value)
-             || SVGExternalResourcesRequired::parseAttribute(name, value)) {
-    } else
-        ASSERT_NOT_REACHED();
+    }
 
     reportAttributeParsingError(parseError, name, value);
+
+    SVGElement::parseAttribute(name, value);
+    SVGURIReference::parseAttribute(name, value);
+    SVGExternalResourcesRequired::parseAttribute(name, value);
 }
 
 void SVGFilterElement::svgAttributeChanged(const QualifiedName& attrName)
@@ -165,18 +161,15 @@ void SVGFilterElement::svgAttributeChanged(const QualifiedName& attrName)
         return;
     }
 
-    SVGElementInstance::InvalidationGuard invalidationGuard(this);
+    InstanceInvalidationGuard guard(*this);
 
-    if (attrName == SVGNames::xAttr
-        || attrName == SVGNames::yAttr
-        || attrName == SVGNames::widthAttr
-        || attrName == SVGNames::heightAttr) {
+    if (attrName == SVGNames::xAttr || attrName == SVGNames::yAttr || attrName == SVGNames::widthAttr || attrName == SVGNames::heightAttr) {
         invalidateSVGPresentationAttributeStyle();
         return;
     }
 
-    if (RenderObject* object = renderer())
-        object->setNeedsLayout();
+    if (auto* renderer = this->renderer())
+        renderer->setNeedsLayout();
 }
 
 void SVGFilterElement::childrenChanged(const ChildChange& change)
@@ -190,7 +183,7 @@ void SVGFilterElement::childrenChanged(const ChildChange& change)
         object->setNeedsLayout();
 }
 
-RenderPtr<RenderElement> SVGFilterElement::createElementRenderer(PassRef<RenderStyle> style)
+RenderPtr<RenderElement> SVGFilterElement::createElementRenderer(Ref<RenderStyle>&& style, const RenderTreePosition&)
 {
     return createRenderer<RenderSVGResourceFilter>(*this, WTF::move(style));
 }
@@ -200,7 +193,7 @@ bool SVGFilterElement::childShouldCreateRenderer(const Node& child) const
     if (!child.isSVGElement())
         return false;
 
-    const SVGElement& svgElement = toSVGElement(child);
+    const SVGElement& svgElement = downcast<SVGElement>(child);
 
     static NeverDestroyed<HashSet<QualifiedName>> allowedChildElementTags;
     if (allowedChildElementTags.get().isEmpty()) {

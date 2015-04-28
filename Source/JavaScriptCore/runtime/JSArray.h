@@ -1,6 +1,6 @@
 /*
  *  Copyright (C) 1999-2000 Harri Porten (porten@kde.org)
- *  Copyright (C) 2003, 2007, 2008, 2009, 2012 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003, 2007, 2008, 2009, 2012, 2015 Apple Inc. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -37,6 +37,7 @@ class JSArray : public JSNonFinalObject {
 
 public:
     typedef JSNonFinalObject Base;
+    static const unsigned StructureFlags = Base::StructureFlags | OverridesGetOwnPropertySlot | OverridesGetPropertyNames;
 
     static size_t allocationSize(size_t inlineCapacity)
     {
@@ -132,7 +133,7 @@ public:
     }
 
     JS_EXPORT_PRIVATE void fillArgList(ExecState*, MarkedArgumentBuffer&);
-    JS_EXPORT_PRIVATE void copyToArguments(ExecState*, CallFrame*, uint32_t length, int32_t firstVarArgOffset);
+    JS_EXPORT_PRIVATE void copyToArguments(ExecState*, VirtualRegister firstElementDest, unsigned offset, unsigned length);
 
     static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue prototype, IndexingType indexingType)
     {
@@ -140,7 +141,6 @@ public:
     }
         
 protected:
-    static const unsigned StructureFlags = OverridesGetOwnPropertySlot | OverridesGetPropertyNames | JSObject::StructureFlags;
     static void put(JSCell*, ExecState*, PropertyName, JSValue, PutPropertySlot&);
 
     static bool deleteProperty(JSCell*, ExecState*, PropertyName);
@@ -188,18 +188,6 @@ inline Butterfly* createContiguousArrayButterfly(VM& vm, JSCell* intendedOwner, 
     Butterfly* result = Butterfly::create(
         vm, intendedOwner, 0, 0, true, header, vectorLength * sizeof(EncodedJSValue));
     return result;
-}
-
-inline Butterfly* createArrayButterflyWithExactLength(VM& vm, JSCell* intendedOwner, unsigned initialLength)
-{
-    Butterfly* butterfly = Butterfly::create(
-        vm, intendedOwner, 0, 0, true, indexingHeaderForArray(initialLength, initialLength),
-        ArrayStorage::sizeFor(initialLength));
-    ArrayStorage* storage = butterfly->arrayStorage();
-    storage->m_indexBias = 0;
-    storage->m_sparseMap.clear();
-    storage->m_numValuesInVector = 0;
-    return butterfly;
 }
 
 inline Butterfly* createArrayButterfly(VM& vm, JSCell* intendedOwner, unsigned initialLength)

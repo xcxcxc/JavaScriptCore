@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011, 2013, 2014 Apple Inc. All rights reserved.
+ * Copyright (C) 2011, 2013-2015 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -96,14 +96,14 @@ EncodedJSValue JIT_OPERATION operationRegExpExec(ExecState*, JSCell*, JSCell*) W
 size_t JIT_OPERATION operationRegExpTest(ExecState*, JSCell*, JSCell*) WTF_INTERNAL;
 size_t JIT_OPERATION operationCompareStrictEqCell(ExecState*, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2) WTF_INTERNAL;
 size_t JIT_OPERATION operationCompareStrictEq(ExecState*, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2) WTF_INTERNAL;
-JSCell* JIT_OPERATION operationCreateInlinedArguments(ExecState*, InlineCallFrame*) WTF_INTERNAL;
-JSCell* JIT_OPERATION operationCreateInlinedArgumentsDuringOSRExit(ExecState*, InlineCallFrame*) WTF_INTERNAL;
-void JIT_OPERATION operationTearOffInlinedArguments(ExecState*, JSCell*, JSCell*, InlineCallFrame*) WTF_INTERNAL;
-EncodedJSValue JIT_OPERATION operationGetInlinedArgumentByVal(ExecState*, int32_t, InlineCallFrame*, int32_t) WTF_INTERNAL;
-EncodedJSValue JIT_OPERATION operationGetArgumentByVal(ExecState*, int32_t, int32_t) WTF_INTERNAL;
-JSCell* JIT_OPERATION operationNewFunctionNoCheck(ExecState*, JSCell*) WTF_INTERNAL;
+JSCell* JIT_OPERATION operationCreateActivationDirect(ExecState*, Structure*, JSScope*, SymbolTable*);
+JSCell* JIT_OPERATION operationCreateDirectArguments(ExecState*, Structure*, int32_t length, int32_t minCapacity);
+JSCell* JIT_OPERATION operationCreateDirectArgumentsDuringExit(ExecState*, InlineCallFrame*, JSFunction*, int32_t argumentCount);
+JSCell* JIT_OPERATION operationCreateScopedArguments(ExecState*, Structure*, Register* argumentStart, int32_t length, JSFunction* callee, JSLexicalEnvironment*);
+JSCell* JIT_OPERATION operationCreateClonedArgumentsDuringExit(ExecState*, InlineCallFrame*, JSFunction*, int32_t argumentCount);
+JSCell* JIT_OPERATION operationCreateClonedArguments(ExecState*, Structure*, Register* argumentStart, int32_t length, JSFunction* callee);
 double JIT_OPERATION operationFModOnInts(int32_t, int32_t) WTF_INTERNAL;
-size_t JIT_OPERATION operationIsObject(ExecState*, EncodedJSValue) WTF_INTERNAL;
+size_t JIT_OPERATION operationIsObjectOrNull(ExecState*, EncodedJSValue) WTF_INTERNAL;
 size_t JIT_OPERATION operationIsFunction(EncodedJSValue) WTF_INTERNAL;
 JSCell* JIT_OPERATION operationTypeOf(ExecState*, JSCell*) WTF_INTERNAL;
 char* JIT_OPERATION operationAllocatePropertyStorageWithInitialCapacity(ExecState*) WTF_INTERNAL;
@@ -121,14 +121,21 @@ JSString* JIT_OPERATION operationSingleCharacterString(ExecState*, int32_t);
 JSCell* JIT_OPERATION operationNewStringObject(ExecState*, JSString*, Structure*);
 JSCell* JIT_OPERATION operationToStringOnCell(ExecState*, JSCell*);
 JSCell* JIT_OPERATION operationToString(ExecState*, EncodedJSValue);
+JSCell* JIT_OPERATION operationCallStringConstructorOnCell(ExecState*, JSCell*);
+JSCell* JIT_OPERATION operationCallStringConstructor(ExecState*, EncodedJSValue);
 JSCell* JIT_OPERATION operationMakeRope2(ExecState*, JSString*, JSString*);
 JSCell* JIT_OPERATION operationMakeRope3(ExecState*, JSString*, JSString*, JSString*);
 char* JIT_OPERATION operationFindSwitchImmTargetForDouble(ExecState*, EncodedJSValue, size_t tableIndex);
 char* JIT_OPERATION operationSwitchString(ExecState*, size_t tableIndex, JSString*);
-void JIT_OPERATION operationNotifyWrite(ExecState*, VariableWatchpointSet*, EncodedJSValue);
+void JIT_OPERATION operationNotifyWrite(ExecState*, WatchpointSet*);
+void JIT_OPERATION operationThrowStackOverflowForVarargs(ExecState*) WTF_INTERNAL;
+int32_t JIT_OPERATION operationSizeOfVarargs(ExecState*, EncodedJSValue arguments, int32_t firstVarArgOffset);
+void JIT_OPERATION operationLoadVarargs(ExecState*, int32_t firstElementDest, EncodedJSValue arguments, int32_t offset, int32_t length, int32_t mandatoryMinimum);
 
 int64_t JIT_OPERATION operationConvertBoxedDoubleToInt52(EncodedJSValue);
 int64_t JIT_OPERATION operationConvertDoubleToInt52(double);
+
+void JIT_OPERATION operationProcessTypeProfilerLogDFG(ExecState*) WTF_INTERNAL;
 
 // These operations implement the implicitly called ToInt32 and ToBoolean conversions from ES5.
 // This conversion returns an int32_t within a size_t such that the value is zero extended to fill the register.
