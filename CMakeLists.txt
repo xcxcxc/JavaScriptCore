@@ -40,7 +40,7 @@ include(WebKitFeatures)
 # -----------------------------------------------------------------------------
 # Determine which port will be built
 # -----------------------------------------------------------------------------
-set(ALL_PORTS Efl GTK AppleWin WinCairo Mac)
+set(ALL_PORTS Efl GTK AppleWin WinCairo Mac Android)
 set(PORT "NOPORT" CACHE STRING "choose which WebKit port to build (one of ${ALL_PORTS})")
 
 list(FIND ALL_PORTS ${PORT} RET)
@@ -129,7 +129,7 @@ if (SHARED_CORE)
     set(JavaScriptCore_LIBRARY_TYPE SHARED)
     set(WebCore_LIBRARY_TYPE SHARED)
 else ()
-    set(JavaScriptCore_LIBRARY_TYPE SHARED)
+    set(JavaScriptCore_LIBRARY_TYPE STATIC)
     set(WebCore_LIBRARY_TYPE STATIC)
 endif ()
 

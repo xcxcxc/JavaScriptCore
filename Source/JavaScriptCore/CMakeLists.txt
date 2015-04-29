@@ -51,6 +51,7 @@ set(JavaScriptCore_SOURCES
     API/JSValueRef.cpp
     API/JSWeakObjectMapRefPrivate.cpp
     API/OpaqueJSString.cpp
+    API/JSTypedArray.cpp
 
     assembler/LinkBuffer.cpp
     assembler/MacroAssembler.cpp
@@ -1207,8 +1208,9 @@ WEBKIT_INCLUDE_CONFIG_FILES_IF_EXISTS()
 
 WEBKIT_CREATE_FORWARDING_HEADERS(JavaScriptCore DIRECTORIES ${JavaScriptCore_FORWARDING_HEADERS_DIRECTORIES} FILES ${JavaScriptCore_FORWARDING_HEADERS_FILES})
 
-
-add_subdirectory(shell)
+if (NOT "${PORT}" STREQUAL "Android")
+    add_subdirectory(shell)
+endif ()
 
 WEBKIT_WRAP_SOURCELIST(${JavaScriptCore_SOURCES})
 include_directories(${JavaScriptCore_INCLUDE_DIRECTORIES})

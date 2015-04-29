@@ -59,5 +59,6 @@ if __name__ == "__main__":
 
     outdir = build(args.out, args.derived_data)
 
+    print "outdir", outdir
     if args.no_open:
         os.system("open %s" % outdir)

@@ -26,6 +26,8 @@
 #ifndef JSGlobalObjectInspectorController_h
 #define JSGlobalObjectInspectorController_h
 
+#if ENABLE(INSPECTOR)
+
 #include "InspectorAgentRegistry.h"
 #include "InspectorEnvironment.h"
 #include <wtf/Forward.h>
@@ -124,5 +126,7 @@ private:
 };
 
 } // namespace Inspector
+
+#endif // ENABLE(INSPECTOR)
 
 #endif // !defined(JSGlobalObjectInspectorController_h)

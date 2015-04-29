@@ -12,7 +12,7 @@ import tempfile
 __author__ = "Martijn The"
 __email__ = "martijn@getpebble.com"
 
-DEFAULT_SDK_VERSION = "8.0"
+DEFAULT_SDK_VERSION = "7.0"
 
 
 class PebbleXcodeBuildException (Exception):
@@ -20,7 +20,7 @@ class PebbleXcodeBuildException (Exception):
 
 
 class XcodeBuild(object):
-    sdk_version = "8.0"
+    sdk_version = ""
     conf = None
     archs = None
     project = None
@@ -44,7 +44,7 @@ class XcodeBuild(object):
                          if arch.startswith("arm")]) > 0
         is_simulator = len([arch for arch in self.archs
                             if arch.startswith("i386") or
-                            arch.startswith("x64")]) > 0
+                            arch.startswith("x86_64")]) > 0
         if is_device and is_simulator:
             raise PebbleXcodeBuildException("Can't build for Device and"
                                             "Simulator in one go! (archs=%s)" %
@@ -90,8 +90,8 @@ class XcodeBuild(object):
         settings_list = re.findall('\s*([A-Z_]+)\s*=\s*(.*)',
                                    out, re.MULTILINE)
         self.build_settings = {pair[0]: pair[1] for pair in settings_list}
+
         self.is_built = True
-        subprocess.call(["strip", "-S", self.built_product_path()])
 
     def build(self):
         self._xcodebuild("build")
@@ -123,11 +123,11 @@ class FrameworkBuild(object):
                  derived_data_path=None):
         self.scheme = scheme
         self.name = name
-        self.devicebuildarm64 = XcodeBuild(project, derived_data_path=derived_data_path)
-        self.devicebuildarmv7 = XcodeBuild(project, derived_data_path=derived_data_path)
-        #self.devicebuildarmv7s = XcodeBuild(project, derived_data_path=derived_data_path)
-        self.simulatorbuild = XcodeBuild(project, derived_data_path=derived_data_path)
-        self.simulatorbuild64 = XcodeBuild(project, derived_data_path=derived_data_path)
+        self.devicebuildarm64 = XcodeBuild(project, derived_data_path=None if derived_data_path is None else os.path.join(derived_data_path, "arm64"))
+        self.devicebuildarmv7 = XcodeBuild(project, derived_data_path=None if derived_data_path is None else os.path.join(derived_data_path, "armv7"))
+        #self.devicebuildarmv7s = XcodeBuild(project, derived_data_path=None if derived_data_path is None else os.path.join(derived_data_path, "armv7s"))
+        self.simulatorbuild = XcodeBuild(project, derived_data_path=None if derived_data_path is None else os.path.join(derived_data_path, "i386"))
+        self.simulatorbuild64 = XcodeBuild(project, derived_data_path=None if derived_data_path is None else os.path.join(derived_data_path, "x86_64"))
         self.outdir = outdir
         for (bld, archs) in [self.devicebuildarm64, ["arm64"]], \
                             [self.devicebuildarmv7, ["armv7"]], \
@@ -165,7 +165,9 @@ class FrameworkBuild(object):
                    os.path.join(framework_dir, name))
 
         # Move public headers:
-        os.renames(self.devicebuildarm64.public_headers_path(), headers_dir)
+        for filename in os.listdir(self.devicebuildarm64.public_headers_path()):
+            shutil.move(os.path.join(self.devicebuildarm64.public_headers_path(), filename), headers_dir)
+        #shutil.move(self.devicebuildarm64.public_headers_path(), headers_dir)
 
         # Use lipo to create one fat static library:
         lipo_cmd = ["lipo", "-create",
@@ -191,7 +193,7 @@ class FrameworkBuild(object):
                                                      "A", "Headers")
             if os.path.exists(self._built_product_path):
                 shutil.rmtree(self._built_product_path)
-            os.rename(framework_dir, self._built_product_path)
+            shutil.move(framework_dir, self._built_product_path)
         else:
             self._built_product_path = framework_dir
             self._public_headers_path = headers_dir

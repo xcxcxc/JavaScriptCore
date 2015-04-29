@@ -31,10 +31,10 @@
 // we need to place this directive before any data or functions are defined.
 #pragma GCC diagnostic ignored "-Wmissing-format-attribute"
 
+#include "Compiler.h"
 #include "config.h"
 #include "Assertions.h"
 
-#include "Compiler.h"
 #include <wtf/StdLibExtras.h>
 #include <wtf/StringExtras.h>
 #include <wtf/text/CString.h>
