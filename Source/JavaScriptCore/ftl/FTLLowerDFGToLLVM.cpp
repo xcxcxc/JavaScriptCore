@@ -463,9 +463,8 @@ private:
         case PutStack:
             compilePutStack();
             break;
-        case Phantom:
         case Check:
-            compilePhantom();
+            compileNoOp();
             break;
         case ToThis:
             compileToThis();
@@ -797,6 +796,9 @@ private:
         case IsFunction:
             compileIsFunction();
             break;
+        case TypeOf:
+            compileTypeOf();
+            break;
         case CheckHasInstance:
             compileCheckHasInstance();
             break;
@@ -1068,7 +1070,9 @@ private:
             LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("BooleanToNumber continuation"));
             
             ValueFromBlock notBooleanResult = m_out.anchor(value);
-            m_out.branch(isBoolean(value), unsure(booleanCase), unsure(continuation));
+            m_out.branch(
+                isBoolean(value, provenType(m_node->child1())),
+                unsure(booleanCase), unsure(continuation));
             
             LBasicBlock lastNext = m_out.appendTo(booleanCase, continuation);
             ValueFromBlock booleanResult = m_out.anchor(m_out.bitOr(
@@ -1162,7 +1166,7 @@ private:
         }
     }
     
-    void compilePhantom()
+    void compileNoOp()
     {
         DFG_NODE_DO_TO_CHILDREN(m_graph, m_node, speculate);
     }
@@ -1175,7 +1179,8 @@ private:
         LBasicBlock slowCase = FTL_NEW_BLOCK(m_out, ("ToThis slow case"));
         LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("ToThis continuation"));
         
-        m_out.branch(isCell(value), usually(isCellCase), rarely(slowCase));
+        m_out.branch(
+            isCell(value, provenType(m_node->child1())), usually(isCellCase), rarely(slowCase));
         
         LBasicBlock lastNext = m_out.appendTo(isCellCase, slowCase);
         ValueFromBlock fastResult = m_out.anchor(value);
@@ -1198,8 +1203,8 @@ private:
     void compileValueAdd()
     {
         J_JITOperation_EJJ operation;
-        if (!(m_state.forNode(m_node->child1()).m_type & SpecFullNumber)
-            && !(m_state.forNode(m_node->child2()).m_type & SpecFullNumber))
+        if (!(provenType(m_node->child1()) & SpecFullNumber)
+            && !(provenType(m_node->child2()) & SpecFullNumber))
             operation = operationValueAddNotNumber;
         else
             operation = operationValueAdd;
@@ -1259,8 +1264,8 @@ private:
         }
             
         case Int52RepUse: {
-            if (!m_state.forNode(m_node->child1()).couldBeType(SpecInt52)
-                && !m_state.forNode(m_node->child2()).couldBeType(SpecInt52)) {
+            if (!abstractValue(m_node->child1()).couldBeType(SpecInt52)
+                && !abstractValue(m_node->child2()).couldBeType(SpecInt52)) {
                 Int52Kind kind;
                 LValue left = lowWhicheverInt52(m_node->child1(), kind);
                 LValue right = lowInt52(m_node->child2(), kind);
@@ -1720,7 +1725,7 @@ private:
             // If y is NaN, the result is NaN.
             m_out.appendTo(doubleExponentPowBlockEntry, nanExceptionExponentIsInfinity);
             LValue exponentIsNaN;
-            if (m_state.forNode(m_node->child2()).m_type & SpecDoubleNaN)
+            if (provenType(m_node->child2()) & SpecDoubleNaN)
                 exponentIsNaN = m_out.doubleNotEqualOrUnordered(exponent, exponent);
             else
                 exponentIsNaN = m_out.booleanFalse;
@@ -1786,7 +1791,7 @@ private:
         }
             
         case Int52RepUse: {
-            if (!m_state.forNode(m_node->child1()).couldBeType(SpecInt52)) {
+            if (!abstractValue(m_node->child1()).couldBeType(SpecInt52)) {
                 Int52Kind kind;
                 LValue value = lowWhicheverInt52(m_node->child1(), kind);
                 LValue result = m_out.neg(value);
@@ -1944,10 +1949,7 @@ private:
             vmCall(m_out.operation(operationEnsureDouble), m_callFrame, cell);
             break;
         case Array::Contiguous:
-            if (m_node->arrayMode().conversion() == Array::RageConvert)
-                vmCall(m_out.operation(operationRageEnsureContiguous), m_callFrame, cell);
-            else
-                vmCall(m_out.operation(operationEnsureContiguous), m_callFrame, cell);
+            vmCall(m_out.operation(operationEnsureContiguous), m_callFrame, cell);
             break;
         case Array::ArrayStorage:
         case Array::SlowPutArrayStorage:
@@ -2004,7 +2006,8 @@ private:
             LBasicBlock notCellCase = FTL_NEW_BLOCK(m_out, ("GetById untyped not cell case"));
             LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("GetById untyped continuation"));
             
-            m_out.branch(isCell(value), unsure(cellCase), unsure(notCellCase));
+            m_out.branch(
+                isCell(value, provenType(m_node->child1())), unsure(cellCase), unsure(notCellCase));
             
             LBasicBlock lastNext = m_out.appendTo(cellCase, notCellCase);
             ValueFromBlock cellResult = m_out.anchor(getById(value));
@@ -2100,7 +2103,7 @@ private:
         Edge edge = m_node->child1();
         LValue cell = lowCell(edge);
         
-        if (m_node->arrayMode().alreadyChecked(m_graph, m_node, m_state.forNode(edge)))
+        if (m_node->arrayMode().alreadyChecked(m_graph, m_node, abstractValue(edge)))
             return;
         
         speculate(
@@ -2559,7 +2562,7 @@ private:
                 TypedPointer elementPointer = m_out.baseIndex(
                     m_node->arrayMode().type() == Array::Int32 ?
                     m_heaps.indexedInt32Properties : m_heaps.indexedContiguousProperties,
-                    storage, m_out.zeroExtPtr(index), m_state.forNode(child2).m_value);
+                    storage, m_out.zeroExtPtr(index), provenValue(child2));
                 
                 if (m_node->op() == PutByValAlias) {
                     m_out.store64(value, elementPointer);
@@ -2585,7 +2588,7 @@ private:
                 
                 TypedPointer elementPointer = m_out.baseIndex(
                     m_heaps.indexedDoubleProperties, storage, m_out.zeroExtPtr(index),
-                    m_state.forNode(child2).m_value);
+                    provenValue(child2));
                 
                 if (m_node->op() == PutByValAlias) {
                     m_out.storeDouble(value, elementPointer);
@@ -3395,14 +3398,14 @@ private:
             if (m_node->child1().useKind() == CellUse)
                 isCellPredicate = m_out.booleanTrue;
             else
-                isCellPredicate = this->isCell(value);
+                isCellPredicate = this->isCell(value, provenType(m_node->child1()));
             m_out.branch(isCellPredicate, unsure(isCell), unsure(notString));
             
             LBasicBlock lastNext = m_out.appendTo(isCell, notString);
             ValueFromBlock simpleResult = m_out.anchor(value);
             LValue isStringPredicate;
             if (m_node->child1()->prediction() & SpecString) {
-                isStringPredicate = isString(value);
+                isStringPredicate = isString(value, provenType(m_node->child1()));
             } else
                 isStringPredicate = m_out.booleanFalse;
             m_out.branch(isStringPredicate, unsure(continuation), unsure(notString));
@@ -3438,11 +3441,14 @@ private:
         Vector<ValueFromBlock, 3> results;
         
         results.append(m_out.anchor(value));
-        m_out.branch(isCell(value), unsure(isCellCase), unsure(continuation));
+        m_out.branch(
+            isCell(value, provenType(m_node->child1())), unsure(isCellCase), unsure(continuation));
         
         LBasicBlock lastNext = m_out.appendTo(isCellCase, isObjectCase);
         results.append(m_out.anchor(value));
-        m_out.branch(isObject(value), unsure(isObjectCase), unsure(continuation));
+        m_out.branch(
+            isObject(value, provenType(m_node->child1())),
+            unsure(isObjectCase), unsure(continuation));
         
         m_out.appendTo(isObjectCase, continuation);
         results.append(m_out.anchor(vmCall(
@@ -3558,7 +3564,7 @@ private:
         ValueFromBlock char8Bit = m_out.anchor(m_out.zeroExt(
             m_out.load8(m_out.baseIndex(
                 m_heaps.characters8, storage, m_out.zeroExtPtr(index),
-                m_state.forNode(m_node->child2()).m_value)),
+                provenValue(m_node->child2()))),
             m_out.int32));
         m_out.jump(bitsContinuation);
             
@@ -3567,7 +3573,7 @@ private:
         ValueFromBlock char16Bit = m_out.anchor(m_out.zeroExt(
             m_out.load16(m_out.baseIndex(
                 m_heaps.characters16, storage, m_out.zeroExtPtr(index),
-                m_state.forNode(m_node->child2()).m_value)),
+                provenValue(m_node->child2()))),
             m_out.int32));
         m_out.branch(
             m_out.aboveOrEqual(char16Bit.value(), m_out.constInt32(0x100)),
@@ -3648,7 +3654,7 @@ private:
         ValueFromBlock char8Bit = m_out.anchor(m_out.zeroExt(
             m_out.load8(m_out.baseIndex(
                 m_heaps.characters8, storage, m_out.zeroExtPtr(index),
-                m_state.forNode(m_node->child2()).m_value)),
+                provenValue(m_node->child2()))),
             m_out.int32));
         m_out.jump(continuation);
             
@@ -3657,7 +3663,7 @@ private:
         ValueFromBlock char16Bit = m_out.anchor(m_out.zeroExt(
             m_out.load16(m_out.baseIndex(
                 m_heaps.characters16, storage, m_out.zeroExtPtr(index),
-                m_state.forNode(m_node->child2()).m_value)),
+                provenValue(m_node->child2()))),
             m_out.int32));
         m_out.jump(continuation);
         
@@ -4010,11 +4016,15 @@ private:
             LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("CompareStrictEq StringIdent to NotStringVar continuation"));
             
             ValueFromBlock notCellResult = m_out.anchor(m_out.booleanFalse);
-            m_out.branch(isCell(rightValue), unsure(isCellCase), unsure(continuation));
+            m_out.branch(
+                isCell(rightValue, provenType(rightEdge)),
+                unsure(isCellCase), unsure(continuation));
             
             LBasicBlock lastNext = m_out.appendTo(isCellCase, isStringCase);
             ValueFromBlock notStringResult = m_out.anchor(m_out.booleanFalse);
-            m_out.branch(isString(rightValue), unsure(isStringCase), unsure(continuation));
+            m_out.branch(
+                isString(rightValue, provenType(rightEdge)),
+                unsure(isStringCase), unsure(continuation));
             
             m_out.appendTo(isStringCase, continuation);
             LValue right = m_out.loadPtr(rightValue, m_heaps.JSString_value);
@@ -4327,7 +4337,7 @@ private:
                 
                 m_out.appendTo(isNotInt, isDouble);
                 m_out.branch(
-                    isCellOrMisc(boxedValue),
+                    isCellOrMisc(boxedValue, provenType(m_node->child1())),
                     usually(lowBlock(data->fallThrough.block)), rarely(isDouble));
                 
                 m_out.appendTo(isDouble, innerLastNext);
@@ -4372,13 +4382,13 @@ private:
                 LBasicBlock isStringCase = FTL_NEW_BLOCK(m_out, ("Switch/SwitchChar is string"));
                 
                 m_out.branch(
-                    isNotCell(unboxedValue),
+                    isNotCell(unboxedValue, provenType(m_node->child1())),
                     unsure(lowBlock(data->fallThrough.block)), unsure(isCellCase));
                 
                 LBasicBlock lastNext = m_out.appendTo(isCellCase, isStringCase);
                 LValue cellValue = unboxedValue;
                 m_out.branch(
-                    isNotString(cellValue),
+                    isNotString(cellValue, provenType(m_node->child1())),
                     unsure(lowBlock(data->fallThrough.block)), unsure(isStringCase));
                 
                 m_out.appendTo(isStringCase, lastNext);
@@ -4440,7 +4450,55 @@ private:
         }
         
         case SwitchString: {
-            DFG_CRASH(m_graph, m_node, "Unimplemented");
+            switch (m_node->child1().useKind()) {
+            case StringIdentUse: {
+                LValue stringImpl = lowStringIdent(m_node->child1());
+                
+                Vector<SwitchCase> cases;
+                for (unsigned i = 0; i < data->cases.size(); ++i) {
+                    LValue value = m_out.constIntPtr(data->cases[i].value.stringImpl());
+                    LBasicBlock block = lowBlock(data->cases[i].target.block);
+                    Weight weight = Weight(data->cases[i].target.count);
+                    cases.append(SwitchCase(value, block, weight));
+                }
+                
+                m_out.switchInstruction(
+                    stringImpl, cases, lowBlock(data->fallThrough.block),
+                    Weight(data->fallThrough.count));
+                return;
+            }
+                
+            case StringUse: {
+                switchString(data, lowString(m_node->child1()));
+                return;
+            }
+                
+            case UntypedUse: {
+                LValue value = lowJSValue(m_node->child1());
+                
+                LBasicBlock isCellBlock = FTL_NEW_BLOCK(m_out, ("Switch/SwitchString Untyped cell case"));
+                LBasicBlock isStringBlock = FTL_NEW_BLOCK(m_out, ("Switch/SwitchString Untyped string case"));
+                
+                m_out.branch(
+                    isCell(value, provenType(m_node->child1())),
+                    unsure(isCellBlock), unsure(lowBlock(data->fallThrough.block)));
+                
+                LBasicBlock lastNext = m_out.appendTo(isCellBlock, isStringBlock);
+                
+                m_out.branch(
+                    isString(value, provenType(m_node->child1())),
+                    unsure(isStringBlock), unsure(lowBlock(data->fallThrough.block)));
+                
+                m_out.appendTo(isStringBlock, lastNext);
+                
+                switchString(data, value);
+                return;
+            }
+                
+            default:
+                DFG_CRASH(m_graph, m_node, "Bad use kind");
+                return;
+            }
             return;
         }
             
@@ -4456,7 +4514,8 @@ private:
                 LValue value = lowJSValue(m_node->child1());
                 LBasicBlock cellCase = FTL_NEW_BLOCK(m_out, ("Switch/SwitchCell cell case"));
                 m_out.branch(
-                    isCell(value), unsure(cellCase), unsure(lowBlock(data->fallThrough.block)));
+                    isCell(value, provenType(m_node->child1())),
+                    unsure(cellCase), unsure(lowBlock(data->fallThrough.block)));
                 m_out.appendTo(cellCase);
                 cell = value;
                 break;
@@ -4519,12 +4578,12 @@ private:
     
     void compileIsBoolean()
     {
-        setBoolean(isBoolean(lowJSValue(m_node->child1())));
+        setBoolean(isBoolean(lowJSValue(m_node->child1()), provenType(m_node->child1())));
     }
     
     void compileIsNumber()
     {
-        setBoolean(isNumber(lowJSValue(m_node->child1())));
+        setBoolean(isNumber(lowJSValue(m_node->child1()), provenType(m_node->child1())));
     }
     
     void compileIsString()
@@ -4535,10 +4594,11 @@ private:
         LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("IsString continuation"));
         
         ValueFromBlock notCellResult = m_out.anchor(m_out.booleanFalse);
-        m_out.branch(isCell(value), unsure(isCellCase), unsure(continuation));
+        m_out.branch(
+            isCell(value, provenType(m_node->child1())), unsure(isCellCase), unsure(continuation));
         
         LBasicBlock lastNext = m_out.appendTo(isCellCase, continuation);
-        ValueFromBlock cellResult = m_out.anchor(isString(value));
+        ValueFromBlock cellResult = m_out.anchor(isString(value, provenType(m_node->child1())));
         m_out.jump(continuation);
         
         m_out.appendTo(continuation, lastNext);
@@ -4553,10 +4613,11 @@ private:
         LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("IsObject continuation"));
 
         ValueFromBlock notCellResult = m_out.anchor(m_out.booleanFalse);
-        m_out.branch(isCell(value), unsure(isCellCase), unsure(continuation));
+        m_out.branch(
+            isCell(value, provenType(m_node->child1())), unsure(isCellCase), unsure(continuation));
 
         LBasicBlock lastNext = m_out.appendTo(isCellCase, continuation);
-        ValueFromBlock cellResult = m_out.anchor(isObject(value));
+        ValueFromBlock cellResult = m_out.anchor(isObject(value, provenType(m_node->child1())));
         m_out.jump(continuation);
 
         m_out.appendTo(continuation, lastNext);
@@ -4565,16 +4626,117 @@ private:
 
     void compileIsObjectOrNull()
     {
-        LValue pointerResult = vmCall(
-            m_out.operation(operationIsObjectOrNull), m_callFrame, lowJSValue(m_node->child1()));
-        setBoolean(m_out.notNull(pointerResult));
+        JSGlobalObject* globalObject = m_graph.globalObjectFor(m_node->origin.semantic);
+        
+        Edge child = m_node->child1();
+        LValue value = lowJSValue(child);
+        
+        LBasicBlock cellCase = FTL_NEW_BLOCK(m_out, ("IsObjectOrNull cell case"));
+        LBasicBlock notFunctionCase = FTL_NEW_BLOCK(m_out, ("IsObjectOrNull not function case"));
+        LBasicBlock objectCase = FTL_NEW_BLOCK(m_out, ("IsObjectOrNull object case"));
+        LBasicBlock slowPath = FTL_NEW_BLOCK(m_out, ("IsObjectOrNull slow path"));
+        LBasicBlock notCellCase = FTL_NEW_BLOCK(m_out, ("IsObjectOrNull not cell case"));
+        LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("IsObjectOrNull continuation"));
+        
+        m_out.branch(isCell(value, provenType(child)), unsure(cellCase), unsure(notCellCase));
+        
+        LBasicBlock lastNext = m_out.appendTo(cellCase, notFunctionCase);
+        ValueFromBlock isFunctionResult = m_out.anchor(m_out.booleanFalse);
+        m_out.branch(
+            isFunction(value, provenType(child)),
+            unsure(continuation), unsure(notFunctionCase));
+        
+        m_out.appendTo(notFunctionCase, objectCase);
+        ValueFromBlock notObjectResult = m_out.anchor(m_out.booleanFalse);
+        m_out.branch(
+            isObject(value, provenType(child)),
+            unsure(objectCase), unsure(continuation));
+        
+        m_out.appendTo(objectCase, slowPath);
+        ValueFromBlock objectResult = m_out.anchor(m_out.booleanTrue);
+        m_out.branch(
+            isExoticForTypeof(value, provenType(child)),
+            rarely(slowPath), usually(continuation));
+        
+        m_out.appendTo(slowPath, notCellCase);
+        LValue slowResultValue = vmCall(
+            m_out.operation(operationObjectIsObject), m_callFrame, weakPointer(globalObject),
+            value);
+        ValueFromBlock slowResult = m_out.anchor(m_out.notNull(slowResultValue));
+        m_out.jump(continuation);
+        
+        m_out.appendTo(notCellCase, continuation);
+        LValue notCellResultValue = m_out.equal(value, m_out.constInt64(JSValue::encode(jsNull())));
+        ValueFromBlock notCellResult = m_out.anchor(notCellResultValue);
+        m_out.jump(continuation);
+        
+        m_out.appendTo(continuation, lastNext);
+        LValue result = m_out.phi(
+            m_out.boolean,
+            isFunctionResult, notObjectResult, objectResult, slowResult, notCellResult);
+        setBoolean(result);
     }
     
     void compileIsFunction()
     {
-        LValue pointerResult = vmCall(
-            m_out.operation(operationIsFunction), lowJSValue(m_node->child1()));
-        setBoolean(m_out.notNull(pointerResult));
+        JSGlobalObject* globalObject = m_graph.globalObjectFor(m_node->origin.semantic);
+        
+        Edge child = m_node->child1();
+        LValue value = lowJSValue(child);
+        
+        LBasicBlock cellCase = FTL_NEW_BLOCK(m_out, ("IsFunction cell case"));
+        LBasicBlock notFunctionCase = FTL_NEW_BLOCK(m_out, ("IsFunction not function case"));
+        LBasicBlock slowPath = FTL_NEW_BLOCK(m_out, ("IsFunction slow path"));
+        LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("IsFunction continuation"));
+        
+        ValueFromBlock notCellResult = m_out.anchor(m_out.booleanFalse);
+        m_out.branch(
+            isCell(value, provenType(child)), unsure(cellCase), unsure(continuation));
+        
+        LBasicBlock lastNext = m_out.appendTo(cellCase, notFunctionCase);
+        ValueFromBlock functionResult = m_out.anchor(m_out.booleanTrue);
+        m_out.branch(
+            isFunction(value, provenType(child)),
+            unsure(continuation), unsure(notFunctionCase));
+        
+        m_out.appendTo(notFunctionCase, slowPath);
+        ValueFromBlock objectResult = m_out.anchor(m_out.booleanFalse);
+        m_out.branch(
+            isExoticForTypeof(value, provenType(child)),
+            rarely(slowPath), usually(continuation));
+        
+        m_out.appendTo(slowPath, continuation);
+        LValue slowResultValue = vmCall(
+            m_out.operation(operationObjectIsFunction), m_callFrame, weakPointer(globalObject),
+            value);
+        ValueFromBlock slowResult = m_out.anchor(m_out.notNull(slowResultValue));
+        m_out.jump(continuation);
+        
+        m_out.appendTo(continuation, lastNext);
+        LValue result = m_out.phi(
+            m_out.boolean, notCellResult, functionResult, objectResult, slowResult);
+        setBoolean(result);
+    }
+    
+    void compileTypeOf()
+    {
+        Edge child = m_node->child1();
+        LValue value = lowJSValue(child);
+        
+        LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("TypeOf continuation"));
+        LBasicBlock lastNext = m_out.insertNewBlocksBefore(continuation);
+        
+        Vector<ValueFromBlock> results;
+        
+        buildTypeOf(
+            child, value,
+            [&] (TypeofType type) {
+                results.append(m_out.anchor(weakPointer(vm().smallStrings.typeString(type))));
+                m_out.jump(continuation);
+            });
+        
+        m_out.appendTo(continuation, lastNext);
+        setJSValue(m_out.phi(m_out.int64, results));
     }
     
     void compileIn()
@@ -4631,7 +4793,7 @@ private:
         
         LValue condition;
         if (m_node->child1().useKind() == UntypedUse)
-            condition = isCell(cell);
+            condition = isCell(cell, provenType(m_node->child1()));
         else
             condition = m_out.booleanTrue;
         
@@ -4640,7 +4802,7 @@ private:
         
         LBasicBlock lastNext = m_out.appendTo(isCellCase, loop);
         
-        speculate(BadType, noValue(), 0, isNotObject(prototype));
+        speculate(BadType, noValue(), 0, isNotObject(prototype, provenType(m_node->child2())));
         
         ValueFromBlock originalValue = m_out.anchor(cell);
         m_out.jump(loop);
@@ -5325,7 +5487,8 @@ private:
             m_out.jump(continuation);
         } else {
             m_out.appendTo(notIntCase, doubleCase);
-            m_out.branch(isCellOrMisc(value), unsure(notNumberCase), unsure(doubleCase));
+            m_out.branch(
+                isCellOrMisc(value, provenType(edge)), unsure(notNumberCase), unsure(doubleCase));
             
             m_out.appendTo(doubleCase, notNumberCase);
             results.append(m_out.anchor(doubleToInt32(unboxDouble(value))));
@@ -5491,7 +5654,7 @@ private:
     TypedPointer baseIndex(IndexedAbstractHeap& heap, LValue storage, LValue index, Edge edge, ptrdiff_t offset = 0)
     {
         return m_out.baseIndex(
-            heap, storage, m_out.zeroExtPtr(index), m_state.forNode(edge).m_value, offset);
+            heap, storage, m_out.zeroExtPtr(index), provenValue(edge), offset);
     }
     
     void compare(
@@ -5539,7 +5702,9 @@ private:
         LBasicBlock leftNotCellCase = FTL_NEW_BLOCK(m_out, ("CompareEqObjectOrOtherToObject left not cell case"));
         LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("CompareEqObjectOrOtherToObject continuation"));
         
-        m_out.branch(isCell(leftValue), unsure(leftCellCase), unsure(leftNotCellCase));
+        m_out.branch(
+            isCell(leftValue, provenType(leftChild)),
+            unsure(leftCellCase), unsure(leftNotCellCase));
         
         LBasicBlock lastNext = m_out.appendTo(leftCellCase, leftNotCellCase);
         speculateTruthyObject(leftChild, leftValue, SpecObject | (~SpecCell));
@@ -5828,8 +5993,7 @@ private:
     
     LValue typedArrayLength(Edge baseEdge, ArrayMode arrayMode, LValue base)
     {
-        JSArrayBufferView* view = m_graph.tryGetFoldableView(
-            m_state.forNode(baseEdge).m_value, arrayMode);
+        JSArrayBufferView* view = m_graph.tryGetFoldableView(provenValue(baseEdge), arrayMode);
         if (view)
             return m_out.constInt32(view->length());
         return m_out.load32NonNegative(base, m_heaps.JSArrayBufferView_length);
@@ -5866,7 +6030,9 @@ private:
             LBasicBlock fastCase = FTL_NEW_BLOCK(m_out, ("Boolify untyped fast case"));
             LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("Boolify untyped continuation"));
             
-            m_out.branch(isNotBoolean(value), rarely(slowCase), usually(fastCase));
+            m_out.branch(
+                isNotBoolean(value, provenType(m_node->child1())),
+                rarely(slowCase), usually(fastCase));
             
             LBasicBlock lastNext = m_out.appendTo(fastCase, slowCase);
             ValueFromBlock fastResult = m_out.anchor(unboxBoolean(value));
@@ -5908,7 +6074,7 @@ private:
         LBasicBlock primitiveCase = FTL_NEW_BLOCK(m_out, ("EqualNullOrUndefined primitive case"));
         LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("EqualNullOrUndefined continuation"));
         
-        m_out.branch(isNotCell(value), unsure(primitiveCase), unsure(cellCase));
+        m_out.branch(isNotCell(value, provenType(edge)), unsure(primitiveCase), unsure(cellCase));
         
         LBasicBlock lastNext = m_out.appendTo(cellCase, primitiveCase);
         
@@ -5960,7 +6126,7 @@ private:
             primitiveResult = m_out.equal(value, m_out.constInt64(ValueUndefined));
             break;
         case EqualNullOrUndefined:
-            primitiveResult = isOther(value);
+            primitiveResult = isOther(value, provenType(edge));
             break;
         case SpeculateNullOrUndefined:
             FTL_TYPE_CHECK(
@@ -6038,6 +6204,397 @@ private:
         m_out.switchInstruction(
             switchValue, cases,
             lowBlock(data->fallThrough.block), Weight(data->fallThrough.count));
+    }
+    
+    void switchString(SwitchData* data, LValue string)
+    {
+        bool canDoBinarySwitch = true;
+        unsigned totalLength = 0;
+        
+        for (DFG::SwitchCase myCase : data->cases) {
+            StringImpl* string = myCase.value.stringImpl();
+            if (!string->is8Bit()) {
+                canDoBinarySwitch = false;
+                break;
+            }
+            if (string->length() > Options::maximumBinaryStringSwitchCaseLength()) {
+                canDoBinarySwitch = false;
+                break;
+            }
+            totalLength += string->length();
+        }
+        
+        if (!canDoBinarySwitch || totalLength > Options::maximumBinaryStringSwitchTotalLength()) {
+            switchStringSlow(data, string);
+            return;
+        }
+        
+        LValue stringImpl = m_out.loadPtr(string, m_heaps.JSString_value);
+        LValue length = m_out.load32(string, m_heaps.JSString_length);
+        
+        LBasicBlock hasImplBlock = FTL_NEW_BLOCK(m_out, ("Switch/SwitchString has impl case"));
+        LBasicBlock is8BitBlock = FTL_NEW_BLOCK(m_out, ("Switch/SwitchString is 8 bit case"));
+        LBasicBlock slowBlock = FTL_NEW_BLOCK(m_out, ("Switch/SwitchString slow case"));
+        
+        m_out.branch(m_out.isNull(stringImpl), unsure(slowBlock), unsure(hasImplBlock));
+        
+        LBasicBlock lastNext = m_out.appendTo(hasImplBlock, is8BitBlock);
+        
+        m_out.branch(
+            m_out.testIsZero32(
+                m_out.load32(stringImpl, m_heaps.StringImpl_hashAndFlags),
+                m_out.constInt32(StringImpl::flagIs8Bit())),
+            unsure(slowBlock), unsure(is8BitBlock));
+        
+        m_out.appendTo(is8BitBlock, slowBlock);
+        
+        LValue buffer = m_out.loadPtr(stringImpl, m_heaps.StringImpl_data);
+        
+        // FIXME: We should propagate branch weight data to the cases of this switch.
+        // https://bugs.webkit.org/show_bug.cgi?id=144368
+        
+        Vector<StringSwitchCase> cases;
+        for (DFG::SwitchCase myCase : data->cases)
+            cases.append(StringSwitchCase(myCase.value.stringImpl(), lowBlock(myCase.target.block)));
+        std::sort(cases.begin(), cases.end());
+        switchStringRecurse(data, buffer, length, cases, 0, 0, cases.size(), 0, false);
+
+        m_out.appendTo(slowBlock, lastNext);
+        switchStringSlow(data, string);
+    }
+    
+    // The code for string switching is based closely on the same code in the DFG backend. While it
+    // would be nice to reduce the amount of similar-looking code, it seems like this is one of
+    // those algorithms where factoring out the common bits would result in more code than just
+    // duplicating.
+    
+    struct StringSwitchCase {
+        StringSwitchCase() { }
+        
+        StringSwitchCase(StringImpl* string, LBasicBlock target)
+            : string(string)
+            , target(target)
+        {
+        }
+
+        bool operator<(const StringSwitchCase& other) const
+        {
+            return stringLessThan(*string, *other.string);
+        }
+        
+        StringImpl* string;
+        LBasicBlock target;
+    };
+    
+    struct CharacterCase {
+        CharacterCase()
+            : character(0)
+            , begin(0)
+            , end(0)
+        {
+        }
+        
+        CharacterCase(LChar character, unsigned begin, unsigned end)
+            : character(character)
+            , begin(begin)
+            , end(end)
+        {
+        }
+        
+        bool operator<(const CharacterCase& other) const
+        {
+            return character < other.character;
+        }
+        
+        LChar character;
+        unsigned begin;
+        unsigned end;
+    };
+    
+    void switchStringRecurse(
+        SwitchData* data, LValue buffer, LValue length, const Vector<StringSwitchCase>& cases,
+        unsigned numChecked, unsigned begin, unsigned end, unsigned alreadyCheckedLength,
+        unsigned checkedExactLength)
+    {
+        LBasicBlock fallThrough = lowBlock(data->fallThrough.block);
+        
+        if (begin == end) {
+            m_out.jump(fallThrough);
+            return;
+        }
+        
+        unsigned minLength = cases[begin].string->length();
+        unsigned commonChars = minLength;
+        bool allLengthsEqual = true;
+        for (unsigned i = begin + 1; i < end; ++i) {
+            unsigned myCommonChars = numChecked;
+            unsigned limit = std::min(cases[begin].string->length(), cases[i].string->length());
+            for (unsigned j = numChecked; j < limit; ++j) {
+                if (cases[begin].string->at(j) != cases[i].string->at(j))
+                    break;
+                myCommonChars++;
+            }
+            commonChars = std::min(commonChars, myCommonChars);
+            if (minLength != cases[i].string->length())
+                allLengthsEqual = false;
+            minLength = std::min(minLength, cases[i].string->length());
+        }
+        
+        if (checkedExactLength) {
+            DFG_ASSERT(m_graph, m_node, alreadyCheckedLength == minLength);
+            DFG_ASSERT(m_graph, m_node, allLengthsEqual);
+        }
+        
+        DFG_ASSERT(m_graph, m_node, minLength >= commonChars);
+        
+        if (!allLengthsEqual && alreadyCheckedLength < minLength)
+            m_out.check(m_out.below(length, m_out.constInt32(minLength)), unsure(fallThrough));
+        if (allLengthsEqual && (alreadyCheckedLength < minLength || !checkedExactLength))
+            m_out.check(m_out.notEqual(length, m_out.constInt32(minLength)), unsure(fallThrough));
+        
+        for (unsigned i = numChecked; i < commonChars; ++i) {
+            m_out.check(
+                m_out.notEqual(
+                    m_out.load8(buffer, m_heaps.characters8[i]),
+                    m_out.constInt8(cases[begin].string->at(i))),
+                unsure(fallThrough));
+        }
+        
+        if (minLength == commonChars) {
+            // This is the case where one of the cases is a prefix of all of the other cases.
+            // We've already checked that the input string is a prefix of all of the cases,
+            // so we just check length to jump to that case.
+            
+            DFG_ASSERT(m_graph, m_node, cases[begin].string->length() == commonChars);
+            for (unsigned i = begin + 1; i < end; ++i)
+                DFG_ASSERT(m_graph, m_node, cases[i].string->length() > commonChars);
+            
+            if (allLengthsEqual) {
+                DFG_ASSERT(m_graph, m_node, end == begin + 1);
+                m_out.jump(cases[begin].target);
+                return;
+            }
+            
+            m_out.check(
+                m_out.equal(length, m_out.constInt32(commonChars)),
+                unsure(cases[begin].target));
+            
+            // We've checked if the length is >= minLength, and then we checked if the length is
+            // == commonChars. We get to this point if it is >= minLength but not == commonChars.
+            // Hence we know that it now must be > minLength, i.e. that it's >= minLength + 1.
+            switchStringRecurse(
+                data, buffer, length, cases, commonChars, begin + 1, end, minLength + 1, false);
+            return;
+        }
+        
+        // At this point we know that the string is longer than commonChars, and we've only verified
+        // commonChars. Use a binary switch on the next unchecked character, i.e.
+        // string[commonChars].
+        
+        DFG_ASSERT(m_graph, m_node, end >= begin + 2);
+        
+        LValue uncheckedChar = m_out.load8(buffer, m_heaps.characters8[commonChars]);
+        
+        Vector<CharacterCase> characterCases;
+        CharacterCase currentCase(cases[begin].string->at(commonChars), begin, begin + 1);
+        for (unsigned i = begin + 1; i < end; ++i) {
+            LChar currentChar = cases[i].string->at(commonChars);
+            if (currentChar != currentCase.character) {
+                currentCase.end = i;
+                characterCases.append(currentCase);
+                currentCase = CharacterCase(currentChar, i, i + 1);
+            } else
+                currentCase.end = i + 1;
+        }
+        characterCases.append(currentCase);
+        
+        Vector<LBasicBlock> characterBlocks;
+        for (CharacterCase& myCase : characterCases)
+            characterBlocks.append(FTL_NEW_BLOCK(m_out, ("Switch/SwitchString case for ", myCase.character, " at index ", commonChars)));
+        
+        Vector<SwitchCase> switchCases;
+        for (unsigned i = 0; i < characterCases.size(); ++i) {
+            switchCases.append(SwitchCase(
+                m_out.constInt8(characterCases[i].character), characterBlocks[i], Weight()));
+        }
+        m_out.switchInstruction(uncheckedChar, switchCases, fallThrough, Weight());
+        
+        LBasicBlock lastNext = m_out.m_nextBlock;
+        characterBlocks.append(lastNext); // Makes it convenient to set nextBlock.
+        for (unsigned i = 0; i < characterCases.size(); ++i) {
+            m_out.appendTo(characterBlocks[i], characterBlocks[i + 1]);
+            switchStringRecurse(
+                data, buffer, length, cases, commonChars + 1,
+                characterCases[i].begin, characterCases[i].end, minLength, allLengthsEqual);
+        }
+        
+        DFG_ASSERT(m_graph, m_node, m_out.m_nextBlock == lastNext);
+    }
+    
+    void switchStringSlow(SwitchData* data, LValue string)
+    {
+        // FIXME: We ought to be able to use computed gotos here. We would save the labels of the
+        // blocks we want to jump to, and then request their addresses after compilation completes.
+        // https://bugs.webkit.org/show_bug.cgi?id=144369
+        
+        LValue branchOffset = vmCall(
+            m_out.operation(operationSwitchStringAndGetBranchOffset),
+            m_callFrame, m_out.constIntPtr(data->switchTableIndex), string);
+        
+        StringJumpTable& table = codeBlock()->stringSwitchJumpTable(data->switchTableIndex);
+        
+        Vector<SwitchCase> cases;
+        for (unsigned i = 0; i < data->cases.size(); ++i) {
+            DFG::SwitchCase myCase = data->cases[i];
+            StringJumpTable::StringOffsetTable::iterator iter =
+                table.offsetTable.find(myCase.value.stringImpl());
+            DFG_ASSERT(m_graph, m_node, iter != table.offsetTable.end());
+            
+            cases.append(SwitchCase(
+                m_out.constInt32(iter->value.branchOffset),
+                lowBlock(myCase.target.block), Weight(myCase.target.count)));
+        }
+        
+        m_out.switchInstruction(
+            branchOffset, cases, lowBlock(data->fallThrough.block),
+            Weight(data->fallThrough.count));
+    }
+    
+    // Calls the functor at the point of code generation where we know what the result type is.
+    // You can emit whatever code you like at that point. Expects you to terminate the basic block.
+    // When buildTypeOf() returns, it will have terminated all basic blocks that it created. So, if
+    // you aren't using this as the terminator of a high-level block, you should create your own
+    // contination and set it as the nextBlock (m_out.insertNewBlocksBefore(continuation)) before
+    // calling this. For example:
+    //
+    // LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("My continuation"));
+    // LBasicBlock lastNext = m_out.insertNewBlocksBefore(continuation);
+    // buildTypeOf(
+    //     child, value,
+    //     [&] (TypeofType type) {
+    //          do things;
+    //          m_out.jump(continuation);
+    //     });
+    // m_out.appendTo(continuation, lastNext);
+    template<typename Functor>
+    void buildTypeOf(Edge child, LValue value, const Functor& functor)
+    {
+        JSGlobalObject* globalObject = m_graph.globalObjectFor(m_node->origin.semantic);
+        
+        // Implements the following branching structure:
+        //
+        // if (is cell) {
+        //     if (is object) {
+        //         if (is function) {
+        //             return function;
+        //         } else if (doesn't have call trap and doesn't masquerade as undefined) {
+        //             return object
+        //         } else {
+        //             return slowPath();
+        //         }
+        //     } else if (is string) {
+        //         return string
+        //     } else {
+        //         return symbol
+        //     }
+        // } else if (is number) {
+        //     return number
+        // } else if (is null) {
+        //     return object
+        // } else if (is boolean) {
+        //     return boolean
+        // } else {
+        //     return undefined
+        // }
+        
+        LBasicBlock cellCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf cell case"));
+        LBasicBlock objectCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf object case"));
+        LBasicBlock functionCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf function case"));
+        LBasicBlock notFunctionCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf not function case"));
+        LBasicBlock reallyObjectCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf really object case"));
+        LBasicBlock slowPath = FTL_NEW_BLOCK(m_out, ("buildTypeOf slow path"));
+        LBasicBlock unreachable = FTL_NEW_BLOCK(m_out, ("buildTypeOf unreachable"));
+        LBasicBlock notObjectCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf not object case"));
+        LBasicBlock stringCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf string case"));
+        LBasicBlock symbolCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf symbol case"));
+        LBasicBlock notCellCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf not cell case"));
+        LBasicBlock numberCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf number case"));
+        LBasicBlock notNumberCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf not number case"));
+        LBasicBlock notNullCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf not null case"));
+        LBasicBlock booleanCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf boolean case"));
+        LBasicBlock undefinedCase = FTL_NEW_BLOCK(m_out, ("buildTypeOf undefined case"));
+        
+        m_out.branch(isCell(value, provenType(child)), unsure(cellCase), unsure(notCellCase));
+        
+        LBasicBlock lastNext = m_out.appendTo(cellCase, objectCase);
+        m_out.branch(isObject(value, provenType(child)), unsure(objectCase), unsure(notObjectCase));
+        
+        m_out.appendTo(objectCase, functionCase);
+        m_out.branch(
+            isFunction(value, provenType(child) & SpecObject),
+            unsure(functionCase), unsure(notFunctionCase));
+        
+        m_out.appendTo(functionCase, notFunctionCase);
+        functor(TypeofType::Function);
+        
+        m_out.appendTo(notFunctionCase, reallyObjectCase);
+        m_out.branch(
+            isExoticForTypeof(value, provenType(child) & (SpecObject - SpecFunction)),
+            rarely(slowPath), usually(reallyObjectCase));
+        
+        m_out.appendTo(reallyObjectCase, slowPath);
+        functor(TypeofType::Object);
+        
+        m_out.appendTo(slowPath, unreachable);
+        LValue result = vmCall(
+            m_out.operation(operationTypeOfObjectAsTypeofType), m_callFrame,
+            weakPointer(globalObject), value);
+        Vector<SwitchCase, 3> cases;
+        cases.append(SwitchCase(m_out.constInt32(static_cast<int32_t>(TypeofType::Undefined)), undefinedCase));
+        cases.append(SwitchCase(m_out.constInt32(static_cast<int32_t>(TypeofType::Object)), reallyObjectCase));
+        cases.append(SwitchCase(m_out.constInt32(static_cast<int32_t>(TypeofType::Function)), functionCase));
+        m_out.switchInstruction(result, cases, unreachable, Weight());
+        
+        m_out.appendTo(unreachable, notObjectCase);
+        m_out.unreachable();
+        
+        m_out.appendTo(notObjectCase, stringCase);
+        m_out.branch(
+            isString(value, provenType(child) & (SpecCell - SpecObject)),
+            unsure(stringCase), unsure(symbolCase));
+        
+        m_out.appendTo(stringCase, symbolCase);
+        functor(TypeofType::String);
+        
+        m_out.appendTo(symbolCase, notCellCase);
+        functor(TypeofType::Symbol);
+        
+        m_out.appendTo(notCellCase, numberCase);
+        m_out.branch(
+            isNumber(value, provenType(child) & ~SpecCell),
+            unsure(numberCase), unsure(notNumberCase));
+        
+        m_out.appendTo(numberCase, notNumberCase);
+        functor(TypeofType::Number);
+        
+        m_out.appendTo(notNumberCase, notNullCase);
+        LValue isNull;
+        if (provenType(child) & SpecOther)
+            isNull = m_out.equal(value, m_out.constInt64(ValueNull));
+        else
+            isNull = m_out.booleanFalse;
+        m_out.branch(isNull, unsure(reallyObjectCase), unsure(notNullCase));
+        
+        m_out.appendTo(notNullCase, booleanCase);
+        m_out.branch(
+            isBoolean(value, provenType(child) & ~(SpecCell | SpecFullNumber)),
+            unsure(booleanCase), unsure(undefinedCase));
+        
+        m_out.appendTo(booleanCase, undefinedCase);
+        functor(TypeofType::Boolean);
+        
+        m_out.appendTo(undefinedCase, lastNext);
+        functor(TypeofType::Undefined);
     }
     
     LValue doubleToInt32(LValue doubleValue, double low, double high, bool isSigned = true)
@@ -6174,7 +6731,7 @@ private:
             return result;
         }
 
-        DFG_ASSERT(m_graph, m_node, !(m_state.forNode(edge).m_type & SpecInt32));
+        DFG_ASSERT(m_graph, m_node, !(provenType(edge) & SpecInt32));
         terminate(Uncountable);
         return m_out.int32Zero;
     }
@@ -6208,7 +6765,7 @@ private:
             break;
         }
 
-        DFG_ASSERT(m_graph, m_node, !m_state.forNode(edge).m_type);
+        DFG_ASSERT(m_graph, m_node, !provenType(edge));
         terminate(Uncountable);
         return m_out.int64Zero;
     }
@@ -6275,7 +6832,7 @@ private:
             return uncheckedValue;
         }
         
-        DFG_ASSERT(m_graph, m_node, !(m_state.forNode(edge).m_type & SpecCell));
+        DFG_ASSERT(m_graph, m_node, !(provenType(edge) & SpecCell));
         terminate(Uncountable);
         return m_out.intPtrZero;
     }
@@ -6344,7 +6901,7 @@ private:
             return result;
         }
         
-        DFG_ASSERT(m_graph, m_node, !(m_state.forNode(edge).m_type & SpecBoolean));
+        DFG_ASSERT(m_graph, m_node, !(provenType(edge) & SpecBoolean));
         terminate(Uncountable);
         return m_out.booleanFalse;
     }
@@ -6356,7 +6913,7 @@ private:
         LoweredNodeValue value = m_doubleValues.get(edge.node());
         if (isValid(value))
             return value.value();
-        DFG_ASSERT(m_graph, m_node, !m_state.forNode(edge).m_type);
+        DFG_ASSERT(m_graph, m_node, !provenType(edge));
         terminate(Uncountable);
         return m_out.doubleZero;
     }
@@ -6468,12 +7025,16 @@ private:
         return m_out.add(m_out.zeroExt(value, m_out.int64), m_tagTypeNumber);
     }
     
-    LValue isCellOrMisc(LValue jsValue)
+    LValue isCellOrMisc(LValue jsValue, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, SpecCell | SpecMisc))
+            return proven;
         return m_out.testIsZero64(jsValue, m_tagTypeNumber);
     }
-    LValue isNotCellOrMisc(LValue jsValue)
+    LValue isNotCellOrMisc(LValue jsValue, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, ~(SpecCell | SpecMisc)))
+            return proven;
         return m_out.testNonZero64(jsValue, m_tagTypeNumber);
     }
     
@@ -6567,43 +7128,59 @@ private:
         return possibleResult;
     }
     
-    LValue isNumber(LValue jsValue)
+    LValue isNumber(LValue jsValue, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, SpecFullNumber))
+            return proven;
         return isNotCellOrMisc(jsValue);
     }
-    LValue isNotNumber(LValue jsValue)
+    LValue isNotNumber(LValue jsValue, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, ~SpecFullNumber))
+            return proven;
         return isCellOrMisc(jsValue);
     }
     
-    LValue isNotCell(LValue jsValue)
+    LValue isNotCell(LValue jsValue, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, ~SpecCell))
+            return proven;
         return m_out.testNonZero64(jsValue, m_tagMask);
     }
     
-    LValue isCell(LValue jsValue)
+    LValue isCell(LValue jsValue, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, SpecCell))
+            return proven;
         return m_out.testIsZero64(jsValue, m_tagMask);
     }
     
-    LValue isNotMisc(LValue value)
+    LValue isNotMisc(LValue value, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, ~SpecMisc))
+            return proven;
         return m_out.above(value, m_out.constInt64(TagBitTypeOther | TagBitBool | TagBitUndefined));
     }
     
-    LValue isMisc(LValue value)
+    LValue isMisc(LValue value, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, SpecMisc))
+            return proven;
         return m_out.bitNot(isNotMisc(value));
     }
     
-    LValue isNotBoolean(LValue jsValue)
+    LValue isNotBoolean(LValue jsValue, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, ~SpecBoolean))
+            return proven;
         return m_out.testNonZero64(
             m_out.bitXor(jsValue, m_out.constInt64(ValueFalse)),
             m_out.constInt64(~1));
     }
-    LValue isBoolean(LValue jsValue)
+    LValue isBoolean(LValue jsValue, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, SpecBoolean))
+            return proven;
         return m_out.bitNot(isNotBoolean(jsValue));
     }
     LValue unboxBoolean(LValue jsValue)
@@ -6618,17 +7195,30 @@ private:
             value, m_out.constInt64(ValueTrue), m_out.constInt64(ValueFalse));
     }
     
-    LValue isNotOther(LValue value)
+    LValue isNotOther(LValue value, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, ~SpecOther))
+            return proven;
         return m_out.notEqual(
             m_out.bitAnd(value, m_out.constInt64(~TagBitUndefined)),
             m_out.constInt64(ValueNull));
     }
-    LValue isOther(LValue value)
+    LValue isOther(LValue value, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type, SpecOther))
+            return proven;
         return m_out.equal(
             m_out.bitAnd(value, m_out.constInt64(~TagBitUndefined)),
             m_out.constInt64(ValueNull));
+    }
+    
+    LValue isProvenValue(SpeculatedType provenType, SpeculatedType wantedType)
+    {
+        if (!(provenType & ~wantedType))
+            return m_out.booleanTrue;
+        if (!(provenType & wantedType))
+            return m_out.booleanFalse;
+        return nullptr;
     }
 
     void speculate(Edge edge)
@@ -6730,29 +7320,37 @@ private:
         jsValueToStrictInt52(edge, lowJSValue(edge, ManualOperandSpeculation));
     }
     
-    LValue isObject(LValue cell)
+    LValue isObject(LValue cell, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type & SpecCell, SpecObject))
+            return proven;
         return m_out.aboveOrEqual(
             m_out.load8(cell, m_heaps.JSCell_typeInfoType),
             m_out.constInt8(ObjectType));
     }
 
-    LValue isNotObject(LValue cell)
+    LValue isNotObject(LValue cell, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type & SpecCell, ~SpecObject))
+            return proven;
         return m_out.below(
             m_out.load8(cell, m_heaps.JSCell_typeInfoType),
             m_out.constInt8(ObjectType));
     }
 
-    LValue isNotString(LValue cell)
+    LValue isNotString(LValue cell, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type & SpecCell, ~SpecString))
+            return proven;
         return m_out.notEqual(
             m_out.load32(cell, m_heaps.JSCell_structureID),
             m_out.constInt32(vm().stringStructure->id()));
     }
     
-    LValue isString(LValue cell)
+    LValue isString(LValue cell, SpeculatedType type = SpecFullTop)
     {
+        if (LValue proven = isProvenValue(type & SpecCell, SpecString))
+            return proven;
         return m_out.equal(
             m_out.load32(cell, m_heaps.JSCell_structureID),
             m_out.constInt32(vm().stringStructure->id()));
@@ -6808,8 +7406,27 @@ private:
         }
     }
     
-    LValue isFunction(LValue cell) { return isType(cell, JSFunctionType); }
-    LValue isNotFunction(LValue cell) { return isNotType(cell, JSFunctionType); }
+    LValue isFunction(LValue cell, SpeculatedType type = SpecFullTop)
+    {
+        if (LValue proven = isProvenValue(type & SpecCell, SpecFunction))
+            return proven;
+        return isType(cell, JSFunctionType);
+    }
+    LValue isNotFunction(LValue cell, SpeculatedType type = SpecFullTop)
+    {
+        if (LValue proven = isProvenValue(type & SpecCell, ~SpecFunction))
+            return proven;
+        return isNotType(cell, JSFunctionType);
+    }
+            
+    LValue isExoticForTypeof(LValue cell, SpeculatedType type = SpecFullTop)
+    {
+        if (!(type & SpecObjectOther))
+            return m_out.booleanFalse;
+        return m_out.testNonZero8(
+            m_out.load8(cell, m_heaps.JSCell_typeInfoFlags),
+            m_out.constInt8(MasqueradesAsUndefined | TypeOfShouldCallGetCallData));
+    }
     
     LValue isType(LValue cell, JSType type)
     {
@@ -6854,7 +7471,7 @@ private:
         LBasicBlock primitiveCase = FTL_NEW_BLOCK(m_out, ("speculateObjectOrOther primitive case"));
         LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("speculateObjectOrOther continuation"));
         
-        m_out.branch(isNotCell(value), unsure(primitiveCase), unsure(cellCase));
+        m_out.branch(isNotCell(value, provenType(edge)), unsure(primitiveCase), unsure(cellCase));
         
         LBasicBlock lastNext = m_out.appendTo(cellCase, primitiveCase);
         
@@ -6954,7 +7571,7 @@ private:
         Structure* stringObjectStructure =
             m_graph.globalObjectFor(m_node->origin.semantic)->stringObjectStructure();
         
-        if (m_state.forNode(edge).m_structure.isSubsetOf(StructureSet(stringObjectStructure)))
+        if (abstractStructure(edge).isSubsetOf(StructureSet(stringObjectStructure)))
             return;
         
         speculate(
@@ -7017,10 +7634,10 @@ private:
         LBasicBlock isStringCase = FTL_NEW_BLOCK(m_out, ("Speculate NotStringVar is string case"));
         LBasicBlock continuation = FTL_NEW_BLOCK(m_out, ("Speculate NotStringVar continuation"));
         
-        m_out.branch(isCell(value), unsure(isCellCase), unsure(continuation));
+        m_out.branch(isCell(value, provenType(edge)), unsure(isCellCase), unsure(continuation));
         
         LBasicBlock lastNext = m_out.appendTo(isCellCase, isStringCase);
-        m_out.branch(isString(value), unsure(isStringCase), unsure(continuation));
+        m_out.branch(isString(value, provenType(edge)), unsure(isStringCase), unsure(continuation));
         
         m_out.appendTo(isStringCase, continuation);
         speculateStringIdent(edge, value, m_out.loadPtr(value, m_heaps.JSString_value));
@@ -7174,8 +7791,8 @@ private:
         
         OSRExit& exit = m_ftlState.jitCode->osrExit.last();
 
-        LBasicBlock lastNext = 0;
-        LBasicBlock continuation = 0;
+        LBasicBlock lastNext = nullptr;
+        LBasicBlock continuation = nullptr;
         
         LBasicBlock failCase = FTL_NEW_BLOCK(m_out, ("OSR exit failCase for ", m_node));
         continuation = FTL_NEW_BLOCK(m_out, ("OSR exit continuation for ", m_node));
@@ -7561,6 +8178,42 @@ private:
     TypedPointer tagFor(VirtualRegister operand)
     {
         return addressFor(operand, TagOffset);
+    }
+    
+    AbstractValue abstractValue(Node* node)
+    {
+        return m_state.forNode(node);
+    }
+    AbstractValue abstractValue(Edge edge)
+    {
+        return abstractValue(edge.node());
+    }
+    
+    SpeculatedType provenType(Node* node)
+    {
+        return abstractValue(node).m_type;
+    }
+    SpeculatedType provenType(Edge edge)
+    {
+        return provenType(edge.node());
+    }
+    
+    JSValue provenValue(Node* node)
+    {
+        return abstractValue(node).m_value;
+    }
+    JSValue provenValue(Edge edge)
+    {
+        return provenValue(edge.node());
+    }
+    
+    StructureAbstractValue abstractStructure(Node* node)
+    {
+        return abstractValue(node).m_structure;
+    }
+    StructureAbstractValue abstractStructure(Edge edge)
+    {
+        return abstractStructure(edge.node());
     }
     
     void crash()

@@ -182,11 +182,13 @@ const CGFloat minimumTapHighlightRadius = 2.0;
 - (void)showTextServiceFor:(NSString *)selectedTerm fromRect:(CGRect)presentationRect;
 - (void)scheduleChineseTransliterationForText:(NSString *)text;
 - (void)showShareSheetFor:(NSString *)selectedTerm fromRect:(CGRect)presentationRect;
+- (void)lookup:(NSString *)textWithContext fromRect:(CGRect)presentationRect;
 @end
 
 @interface UIWKSelectionAssistant (StagingToRemove)
 - (void)showTextServiceFor:(NSString *)selectedTerm fromRect:(CGRect)presentationRect;
 - (void)showShareSheetFor:(NSString *)selectedTerm fromRect:(CGRect)presentationRect;
+- (void)lookup:(NSString *)textWithContext fromRect:(CGRect)presentationRect;
 @end
 
 @interface UIKeyboardImpl (StagingToRemove)
@@ -1295,6 +1297,24 @@ static void cancelPotentialTapIfNecessary(WKContentView* contentView)
     return (_page->editorState().isContentRichlyEditable) ? richTypes : plainTextTypes;
 }
 
+- (void)_lookup:(CGPoint)point
+{
+    RetainPtr<WKContentView> view = self;
+    _page->getLookupContextAtPoint(WebCore::IntPoint(point), [view](const String& string, CallbackBase::Error error) {
+        if (error != CallbackBase::Error::None)
+            return;
+        if (!string)
+            return;
+        
+        CGRect presentationRect = view->_page->editorState().selectionIsRange ? view->_page->editorState().postLayoutData().selectionRects[0].rect() : view->_page->editorState().postLayoutData().caretRectAtStart;
+        
+        if (view->_textSelectionAssistant && [view->_textSelectionAssistant respondsToSelector:@selector(lookup:fromRect:)])
+            [view->_textSelectionAssistant lookup:string fromRect:presentationRect];
+        else if (view->_webSelectionAssistant && [view->_webSelectionAssistant respondsToSelector:@selector(lookup:fromRect:)])
+            [view->_webSelectionAssistant lookup:string fromRect:presentationRect];
+    });
+}
+
 - (void)_share:(id)sender
 {
     RetainPtr<WKContentView> view = self;
@@ -1440,6 +1460,16 @@ static void cancelPotentialTapIfNecessary(WKContentView* contentView)
         if ([[getMCProfileConnectionClass() sharedConnection] effectiveBoolValueForSetting:MCFeatureDefinitionLookupAllowed] == MCRestrictedBoolExplicitNo)
             return NO;
             
+        return YES;
+    }
+
+    if (action == @selector(_lookup:)) {
+        if (_page->editorState().isInPasswordField)
+            return NO;
+        
+        if ([[getMCProfileConnectionClass() sharedConnection] effectiveBoolValueForSetting:MCFeatureDefinitionLookupAllowed] == MCRestrictedBoolExplicitNo)
+            return NO;
+        
         return YES;
     }
 
@@ -1944,30 +1974,52 @@ static void selectionChangedWithTouch(WKContentView *view, const WebCore::IntPoi
 
 - (void)selectPositionAtPoint:(CGPoint)point completionHandler:(void (^)(void))completionHandler
 {
+    _usingGestureForSelection = YES;
     UIWKSelectionCompletionHandler selectionHandler = [completionHandler copy];
+    RetainPtr<WKContentView> view = self;
     
-    _page->selectPositionAtPoint(WebCore::IntPoint(point), [selectionHandler](WebKit::CallbackBase::Error error) {
+    _page->selectPositionAtPoint(WebCore::IntPoint(point), [view, selectionHandler](WebKit::CallbackBase::Error error) {
         selectionHandler();
+        view->_usingGestureForSelection = NO;
         [selectionHandler release];
     });
 }
 
 - (void)selectPositionAtBoundary:(UITextGranularity)granularity inDirection:(UITextDirection)direction fromPoint:(CGPoint)point completionHandler:(void (^)(void))completionHandler
 {
+    _usingGestureForSelection = YES;
     UIWKSelectionCompletionHandler selectionHandler = [completionHandler copy];
+    RetainPtr<WKContentView> view = self;
     
-    _page->selectPositionAtBoundaryWithDirection(WebCore::IntPoint(point), toWKTextGranularity(granularity), toWKSelectionDirection(direction), [selectionHandler](WebKit::CallbackBase::Error error) {
+    _page->selectPositionAtBoundaryWithDirection(WebCore::IntPoint(point), toWKTextGranularity(granularity), toWKSelectionDirection(direction), [view, selectionHandler](WebKit::CallbackBase::Error error) {
         selectionHandler();
+        view->_usingGestureForSelection = NO;
+        [selectionHandler release];
+    });
+}
+
+- (void)moveSelectionAtBoundary:(UITextGranularity)granularity inDirection:(UITextDirection)direction completionHandler:(void (^)(void))completionHandler
+{
+    _usingGestureForSelection = YES;
+    UIWKSelectionCompletionHandler selectionHandler = [completionHandler copy];
+    RetainPtr<WKContentView> view = self;
+    
+    _page->moveSelectionAtBoundaryWithDirection(toWKTextGranularity(granularity), toWKSelectionDirection(direction), [view, selectionHandler](WebKit::CallbackBase::Error error) {
+        selectionHandler();
+        view->_usingGestureForSelection = NO;
         [selectionHandler release];
     });
 }
 
 - (void)selectTextWithGranularity:(UITextGranularity)granularity atPoint:(CGPoint)point completionHandler:(void (^)(void))completionHandler
 {
+    _usingGestureForSelection = YES;
     UIWKSelectionCompletionHandler selectionHandler = [completionHandler copy];
+    RetainPtr<WKContentView> view = self;
 
-    _page->selectTextWithGranularityAtPoint(WebCore::IntPoint(point), toWKTextGranularity(granularity), [selectionHandler](WebKit::CallbackBase::Error error) {
+    _page->selectTextWithGranularityAtPoint(WebCore::IntPoint(point), toWKTextGranularity(granularity), [view, selectionHandler](WebKit::CallbackBase::Error error) {
         selectionHandler();
+        view->_usingGestureForSelection = NO;
         [selectionHandler release];
     });
 }

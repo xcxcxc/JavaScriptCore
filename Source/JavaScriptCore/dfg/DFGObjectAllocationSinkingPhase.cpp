@@ -585,7 +585,7 @@ private:
                     Node* target = node->child1().node();
                     if (m_sinkCandidates.contains(target)) {
                         ASSERT(target->isPhantomObjectAllocation());
-                        node->convertToPhantom();
+                        node->remove();
                     }
                     break;
                 }
@@ -641,7 +641,7 @@ private:
         Node* bottom = nullptr;
         for (BasicBlock* block : m_graph.blocksInNaturalOrder()) {
             if (block == m_graph.block(0))
-                bottom = m_insertionSet.insertNode(0, SpecNone, BottomValue, NodeOrigin());
+                bottom = m_insertionSet.insertConstant(0, NodeOrigin(), jsUndefined());
             
             for (unsigned nodeIndex = 0; nodeIndex < block->size(); ++nodeIndex) {
                 Node* node = block->at(nodeIndex);
@@ -786,7 +786,8 @@ private:
             break;
 
         case NewFunction:
-            sinkCandidate();
+            if (!node->castOperand<FunctionExecutable*>()->singletonFunction()->isStillValid())
+                sinkCandidate();
             m_graph.doToChildren(
                 node,
                 [&] (Edge edge) {
@@ -795,7 +796,6 @@ private:
             break;
 
         case MovHint:
-        case Phantom:
         case Check:
         case PutHint:
             break;

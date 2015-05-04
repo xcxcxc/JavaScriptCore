@@ -716,7 +716,7 @@ sub determinePassedConfiguration
         $passedConfiguration = "Profiling";
     }
 
-    $passedConfiguration .= "_WinCairo" if (defined($passedConfiguration) && isWinCairo() && isCygwin());
+    $passedConfiguration .= "_WinCairo" if (defined($passedConfiguration) && isWinCairo());
 }
 
 sub passedConfiguration
@@ -2351,7 +2351,7 @@ sub execMacWebKitAppForDebugging($)
         exec { $debuggerPath } $debuggerPath, @architectureFlags, $argumentsSeparator, $appPath, argumentsForRunAndDebugMacWebKitApp() or die;
     } else {
         if (shouldUseXPCServiceForWebProcess()) {
-            die "Targetting the Web Process is not compatible with using an XPC Service for the Web Process at this time.";
+            die "Targeting the Web Process is not compatible with using an XPC Service for the Web Process at this time.";
         }
         
         my $webProcessShimPath = File::Spec->catfile($productDir, "SecItemShim.dylib");

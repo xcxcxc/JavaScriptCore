@@ -1,3 +1,160 @@
+2015-05-01  Martin Robinson  <mrobinson@igalia.com>
+
+        USE(...) macro should expect unprefixed variables
+        https://bugs.webkit.org/show_bug.cgi?id=144454
+
+        Reviewed by Daniel Bates.
+
+        * Source/cmake/OptionsAppleWin.cmake: Replace all occurrences WTF_USE with USE.
+        * Source/cmake/OptionsEfl.cmake: Ditto.
+        * Source/cmake/OptionsGTK.cmake: Ditto.
+        * Source/cmake/OptionsMac.cmake: Ditto.
+        * Source/cmake/OptionsWinCairo.cmake: Ditto.
+        * Source/cmake/WebKitFeatures.cmake: No longer expose WTF_USE when encountering
+        USE variables.
+
+2015-04-30  Martin Robinson  <mrobinson@igalia.com>
+
+        [CMake] Automatically expose WTF_USE_FOO to the build when USE_FOO is exposed
+        https://bugs.webkit.org/show_bug.cgi?id=144394
+
+        Reviewed by Carlos Garcia Campos.
+
+        Automatically expose WTF_USE_FOO when USE_FOO is exposed. A side-effect of this change
+        is that it fixes the redirected XComposite window for GTK+, which was accidentally
+        disabled in previous reworking of the CMake configuration.
+
+        * Source/cmake/OptionsGTK.cmake: We no longer need to expose the WTF_ prefixed
+        version of USE variables.
+        * Source/cmake/WebKitFeatures.cmake: Automatically expose WTF_USE_FOO when USE_FOO
+        is exposed to the build.
+
+2015-04-30  Carlos Garcia Campos  <cgarcia@igalia.com>
+
+        Unreviewed. Bump GTK+ version numbers.
+
+        * Source/cmake/OptionsGTK.cmake:
+
+2015-04-29  Ryuan Choi  <ryuan.choi@navercorp.com>
+
+        [EFL] CMake should be failed if openwebrtc package does not exist but ENABLE_MEDIA_STREAM is ON
+        https://bugs.webkit.org/show_bug.cgi?id=144435
+
+        Reviewed by Gyuyoung Kim.
+
+        This patch adds REQUIRED option for OpenWebRTC when ENABLE_MEDIA_STREAM is ON.
+        In addition, this adds DEFAULT_PORT_VALUE for ENABLE_MEDIA_STREAM to match with FeatureList.pm
+
+        * Source/cmake/OptionsEfl.cmake:
+
+2015-04-29  Joseph Pecoraro  <pecoraro@apple.com>
+
+        REGRESSION(183583): [Mac] make without SDKROOT has issues
+        https://bugs.webkit.org/show_bug.cgi?id=144431
+
+        Reviewed by Dan Bernstein.
+
+        * Source/Makefile:
+        Assume an empty SDKROOT means an macosx variant, so only
+        enable settings if the SDKROOT is not empty and does not
+        contain "macosx".
+
+2015-04-29  Martin Robinson  <mrobinson@igalia.com>
+
+        Fix the GTK+ build after r183584
+
+        * Source/cmake/OptionsGTK.cmake: Properly use the USE_LIBHYPHEN and HYPHEN_FOUND variables.
+
+2015-04-29  Martin Robinson  <mrobinson@igalia.com>
+
+        [GTK] Add support for automatic hyphenation
+        https://bugs.webkit.org/show_bug.cgi?id=44478
+
+        Reviewed by Carlos Garcia Campos.
+
+        * Source/cmake/FindHyphen.cmake: Added. A CMake module for finding libhyphen.
+        * Source/cmake/OptionsGTK.cmake: Look for libhyphen and enable hyphenation if found.
+        * Source/cmakeconfig.h.cmake: Pass through the whether libhyphen is enabled.
+
+2015-04-29  Jake Nielsen  <jacob_nielsen@apple.com>
+
+        Failure when building WebKit for appletvsimulator.
+        https://bugs.webkit.org/show_bug.cgi?id=144356
+
+        Reviewed by Alexey Proskuryakov.
+
+        Changes Makefile logic to check for "not OS X" rather than "is iOS" to
+        make TVOS and WatchOS behave correctly.
+
+        * Source/Makefile:
+
+2015-04-29  Martin Robinson  <mrobinson@igalia.com>
+
+        [CMake] [GTK] Organize and clean up unused CMake variables
+        https://bugs.webkit.org/show_bug.cgi?id=144364
+
+        Reviewed by Gyuyoung Kim.
+
+        * Source/cmake/OptionsGTK.cmake: Remove unused variables and move variables
+        specific to certain projects into their PlatformGTK.cmake files.
+
+2015-04-29  Ryuan Choi  <ryuan.choi@navercorp.com>
+
+        [EFL] Build failure to find gio-unix
+        https://bugs.webkit.org/show_bug.cgi?id=144083
+
+        Reviewed by Gyuyoung Kim.
+
+        Original patch by Doug Newgard <scimma22@outlook.com>
+
+        * Source/cmake/OptionsEfl.cmake: Moved geoclue block before find_package(GLIB...)
+
+2015-04-28  Ryuan Choi  <ryuan.choi@navercorp.com>
+
+        [CoordinatedGraphics] Merge TILED_BACKING_STORE guard with COORDINATED_GRAPHICS
+        https://bugs.webkit.org/show_bug.cgi?id=143001
+
+        Reviewed by Gyuyoung Kim.
+
+        * Source/cmake/OptionsEfl.cmake: Removed TILED_BACKING_STORE definition.
+        * Source/cmake/OptionsGTK.cmake: Ditto.
+
+2015-04-28  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        Unreviewed, fix typo in previous commit
+
+        libsecretr -> libsecret in the error message.
+
+        * Source/cmake/OptionsGTK.cmake:
+
+2015-04-28  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        [GTK] Clean up feature detection and make it hard to accidentally build without optional features
+        https://bugs.webkit.org/show_bug.cgi?id=143546
+
+        Reviewed by Martin Robinson.
+
+        Add USE_GSTREAMER_MPEGTS option and turn it off by default. Turn off ENABLE_SUBTLE_CRYPTO
+        by default. Turn on ENABLE_GEOLOCATION by default. Add USE_LIBNOTIFY and turn it on by
+        default. Fail the build with an informative error message if an optional dependency required
+        for an enabled feature is not present. Perform find_package commands only when necessary.
+        Make ENABLE_API_TESTS private. Alphabetize the feature checks (yes, this is actually
+        possible now!).
+
+        * Source/cmake/OptionsGTK.cmake:
+
+2015-04-28  Michael Catanzaro  <mcatanzaro@igalia.com>
+
+        [GTK] Make all options actually options
+        https://bugs.webkit.org/show_bug.cgi?id=144106
+
+        Reviewed by Martin Robinson.
+
+        Use WEBKIT_OPTION_DEFINE to set ENABLE_GTKDOC, ENABLE_INTROSPECTION, ENABLE_X11_TARGET, and
+        ENABLE_WAYLAND_TARGET.
+
+        * Source/cmake/OptionsGTK.cmake:
+
 2015-04-28  Michael Catanzaro <mcatanzaro@igalia.com>
 
         Unreviewed, fix GTK build after r183452

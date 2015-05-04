@@ -264,7 +264,7 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #if defined(BUILDING_WITH_CMAKE)
 #define ENABLE_WEBGL 0
 #else
-#define ENABLE_WEBGL 1
+#define ENABLE_WEBGL 0
 #endif
 #endif
 
@@ -347,6 +347,10 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #if !defined(ENABLE_ES6_CLASS_SYNTAX)
 #define ENABLE_ES6_CLASS_SYNTAX 1
+#endif
+
+#if !defined(ENABLE_ES6_TEMPLATE_LITERAL_SYNTAX)
+#define ENABLE_ES6_TEMPLATE_LITERAL_SYNTAX 1
 #endif
 
 #if !defined(ENABLE_CONTENT_EXTENSIONS)

@@ -28,11 +28,14 @@
 
 #if ENABLE(CONTENT_EXTENSIONS)
 
+#include "ContentExtensionsDebugging.h"
 #include "NFA.h"
 #include <unicode/utypes.h>
 #include <wtf/ASCIICType.h>
 #include <wtf/HashMap.h>
 #include <wtf/Vector.h>
+#include <wtf/text/StringBuilder.h>
+#include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
@@ -83,7 +86,7 @@ public:
 
     void quantify(const AtomQuantifier&);
 
-    unsigned generateGraph(NFA&, unsigned start, const ActionSet& finalActions) const;
+    unsigned generateGraph(NFA&, unsigned start, const ActionList& finalActions) const;
 
     bool isEndOfLineAssertion() const;
 
@@ -106,6 +109,10 @@ public:
     bool isEmptyValue() const;
     bool isDeletedValue() const;
 
+#if CONTENT_EXTENSIONS_STATE_MACHINE_DEBUGGING
+    String toString() const;
+#endif
+    
 private:
     // This is exact for character sets but conservative for groups.
     // The return value can be false for a group equivalent to a universal transition.
@@ -203,6 +210,59 @@ private:
     } m_atomData;
 };
 
+#if CONTENT_EXTENSIONS_STATE_MACHINE_DEBUGGING
+inline String quantifierToString(AtomQuantifier quantifier)
+{
+    switch (quantifier) {
+    case AtomQuantifier::One:
+        return "";
+    case AtomQuantifier::ZeroOrOne:
+        return "?";
+    case AtomQuantifier::ZeroOrMore:
+        return "*";
+    case AtomQuantifier::OneOrMore:
+        return "+";
+    }
+}
+    
+inline String Term::toString() const
+{
+    switch (m_termType) {
+    case TermType::Empty:
+        return "(Empty)";
+    case TermType::Deleted:
+        return "(Deleted)";
+    case TermType::CharacterSet: {
+        StringBuilder builder;
+        builder.append('[');
+        for (UChar c = 0; c < 128; c++) {
+            if (m_atomData.characterSet.get(c)) {
+                if (isASCIIPrintable(c) && !isASCIISpace(c))
+                    builder.append(c);
+                else {
+                    builder.append('\\');
+                    builder.append('u');
+                    builder.appendNumber(c);
+                }
+            }
+        }
+        builder.append(']');
+        builder.append(quantifierToString(m_quantifier));
+        return builder.toString();
+    }
+    case TermType::Group: {
+        StringBuilder builder;
+        builder.append('(');
+        for (const Term& term : m_atomData.group.terms)
+            builder.append(term.toString());
+        builder.append(')');
+        builder.append(quantifierToString(m_quantifier));
+        return builder.toString();
+    }
+    }
+}
+#endif
+    
 struct TermHash {
     static unsigned hash(const Term& term) { return term.hash(); }
     static bool equal(const Term& a, const Term& b) { return a == b; }
@@ -335,7 +395,7 @@ inline void Term::quantify(const AtomQuantifier& quantifier)
     m_quantifier = quantifier;
 }
 
-inline unsigned Term::Term::generateGraph(NFA& nfa, unsigned start, const ActionSet& finalActions) const
+inline unsigned Term::Term::generateGraph(NFA& nfa, unsigned start, const ActionList& finalActions) const
 {
     ASSERT(isValid());
 
@@ -581,7 +641,7 @@ inline unsigned Term::generateSubgraphForAtom(NFA& nfa, unsigned source) const
     case TermType::Group: {
         unsigned lastTarget = source;
         for (const Term& term : m_atomData.group.terms)
-            lastTarget = term.generateGraph(nfa, lastTarget, ActionSet());
+            lastTarget = term.generateGraph(nfa, lastTarget, ActionList());
         return lastTarget;
     }
     }

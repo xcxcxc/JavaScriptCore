@@ -77,8 +77,6 @@
 
 + (void)hideWordDefinitionWindow;
 
-@property (readwrite) CGFloat minimumLayoutWidth;
-@property (readwrite) CGFloat minimumWidthForAutoLayout;
 @property (readwrite) NSSize minimumSizeForAutoLayout;
 @property (readwrite) BOOL shouldClipToVisibleRect;
 @property (readwrite) BOOL shouldExpandToViewHeightForAutoLayout;
@@ -149,6 +147,7 @@
 - (void)_completeImmediateActionAnimation;
 
 - (void)_dismissContentRelativeChildWindows;
+- (void)_dismissContentRelativeChildWindowsWithAnimation:(BOOL)withAnimation;
 
 - (void)_didChangeContentSize:(NSSize)newSize;
 #endif

@@ -452,8 +452,6 @@ public:
     void determineReachability();
     void resetReachability();
     
-    void mergeRelevantToOSR();
-    
     void computeRefCounts();
     
     unsigned varArgNumChildren(Node* node)
@@ -891,7 +889,7 @@ private:
         if (operandResultType != NodeResultInt32 && immediateValue.isDouble())
             return DontSpeculateInt32;
         
-        if (jsNumber(immediateValue.asNumber()).isInt32() || immediateValue.isBoolean())
+        if (immediateValue.isBoolean() || jsNumber(immediateValue.asNumber()).isInt32())
             return add->canSpeculateInt32(source) ? SpeculateInt32 : DontSpeculateInt32;
         
         double doubleImmediate = immediateValue.asDouble();

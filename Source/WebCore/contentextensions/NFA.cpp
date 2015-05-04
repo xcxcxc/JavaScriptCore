@@ -47,17 +47,21 @@ unsigned NFA::createNode()
     return nextId;
 }
 
+#if CONTENT_EXTENSIONS_PERFORMANCE_REPORTING
 size_t NFA::memoryUsed() const
 {
-    size_t size = 0;
+    size_t size = sizeof(NFA);
     for (const NFANode& node : m_nodes) {
+        for (const auto& transition : node.transitions)
+            size += transition.value.capacity() * sizeof(unsigned);
         size += sizeof(node)
             + node.transitions.capacity() * sizeof(std::pair<uint16_t, NFANodeIndexSet>)
             + node.transitionsOnAnyCharacter.capacity() * sizeof(unsigned)
-            + node.finalRuleIds.size() * sizeof(uint64_t);
+            + node.finalRuleIds.capacity() * sizeof(uint64_t);
     }
     return size;
 }
+#endif
 
 void NFA::addTransition(unsigned from, unsigned to, char character)
 {
@@ -93,7 +97,7 @@ void NFA::addTransitionsOnAnyCharacter(unsigned from, unsigned to)
         transitionSlot.value.remove(to);
 }
 
-void NFA::setActions(unsigned node, const ActionSet& actions)
+void NFA::setActions(unsigned node, const ActionList& actions)
 {
     ASSERT_WITH_MESSAGE(m_nodes[node].finalRuleIds.isEmpty(), "The final state should only be defined once.");
     copyToVector(actions, m_nodes[node].finalRuleIds);
@@ -186,7 +190,7 @@ void NFA::debugPrintDot() const
     for (unsigned i = 0; i < m_nodes.size(); ++i) {
         dataLogF("         %d [label=<Node %d", i, i);
 
-        const Vector<uint64_t>& finalRules = m_nodes[i].finalRuleIds;
+        const ActionList& finalRules = m_nodes[i].finalRuleIds;
         if (!finalRules.isEmpty()) {
             dataLogF("<BR/>(Final: ");
             for (unsigned ruleIndex = 0; ruleIndex < finalRules.size(); ++ruleIndex) {

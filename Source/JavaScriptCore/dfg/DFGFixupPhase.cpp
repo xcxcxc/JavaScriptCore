@@ -82,10 +82,8 @@ private:
         m_block = block;
         for (m_indexInBlock = 0; m_indexInBlock < block->size(); ++m_indexInBlock) {
             m_currentNode = block->at(m_indexInBlock);
-            addPhantomsIfNecessary();
             fixupNode(m_currentNode);
         }
-        addPhantomsIfNecessary();
         m_insertionSet.execute(block);
     }
     
@@ -142,14 +140,12 @@ private:
         case ValueAdd: {
             if (attemptToMakeIntegerAdd(node)) {
                 node->setOp(ArithAdd);
-                node->clearFlags(NodeMustGenerate);
                 break;
             }
             if (Node::shouldSpeculateNumberOrBooleanExpectingDefined(node->child1().node(), node->child2().node())) {
                 fixDoubleOrBooleanEdge(node->child1());
                 fixDoubleOrBooleanEdge(node->child2());
                 node->setOp(ArithAdd);
-                node->clearFlags(NodeMustGenerate);
                 node->setResult(NodeResultDouble);
                 break;
             }
@@ -268,12 +264,6 @@ private:
                 fixDoubleOrBooleanEdge(node->child1());
                 fixDoubleOrBooleanEdge(node->child2());
                 
-                // But we have to make sure that everything is phantom'd until after the
-                // DoubleAsInt32 node, which occurs after the Div/Mod node that the conversions
-                // will be insered on.
-                addRequiredPhantom(node->child1().node());
-                addRequiredPhantom(node->child2().node());
-
                 // We don't need to do ref'ing on the children because we're stealing them from
                 // the original division.
                 Node* newDivision = m_insertionSet.insertNode(
@@ -353,14 +343,6 @@ private:
                 fixEdge<DoubleRepUse>(node->child1());
             else if (node->child1()->shouldSpeculateString())
                 fixEdge<StringUse>(node->child1());
-            break;
-        }
-            
-        case TypeOf: {
-            if (node->child1()->shouldSpeculateString())
-                fixEdge<StringUse>(node->child1());
-            else if (node->child1()->shouldSpeculateCell())
-                fixEdge<CellUse>(node->child1());
             break;
         }
             
@@ -527,7 +509,7 @@ private:
                     m_graph, node,
                     node->child1()->prediction(),
                     node->child2()->prediction(),
-                    SpecNone, node->flags()));
+                    SpecNone));
             
             blessArrayOperation(node->child1(), node->child2(), node->child3());
             
@@ -737,6 +719,8 @@ private:
                 fixEdge<Int32Use>(node->child1());
             else if (node->child1()->shouldSpeculateNumber())
                 fixEdge<DoubleRepUse>(node->child1());
+            else if (node->child1()->shouldSpeculateString())
+                fixEdge<StringUse>(node->child1());
             break;
         }
             
@@ -845,7 +829,7 @@ private:
                 }
 
                 m_insertionSet.insertNode(
-                    m_indexInBlock, SpecNone, Phantom, node->origin,
+                    m_indexInBlock, SpecNone, Check, node->origin,
                     Edge(node->child1().node(), OtherUse));
                 observeUseKindOnNode<OtherUse>(node->child1().node());
                 m_graph.convertToConstant(
@@ -996,7 +980,6 @@ private:
             break;
         }
 
-        case Phantom:
         case Check: {
             switch (node->child1().useKind()) {
             case NumberUse:
@@ -1009,6 +992,11 @@ private:
             observeUseKindOnEdge(node->child1());
             break;
         }
+
+        case Phantom:
+            // Phantoms are meaningless past Fixup. We recreate them on-demand in the backend.
+            node->remove();
+            break;
 
         case FiatInt52: {
             RELEASE_ASSERT(enableInt52());
@@ -1073,7 +1061,7 @@ private:
         case IsString:
             if (node->child1()->shouldSpeculateString()) {
                 m_insertionSet.insertNode(
-                    m_indexInBlock, SpecNone, Phantom, node->origin,
+                    m_indexInBlock, SpecNone, Check, node->origin,
                     Edge(node->child1().node(), StringUse));
                 m_graph.convertToConstant(node, jsBoolean(true));
                 observeUseKindOnNode<StringUse>(node);
@@ -1083,7 +1071,7 @@ private:
         case IsObject:
             if (node->child1()->shouldSpeculateObject()) {
                 m_insertionSet.insertNode(
-                    m_indexInBlock, SpecNone, Phantom, node->origin,
+                    m_indexInBlock, SpecNone, Check, node->origin,
                     Edge(node->child1().node(), ObjectUse));
                 m_graph.convertToConstant(node, jsBoolean(true));
                 observeUseKindOnNode<ObjectUse>(node);
@@ -1109,7 +1097,7 @@ private:
                     m_graph, node,
                     node->child1()->prediction(),
                     node->child2()->prediction(),
-                    SpecNone, node->flags()));
+                    SpecNone));
             
             blessArrayOperation(node->child1(), node->child2(), node->child3());
             fixEdge<CellUse>(node->child1());
@@ -1156,28 +1144,28 @@ private:
             RefPtr<TypeSet> typeSet = node->typeLocation()->m_instructionTypeSet;
             RuntimeTypeMask seenTypes = typeSet->seenTypes();
             if (typeSet->doesTypeConformTo(TypeMachineInt)) {
-                node->convertToCheck();
                 if (node->child1()->shouldSpeculateInt32())
                     fixEdge<Int32Use>(node->child1());
                 else
                     fixEdge<MachineIntUse>(node->child1());
+                node->remove();
             } else if (typeSet->doesTypeConformTo(TypeNumber | TypeMachineInt)) {
-                node->convertToCheck();
                 fixEdge<NumberUse>(node->child1());
+                node->remove();
             } else if (typeSet->doesTypeConformTo(TypeString)) {
-                node->convertToCheck();
                 fixEdge<StringUse>(node->child1());
+                node->remove();
             } else if (typeSet->doesTypeConformTo(TypeBoolean)) {
-                node->convertToCheck();
                 fixEdge<BooleanUse>(node->child1());
+                node->remove();
             } else if (typeSet->doesTypeConformTo(TypeUndefined | TypeNull) && (seenTypes & TypeUndefined) && (seenTypes & TypeNull)) {
-                node->convertToCheck();
                 fixEdge<OtherUse>(node->child1());
+                node->remove();
             } else if (typeSet->doesTypeConformTo(TypeObject)) {
                 StructureSet set = typeSet->structureSet();
                 if (!set.isEmpty()) {
-                    node->convertToCheckStructure(m_graph.addStructureSet(set));
                     fixEdge<CellUse>(node->child1());
+                    node->convertToCheckStructure(m_graph.addStructureSet(set));
                 }
             }
 
@@ -1245,6 +1233,7 @@ private:
         case MovHint:
         case ZombieHint:
         case BottomValue:
+        case TypeOf:
             break;
 #else
         default:
@@ -1294,7 +1283,7 @@ private:
             // decision process much easier.
             observeUseKindOnNode<StringUse>(edge.node());
             m_insertionSet.insertNode(
-                m_indexInBlock, SpecNone, Phantom, node->origin,
+                m_indexInBlock, SpecNone, Check, node->origin,
                 Edge(edge.node(), StringUse));
             edge.setUseKind(KnownStringUse);
             return;
@@ -1396,9 +1385,6 @@ private:
     template<UseKind leftUseKind>
     bool attemptToMakeFastStringAdd(Node* node, Edge& left, Edge& right)
     {
-        Node* originalLeft = left.node();
-        Node* originalRight = right.node();
-        
         ASSERT(leftUseKind == StringUse || leftUseKind == StringObjectUse || leftUseKind == StringOrStringObjectUse);
         
         if (isStringObjectUse<leftUseKind>() && !canOptimizeStringObjectAccess(node->origin.semantic))
@@ -1432,12 +1418,6 @@ private:
             
             right.setNode(toString);
         }
-        
-        // We're doing checks up there, so we need to make sure that the
-        // *original* inputs to the addition are live up to here.
-        m_insertionSet.insertNode(
-            m_indexInBlock, SpecNone, Phantom, node->origin,
-            Edge(originalLeft), Edge(originalRight));
         
         convertToMakeRope(node);
         return true;
@@ -1562,7 +1542,7 @@ private:
         
         if (arrayMode.type() == Array::String) {
             m_insertionSet.insertNode(
-                m_indexInBlock, SpecNone, Phantom, origin, Edge(array, StringUse));
+                m_indexInBlock, SpecNone, Check, origin, Edge(array, StringUse));
         } else {
             Structure* structure = arrayMode.originalArrayStructure(m_graph, origin.semantic);
         
@@ -1773,7 +1753,6 @@ private:
         observeUseKindOnNode(node, useKind);
         
         edge = Edge(newNode, KnownInt32Use);
-        addRequiredPhantom(node);
     }
     
     void fixIntOrBooleanEdge(Edge& edge)
@@ -1795,7 +1774,6 @@ private:
         observeUseKindOnNode(node, useKind);
         
         edge = Edge(newNode, Int32Use);
-        addRequiredPhantom(node);
     }
     
     void fixDoubleOrBooleanEdge(Edge& edge)
@@ -1817,7 +1795,6 @@ private:
         observeUseKindOnNode(node, useKind);
         
         edge = Edge(newNode, DoubleRepUse);
-        addRequiredPhantom(node);
     }
     
     void truncateConstantToInt32(Edge& edge)
@@ -1997,11 +1974,9 @@ private:
         m_block = block;
         for (m_indexInBlock = 0; m_indexInBlock < block->size(); ++m_indexInBlock) {
             m_currentNode = block->at(m_indexInBlock);
-            addPhantomsIfNecessary();
             tryToRelaxRepresentation(m_currentNode);
             DFG_NODE_DO_TO_CHILDREN(m_graph, m_currentNode, injectTypeConversionsForEdge);
         }
-        addPhantomsIfNecessary();
         m_insertionSet.execute(block);
     }
     
@@ -2015,7 +1990,6 @@ private:
         
         switch (node->op()) {
         case MovHint:
-        case Phantom:
         case Check:
             DFG_NODE_DO_TO_CHILDREN(m_graph, m_currentNode, fixEdgeRepresentation);
             break;
@@ -2076,8 +2050,6 @@ private:
             if (edge->hasDoubleResult())
                 break;
             
-            addRequiredPhantom(edge.node());
-
             if (edge->isNumberConstant()) {
                 result = m_insertionSet.insertNode(
                     m_indexInBlock, SpecBytecodeDouble, DoubleConstant, node->origin,
@@ -2100,8 +2072,6 @@ private:
             if (edge->hasInt52Result())
                 break;
             
-            addRequiredPhantom(edge.node());
-
             if (edge->isMachineIntConstant()) {
                 result = m_insertionSet.insertNode(
                     m_indexInBlock, SpecMachineInt, Int52Constant, node->origin,
@@ -2128,8 +2098,6 @@ private:
             if (!edge->hasDoubleResult() && !edge->hasInt52Result())
                 break;
             
-            addRequiredPhantom(edge.node());
-            
             if (edge->hasDoubleResult()) {
                 result = m_insertionSet.insertNode(
                     m_indexInBlock, SpecBytecodeDouble, ValueRep, node->origin,
@@ -2145,32 +2113,11 @@ private:
         } }
     }
     
-    void addRequiredPhantom(Node* node)
-    {
-        m_requiredPhantoms.append(node);
-    }
-
-    void addPhantomsIfNecessary()
-    {
-        if (m_requiredPhantoms.isEmpty())
-            return;
-        
-        for (unsigned i = m_requiredPhantoms.size(); i--;) {
-            Node* node = m_requiredPhantoms[i];
-            m_insertionSet.insertNode(
-                m_indexInBlock, SpecNone, Phantom, m_currentNode->origin,
-                node->defaultEdge());
-        }
-        
-        m_requiredPhantoms.resize(0);
-    }
-    
     BasicBlock* m_block;
     unsigned m_indexInBlock;
     Node* m_currentNode;
     InsertionSet m_insertionSet;
     bool m_profitabilityChanged;
-    Vector<Node*, 3> m_requiredPhantoms;
 };
     
 bool performFixup(Graph& graph)

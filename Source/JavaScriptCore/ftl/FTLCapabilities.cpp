@@ -188,6 +188,8 @@ inline CapabilityLevel canCompile(Node* node)
     case PhantomClonedArguments:
     case GetMyArgumentByVal:
     case ForwardVarargs:
+    case Switch:
+    case TypeOf:
         // These are OK.
         break;
     case Identity:
@@ -350,16 +352,6 @@ inline CapabilityLevel canCompile(Node* node)
         if (node->isBinaryUseKind(UntypedUse))
             break;
         return CannotCompile;
-    case Switch:
-        switch (node->switchData()->kind) {
-        case SwitchImm:
-        case SwitchChar:
-        case SwitchCell:
-            break;
-        default:
-            return CannotCompile;
-        }
-        break;
     default:
         // Don't know how to handle anything else.
         return CannotCompile;

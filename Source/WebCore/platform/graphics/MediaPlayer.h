@@ -244,7 +244,7 @@ public:
     virtual bool mediaPlayerIsPaused() const { return true; }
     virtual bool mediaPlayerIsLooping() const { return false; }
     virtual CachedResourceLoader* mediaPlayerCachedResourceLoader() { return 0; }
-    virtual PassRefPtr<PlatformMediaResourceLoader> mediaPlayerCreateResourceLoader(std::unique_ptr<PlatformMediaResourceLoaderClient>) { return nullptr; }
+    virtual RefPtr<PlatformMediaResourceLoader> mediaPlayerCreateResourceLoader(std::unique_ptr<PlatformMediaResourceLoaderClient>) { return nullptr; }
     virtual bool doesHaveAttribute(const AtomicString&, AtomicString* = 0) const { return false; }
 
 #if ENABLE(VIDEO_TRACK)
@@ -464,7 +464,6 @@ public:
 
 #if ENABLE(WIRELESS_PLAYBACK_TARGET)
     bool isCurrentPlaybackTargetWireless() const;
-    bool isCurrentPlaybackTargetSupported() const;
 
     enum WirelessPlaybackTargetType { TargetTypeNone, TargetTypeAirPlay, TargetTypeTVOut };
     WirelessPlaybackTargetType wirelessPlaybackTargetType() const;

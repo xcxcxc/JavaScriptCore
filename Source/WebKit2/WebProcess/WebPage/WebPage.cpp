@@ -1068,11 +1068,14 @@ void WebPage::loadHTMLString(uint64_t navigationID, const String& htmlString, co
     loadString(navigationID, htmlString, ASCIILiteral("text/html"), baseURL, URL(), userData);
 }
 
-void WebPage::loadAlternateHTMLString(const String& htmlString, const String& baseURLString, const String& unreachableURLString, const UserData& userData)
+void WebPage::loadAlternateHTMLString(const String& htmlString, const String& baseURLString, const String& unreachableURLString, const String& provisionalLoadErrorURLString, const UserData& userData)
 {
     URL baseURL = baseURLString.isEmpty() ? blankURL() : URL(URL(), baseURLString);
     URL unreachableURL = unreachableURLString.isEmpty() ? URL() : URL(URL(), unreachableURLString);
+    URL provisionalLoadErrorURL = provisionalLoadErrorURLString.isEmpty() ? URL() : URL(URL(), provisionalLoadErrorURLString);
+    m_mainFrame->coreFrame()->loader().setProvisionalLoadErrorBeingHandledURL(provisionalLoadErrorURL);
     loadString(0, htmlString, ASCIILiteral("text/html"), baseURL, unreachableURL, userData);
+    m_mainFrame->coreFrame()->loader().setProvisionalLoadErrorBeingHandledURL({ });
 }
 
 void WebPage::loadPlainTextString(const String& string, const UserData& userData)
@@ -1210,13 +1213,13 @@ void WebPage::setSize(const WebCore::IntSize& viewSize)
     
     m_viewSize = viewSize;
 
-#if USE(TILED_BACKING_STORE)
+#if USE(COORDINATED_GRAPHICS)
     if (view->useFixedLayout())
         sendViewportAttributesChanged();
 #endif
 }
 
-#if USE(TILED_BACKING_STORE)
+#if USE(COORDINATED_GRAPHICS)
 void WebPage::setFixedVisibleContentRect(const IntRect& rect)
 {
     ASSERT(m_useFixedLayout);
@@ -1491,7 +1494,7 @@ void WebPage::setUseFixedLayout(bool fixed)
     m_page->settings().setScrollingCoordinatorEnabled(fixed);
 #endif
 
-#if USE(TILED_BACKING_STORE) && ENABLE(SMOOTH_SCROLLING)
+#if USE(COORDINATED_GRAPHICS) && ENABLE(SMOOTH_SCROLLING)
     // Delegated scrolling will be enabled when the FrameView is created if fixed layout is enabled.
     // Ensure we don't do animated scrolling in the WebProcess in that case.
     m_page->settings().setScrollAnimatorEnabled(!fixed);
@@ -1501,7 +1504,7 @@ void WebPage::setUseFixedLayout(bool fixed)
     if (!view)
         return;
 
-#if USE(TILED_BACKING_STORE)
+#if USE(COORDINATED_GRAPHICS)
     view->setDelegatesScrolling(fixed);
     view->setPaintsEntireContents(fixed);
 #endif
@@ -1785,7 +1788,7 @@ void WebPage::pageDidScroll()
     send(Messages::WebPageProxy::PageDidScroll());
 }
 
-#if USE(TILED_BACKING_STORE)
+#if USE(COORDINATED_GRAPHICS)
 void WebPage::pageDidRequestScroll(const IntPoint& point)
 {
 #if USE(COORDINATED_GRAPHICS_MULTIPROCESS)
@@ -2292,7 +2295,7 @@ void WebPage::setCanStartMediaTimerFired()
 
 inline bool WebPage::canHandleUserEvents() const
 {
-#if USE(TILED_BACKING_STORE)
+#if USE(COORDINATED_GRAPHICS)
     // Should apply only if the area was frozen by didStartPageTransition().
     return !m_drawingArea->layerTreeStateIsFrozen();
 #endif
@@ -2756,6 +2759,8 @@ void WebPage::updatePreferences(const WebPreferencesStore& store)
     settings.setForceUpdateScrollbarsOnMainThreadForPerformanceTesting(store.getBoolValueForKey(WebPreferencesKey::forceUpdateScrollbarsOnMainThreadForPerformanceTestingKey()));
     settings.setInteractiveFormValidationEnabled(store.getBoolValueForKey(WebPreferencesKey::interactiveFormValidationEnabledKey()));
     settings.setSpatialNavigationEnabled(store.getBoolValueForKey(WebPreferencesKey::spatialNavigationEnabledKey()));
+
+    settings.setMetaRefreshEnabled(store.getBoolValueForKey(WebPreferencesKey::metaRefreshEnabledKey()));
 
     DatabaseManager::singleton().setIsAvailable(store.getBoolValueForKey(WebPreferencesKey::databasesEnabledKey()));
 
@@ -4901,6 +4906,14 @@ void WebPage::postSynchronousMessage(const String& messageName, API::Object* mes
         returnData = nullptr;
     else
         returnData = webProcess.transformHandlesToObjects(returnUserData.object());
+}
+
+void WebPage::clearWheelEventTestTrigger()
+{
+    if (!m_page)
+        return;
+
+    m_page->clearTrigger();
 }
 
 } // namespace WebKit
