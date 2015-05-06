@@ -63,14 +63,23 @@ void* Allocator::tryAllocate(size_t size)
     return PerProcess<Heap>::get()->tryAllocateXLarge(lock, superChunkSize, roundUpToMultipleOf<xLargeAlignment>(size));
 }
 
+#define STRINGIFY(s) XSTRINGIFY(s)
+#define XSTRINGIFY(s) #s
+
 void* Allocator::allocate(size_t alignment, size_t size)
 {
     BASSERT(isPowerOfTwo(alignment));
 
     if (!m_isBmallocEnabled) {
         void* result = nullptr;
+
+#if !defined(ANDROID) || (ANDROID_NATIVE_API_LEVEL > 15)
+        #pragma message ("ANDROID_NATIVE_API_LEVEL= " STRINGIFY(ANDROID_NATIVE_API_LEVEL))
         if (posix_memalign(&result, alignment, size))
             return nullptr;
+#else
+            return memalign(alignment, size);
+#endif
         return result;
     }
     

@@ -4,7 +4,7 @@
 *.pyc
 .DS_Store
 .directory
-build/
+build*/
 /WebKitBuild/
 autoinstall.cache.d
 project.xcworkspace

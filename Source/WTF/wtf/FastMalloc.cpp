@@ -44,6 +44,11 @@
 #include <malloc/malloc.h>
 #endif
 
+#if OS(WINDOWS) && !(defined(__MINGW32__) && __MSVCRT_VERSION__ < 0x0700)
+#include <malloc.h>
+#define HAS_MSVC_ALIGNED_MALLOC 1
+#endif
+
 namespace WTF {
 
 void* fastZeroedMalloc(size_t n) 
@@ -101,13 +106,26 @@ void fastAlignedFree(void* p)
     _aligned_free(p);
 }
 
-#else
+#elif (!defined(ANDROID) && (ANDROID_NATIVE_API_LEVEL > 15))
 
 void* fastAlignedMalloc(size_t alignment, size_t size) 
 {
     void* p = nullptr;
     posix_memalign(&p, alignment, size);
     return p;
+}
+
+void fastAlignedFree(void* p) 
+{
+    free(p);
+}
+
+#else
+
+void* fastAlignedMalloc(size_t alignment, size_t size) 
+{
+    void* p = nullptr;
+    return memalign(alignment, size);
 }
 
 void fastAlignedFree(void* p) 
