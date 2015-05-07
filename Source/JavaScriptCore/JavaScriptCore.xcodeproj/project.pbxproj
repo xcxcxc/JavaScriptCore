@@ -11178,6 +11178,7 @@
 					"$(GCC_PREPROCESSOR_DEFINITIONS)",
 					"JSC_OBJC_API_ENABLED=0",
 				);
+				STRIP_STYLE = all;
 			};
 			name = Debug;
 		};
@@ -11185,6 +11186,8 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
 			buildSettings = {
+				DEAD_CODE_STRIPPING = YES;
+				GCC_OPTIMIZATION_LEVEL = s;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
 					"WEBKIT_VERSION_MIN_REQUIRED=WEBKIT_VERSION_LATEST",
@@ -11194,6 +11197,7 @@
 					"$(GCC_PREPROCESSOR_DEFINITIONS)",
 					"JSC_OBJC_API_ENABLED=0",
 				);
+				STRIP_STYLE = all;
 			};
 			name = Release;
 		};
@@ -11212,6 +11216,7 @@
 					"JSC_OBJC_API_ENABLED=0",
 				);
 				SDKROOT = macosx;
+				STRIP_STYLE = all;
 			};
 			name = Production;
 		};
@@ -11323,6 +11328,7 @@
 				INFOPLIST_FILE = JavaScriptCoreiOS.plist;
 				PRODUCT_NAME = "JavaScriptCore iOS";
 				SDKROOT = iphoneos;
+				STRIP_STYLE = all;
 			};
 			name = Debug;
 		};
@@ -11331,7 +11337,9 @@
 			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
 			buildSettings = {
 				ARCHS = armv7;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_OPTIMIZATION_LEVEL = s;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
 					"WEBKIT_VERSION_MIN_REQUIRED=WEBKIT_VERSION_LATEST",
@@ -11344,6 +11352,7 @@
 				INFOPLIST_FILE = JavaScriptCoreiOS.plist;
 				PRODUCT_NAME = "JavaScriptCore iOS";
 				SDKROOT = iphoneos;
+				STRIP_STYLE = all;
 			};
 			name = Release;
 		};
@@ -11365,6 +11374,7 @@
 				INFOPLIST_FILE = JavaScriptCoreiOS.plist;
 				PRODUCT_NAME = "JavaScriptCore iOS";
 				SDKROOT = iphoneos;
+				STRIP_STYLE = all;
 			};
 			name = Profiling;
 		};
@@ -11387,6 +11397,7 @@
 				INFOPLIST_FILE = JavaScriptCoreiOS.plist;
 				PRODUCT_NAME = "JavaScriptCore iOS";
 				SDKROOT = iphoneos;
+				STRIP_STYLE = all;
 			};
 			name = Production;
 		};
@@ -11626,6 +11637,7 @@
 					"$(GCC_PREPROCESSOR_DEFINITIONS)",
 					"JSC_OBJC_API_ENABLED=0",
 				);
+				STRIP_STYLE = all;
 			};
 			name = Profiling;
 		};
