@@ -32,7 +32,19 @@
 #include <wtf/RandomNumberSeed.h>
 #include <wtf/Vector.h>
 
+
 namespace JSC {
+#ifdef ANDROID
+float log2f(float x) {
+    return logf(x) / logf(2);
+}
+double log2(double x) {
+    return log(x) / log(2);
+}
+long double log2l(long double x) {
+    return logl(x) / logl(2);
+}
+#endif
 
 STATIC_ASSERT_IS_TRIVIALLY_DESTRUCTIBLE(MathObject);
 

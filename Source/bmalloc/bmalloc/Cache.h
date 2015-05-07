@@ -23,8 +23,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
  */
 
-#ifndef Cache_h
-#define Cache_h
+#ifndef __bmalloc_Cache_h__
+#define __bmalloc_Cache_h__
 
 #include "Allocator.h"
 #include "Deallocator.h"
@@ -105,4 +105,4 @@ inline void* Cache::reallocate(void* object, size_t newSize)
 
 } // namespace bmalloc
 
-#endif // Cache_h
+#endif // _bmalloc_Cache_h
