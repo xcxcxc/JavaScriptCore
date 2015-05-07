@@ -18,7 +18,7 @@ You can do `python make.py --help` for more options.
 	export ANDROID_NDK_ROOT=path/to/ndk
 3. mkdir build_android && cd build_android
 4. Run CMake Command (make sure you have perf, bison, python, ruby and perl installed)
-	```
+	``` 
     cmake -DCMAKE_TOOLCHAIN_FILE="../android_toolchain/android.toolchain.cmake" \
           --platform=android-14 -DANDROID_ABI=armeabi -DCMAKE_BUILD_TYPE=MinSizeRel \
           -DANDROID=TRUE -DANDROID_STL=gnustl_static \

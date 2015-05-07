@@ -11252,7 +11252,10 @@
 		149C276E08902AFE008A9EFC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				DEAD_CODE_STRIPPING = YES;
+				GCC_OPTIMIZATION_LEVEL = s;
 				PRODUCT_NAME = All;
+				STRIP_INSTALLED_PRODUCT = YES;
 			};
 			name = Release;
 		};
