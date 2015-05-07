@@ -1244,7 +1244,7 @@
 		5B67E4DC1AEFB29800ECC475 /* DFGPredictionInjectionPhase.h in Headers */ = {isa = PBXBuildFile; fileRef = 0FBE0F6E16C1DB010082C5E8 /* DFGPredictionInjectionPhase.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E4DD1AEFB29800ECC475 /* DFGPredictionPropagationPhase.h in Headers */ = {isa = PBXBuildFile; fileRef = 0FFFC95214EF909500C72532 /* DFGPredictionPropagationPhase.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E4DE1AEFB29800ECC475 /* DFGRegisterBank.h in Headers */ = {isa = PBXBuildFile; fileRef = 86EC9DC11328DF82002B2AD7 /* DFGRegisterBank.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		5B67E4DF1AEFB29800ECC475 /* DFGResurrectionForValidationPhase.h in Headers */ = {isa = PBXBuildFile; fileRef = 0F666ECB1836B37E00D017F1 /* DFGResurrectionForValidationPhase.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		5B67E4DF1AEFB29800ECC475 /* (null) in Headers */ = {isa = PBXBuildFile; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E4E01AEFB29800ECC475 /* DFGSafepoint.h in Headers */ = {isa = PBXBuildFile; fileRef = 0F2FCCF518A60070001A27F8 /* DFGSafepoint.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E4E11AEFB29800ECC475 /* DFGSafeToExecute.h in Headers */ = {isa = PBXBuildFile; fileRef = A77A423C17A0BBFD00A8DB81 /* DFGSafeToExecute.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E4E21AEFB29800ECC475 /* DFGSaneStringGetByValSlowPathGenerator.h in Headers */ = {isa = PBXBuildFile; fileRef = A741017E179DAF80002EB8BA /* DFGSaneStringGetByValSlowPathGenerator.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -1429,7 +1429,7 @@
 		5B67E5951AEFB29800ECC475 /* IdentifierInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = 8606DDE918DA44AB00A383D0 /* IdentifierInlines.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E5961AEFB29800ECC475 /* InspectorProtocolObjects.h in Headers */ = {isa = PBXBuildFile; fileRef = A532438618568317002ED692 /* InspectorProtocolObjects.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E5971AEFB29800ECC475 /* InspectorRuntimeAgent.h in Headers */ = {isa = PBXBuildFile; fileRef = A50E4B5E18809DD50068A46D /* InspectorRuntimeAgent.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		5B67E5981AEFB29800ECC475 /* DFGPhantomRemovalPhase.h in Headers */ = {isa = PBXBuildFile; fileRef = 0FBFDD03196C92BF007A5BFA /* DFGPhantomRemovalPhase.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		5B67E5981AEFB29800ECC475 /* (null) in Headers */ = {isa = PBXBuildFile; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E5991AEFB29800ECC475 /* InspectorProtocolTypes.h in Headers */ = {isa = PBXBuildFile; fileRef = A55D93AB18514F7900400DED /* InspectorProtocolTypes.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E59A1AEFB29800ECC475 /* InspectorValues.h in Headers */ = {isa = PBXBuildFile; fileRef = A593CF811840377100BFCE27 /* InspectorValues.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E59B1AEFB29800ECC475 /* Instruction.h in Headers */ = {isa = PBXBuildFile; fileRef = 969A07930ED1D3AE00F1F681 /* Instruction.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -1518,7 +1518,7 @@
 		5B67E5EE1AEFB29800ECC475 /* JSGenericTypedArrayViewConstructor.h in Headers */ = {isa = PBXBuildFile; fileRef = 0F2B66C417B6B5AB00A7AE3F /* JSGenericTypedArrayViewConstructor.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E5EF1AEFB29800ECC475 /* JSGenericTypedArrayViewConstructorInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = 0F2B66C517B6B5AB00A7AE3F /* JSGenericTypedArrayViewConstructorInlines.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E5F01AEFB29800ECC475 /* JSGenericTypedArrayViewInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = 0F2B66C617B6B5AB00A7AE3F /* JSGenericTypedArrayViewInlines.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		5B67E5F11AEFB29800ECC475 /* DFGPhantomCanonicalizationPhase.h in Headers */ = {isa = PBXBuildFile; fileRef = 0F7B3660197C525C00ED1DDC /* DFGPhantomCanonicalizationPhase.h */; settings = {ATTRIBUTES = (Private, ); }; };
+		5B67E5F11AEFB29800ECC475 /* (null) in Headers */ = {isa = PBXBuildFile; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E5F21AEFB29800ECC475 /* DFGDoesGC.h in Headers */ = {isa = PBXBuildFile; fileRef = 0F5A1272192D9FDF008764A3 /* DFGDoesGC.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E5F31AEFB29800ECC475 /* JSGenericTypedArrayViewPrototype.h in Headers */ = {isa = PBXBuildFile; fileRef = 0F2B66C717B6B5AB00A7AE3F /* JSGenericTypedArrayViewPrototype.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E5F41AEFB29800ECC475 /* JSGenericTypedArrayViewPrototypeInlines.h in Headers */ = {isa = PBXBuildFile; fileRef = 0F2B66C817B6B5AB00A7AE3F /* JSGenericTypedArrayViewPrototypeInlines.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -2070,7 +2070,7 @@
 		5B67E8181AEFB29800ECC475 /* DFGPlan.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A78A9772179738B8009DF744 /* DFGPlan.cpp */; };
 		5B67E8191AEFB29800ECC475 /* DFGPredictionInjectionPhase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FBE0F6D16C1DB010082C5E8 /* DFGPredictionInjectionPhase.cpp */; };
 		5B67E81A1AEFB29800ECC475 /* DFGPredictionPropagationPhase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FFFC95114EF909500C72532 /* DFGPredictionPropagationPhase.cpp */; };
-		5B67E81B1AEFB29800ECC475 /* DFGResurrectionForValidationPhase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F666ECA1836B37E00D017F1 /* DFGResurrectionForValidationPhase.cpp */; };
+		5B67E81B1AEFB29800ECC475 /* (null) in Sources */ = {isa = PBXBuildFile; };
 		5B67E81C1AEFB29800ECC475 /* DFGSafepoint.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F2FCCF418A60070001A27F8 /* DFGSafepoint.cpp */; };
 		5B67E81D1AEFB29800ECC475 /* DFGSpeculativeJIT.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 86EC9DC21328DF82002B2AD7 /* DFGSpeculativeJIT.cpp */; };
 		5B67E81E1AEFB29800ECC475 /* DFGSpeculativeJIT32_64.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 86880F1B14328BB900B08D42 /* DFGSpeculativeJIT32_64.cpp */; };
@@ -2285,7 +2285,7 @@
 		5B67E8EF1AEFB29800ECC475 /* JSJavaScriptCallFramePrototype.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A503FA17188E0FB000110F14 /* JSJavaScriptCallFramePrototype.cpp */; };
 		5B67E8F01AEFB29800ECC475 /* JSLock.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 65EA4C99092AF9E20093D800 /* JSLock.cpp */; };
 		5B67E8F11AEFB29800ECC475 /* ConstantStructureCheck.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F3D0BBA194A414300FC9CF9 /* ConstantStructureCheck.cpp */; };
-		5B67E8F21AEFB29800ECC475 /* DFGPhantomCanonicalizationPhase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F7B365F197C525C00ED1DDC /* DFGPhantomCanonicalizationPhase.cpp */; };
+		5B67E8F21AEFB29800ECC475 /* (null) in Sources */ = {isa = PBXBuildFile; };
 		5B67E8F31AEFB29800ECC475 /* JSManagedValue.mm in Sources */ = {isa = PBXBuildFile; fileRef = C25D709916DE99F400FCA6BC /* JSManagedValue.mm */; };
 		5B67E8F41AEFB29800ECC475 /* JSMap.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A700873F17CBE8EB00C3E643 /* JSMap.cpp */; };
 		5B67E8F51AEFB29800ECC475 /* JSMapIterator.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A74DEF8F182D991400522C22 /* JSMapIterator.cpp */; };
@@ -2458,7 +2458,7 @@
 		5B67E99C1AEFB29800ECC475 /* SlotVisitor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = C225494215F7DBAA0065E898 /* SlotVisitor.cpp */; };
 		5B67E99D1AEFB29800ECC475 /* SmallStrings.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 93303FE80E6A72B500786E6A /* SmallStrings.cpp */; };
 		5B67E99E1AEFB29800ECC475 /* SourceCode.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F8F2B9D17306C8B007DBDA5 /* SourceCode.cpp */; };
-		5B67E99F1AEFB29800ECC475 /* DFGPhantomRemovalPhase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FBFDD02196C92BF007A5BFA /* DFGPhantomRemovalPhase.cpp */; };
+		5B67E99F1AEFB29800ECC475 /* (null) in Sources */ = {isa = PBXBuildFile; };
 		5B67E9A01AEFB29800ECC475 /* SourceProvider.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F493AF816D0CAD10084508B /* SourceProvider.cpp */; };
 		5B67E9A11AEFB29800ECC475 /* SourceProviderCache.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E49DC15512EF277200184A1F /* SourceProviderCache.cpp */; };
 		5B67E9A21AEFB29800ECC475 /* SparseArrayValueMap.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F0CD4C315F6B6B50032F1C0 /* SparseArrayValueMap.cpp */; };
@@ -7522,7 +7522,7 @@
 				5B67E4DC1AEFB29800ECC475 /* DFGPredictionInjectionPhase.h in Headers */,
 				5B67E4DD1AEFB29800ECC475 /* DFGPredictionPropagationPhase.h in Headers */,
 				5B67E4DE1AEFB29800ECC475 /* DFGRegisterBank.h in Headers */,
-				5B67E4DF1AEFB29800ECC475 /* DFGResurrectionForValidationPhase.h in Headers */,
+				5B67E4DF1AEFB29800ECC475 /* (null) in Headers */,
 				5B67E4E01AEFB29800ECC475 /* DFGSafepoint.h in Headers */,
 				5B67E4E11AEFB29800ECC475 /* DFGSafeToExecute.h in Headers */,
 				5B67E4E21AEFB29800ECC475 /* DFGSaneStringGetByValSlowPathGenerator.h in Headers */,
@@ -7707,7 +7707,7 @@
 				5B67E5951AEFB29800ECC475 /* IdentifierInlines.h in Headers */,
 				5B67E5961AEFB29800ECC475 /* InspectorProtocolObjects.h in Headers */,
 				5B67E5971AEFB29800ECC475 /* InspectorRuntimeAgent.h in Headers */,
-				5B67E5981AEFB29800ECC475 /* DFGPhantomRemovalPhase.h in Headers */,
+				5B67E5981AEFB29800ECC475 /* (null) in Headers */,
 				5B67E5991AEFB29800ECC475 /* InspectorProtocolTypes.h in Headers */,
 				5B67E59A1AEFB29800ECC475 /* InspectorValues.h in Headers */,
 				5B67E59B1AEFB29800ECC475 /* Instruction.h in Headers */,
@@ -7796,7 +7796,7 @@
 				5B67E5EE1AEFB29800ECC475 /* JSGenericTypedArrayViewConstructor.h in Headers */,
 				5B67E5EF1AEFB29800ECC475 /* JSGenericTypedArrayViewConstructorInlines.h in Headers */,
 				5B67E5F01AEFB29800ECC475 /* JSGenericTypedArrayViewInlines.h in Headers */,
-				5B67E5F11AEFB29800ECC475 /* DFGPhantomCanonicalizationPhase.h in Headers */,
+				5B67E5F11AEFB29800ECC475 /* (null) in Headers */,
 				5B67E5F21AEFB29800ECC475 /* DFGDoesGC.h in Headers */,
 				5B67E5F31AEFB29800ECC475 /* JSGenericTypedArrayViewPrototype.h in Headers */,
 				5B67E5F41AEFB29800ECC475 /* JSGenericTypedArrayViewPrototypeInlines.h in Headers */,
@@ -9838,7 +9838,7 @@
 				5B67E8181AEFB29800ECC475 /* DFGPlan.cpp in Sources */,
 				5B67E8191AEFB29800ECC475 /* DFGPredictionInjectionPhase.cpp in Sources */,
 				5B67E81A1AEFB29800ECC475 /* DFGPredictionPropagationPhase.cpp in Sources */,
-				5B67E81B1AEFB29800ECC475 /* DFGResurrectionForValidationPhase.cpp in Sources */,
+				5B67E81B1AEFB29800ECC475 /* (null) in Sources */,
 				5B67E81C1AEFB29800ECC475 /* DFGSafepoint.cpp in Sources */,
 				5B67E81D1AEFB29800ECC475 /* DFGSpeculativeJIT.cpp in Sources */,
 				5B67E81E1AEFB29800ECC475 /* DFGSpeculativeJIT32_64.cpp in Sources */,
@@ -10053,7 +10053,7 @@
 				5B67E8EF1AEFB29800ECC475 /* JSJavaScriptCallFramePrototype.cpp in Sources */,
 				5B67E8F01AEFB29800ECC475 /* JSLock.cpp in Sources */,
 				5B67E8F11AEFB29800ECC475 /* ConstantStructureCheck.cpp in Sources */,
-				5B67E8F21AEFB29800ECC475 /* DFGPhantomCanonicalizationPhase.cpp in Sources */,
+				5B67E8F21AEFB29800ECC475 /* (null) in Sources */,
 				5B67E8F31AEFB29800ECC475 /* JSManagedValue.mm in Sources */,
 				5B67E8F41AEFB29800ECC475 /* JSMap.cpp in Sources */,
 				5B67E8F51AEFB29800ECC475 /* JSMapIterator.cpp in Sources */,
@@ -10226,7 +10226,7 @@
 				5B67E99C1AEFB29800ECC475 /* SlotVisitor.cpp in Sources */,
 				5B67E99D1AEFB29800ECC475 /* SmallStrings.cpp in Sources */,
 				5B67E99E1AEFB29800ECC475 /* SourceCode.cpp in Sources */,
-				5B67E99F1AEFB29800ECC475 /* DFGPhantomRemovalPhase.cpp in Sources */,
+				5B67E99F1AEFB29800ECC475 /* (null) in Sources */,
 				5B67E9A01AEFB29800ECC475 /* SourceProvider.cpp in Sources */,
 				5B67E9A11AEFB29800ECC475 /* SourceProviderCache.cpp in Sources */,
 				5B67E9A21AEFB29800ECC475 /* SparseArrayValueMap.cpp in Sources */,
@@ -11309,7 +11309,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = armv7;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
@@ -11330,7 +11330,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = armv7;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
@@ -11351,7 +11351,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = armv7;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
@@ -11372,7 +11372,7 @@
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
 			buildSettings = {
-				ARCHS = "$(ARCHS_STANDARD)";
+				ARCHS = armv7;
 				BUILD_VARIANTS = normal;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				GCC_PREPROCESSOR_DEFINITIONS = (
