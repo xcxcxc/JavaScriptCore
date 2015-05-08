@@ -14,10 +14,10 @@ You can do `python make.py --help` for more options.
 
 ## How to Compile for Android
 1. Install CMake 
-2. Set ANDROID_NDK_ROOT variable to you android ndk path
-	export ANDROID_NDK_ROOT=path/to/ndk
+2. Set ANDROID_NDK variable to you android ndk path
+	export ANDROID_NDK=path/to/ndk
 3. mkdir build_android && cd build_android
-4. Run CMake Command (make sure you have perf, bison, python, ruby and perl installed)
+4. Run CMake Command (make sure you have Gperf, bison, python, ruby and perl installed)
 	``` 
     cmake -DCMAKE_TOOLCHAIN_FILE="../android_toolchain/android.toolchain.cmake" \
           --platform=android-14 -DANDROID_ABI=armeabi -DCMAKE_BUILD_TYPE=MinSizeRel \
