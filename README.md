@@ -14,9 +14,9 @@ You can do `python make.py --help` for more options.
 
 ## How to Compile for Android
 1. Install CMake 
-2. Set ANDROID_NDK variable to you android ndk path
-	export ANDROID_NDK=path/to/ndk
-3. mkdir build_android && cd build_android
+2. Set ANDROID_NDK variable to you android ndk path  
+	`export ANDROID_NDK=path/to/ndk`
+3. `mkdir build_android && cd build_android`
 4. Run CMake Command (make sure you have Gperf, bison, python, ruby and perl installed)
 	``` 
     cmake -DCMAKE_TOOLCHAIN_FILE="../android_toolchain/android.toolchain.cmake" \
@@ -36,7 +36,10 @@ You can do `python make.py --help` for more options.
           -DCMAKE_INSTALL_PREFIX=../AndroidModulesRelease/JavaScriptCore \
           ..
     ```
+
     one liner:
     ```
     cmake -DCMAKE_TOOLCHAIN_FILE="../android_toolchain/android.toolchain.cmake" --platform=android-14 -DANDROID_ABI=armeabi -DCMAKE_BUILD_TYPE=MinSizeRel -DANDROID=TRUE -DANDROID_STL=gnustl_static -DANDROID_TOOLCHAIN_NAME=arm-linux-androideabi-4.9 -DANDROID_NATIVE_API_LEVEL=14 -DENABLE_WEBKIT=0 -DENABLE_WEBCORE=0 -DENABLE_TOOLS=0 -DENABLE_WEBKIT=0 -DENABLE_WEBKIT2=0 -DENABLE_API_TESTS=0 -DPORT=Android -DCMAKE_FIND_ROOT_PATH="$(pwd)/../icu_build_android" -DPYTHON_EXECUTABLE=$(which python) -DPERL_EXECUTABLE=$(which perl) -DRUBY_EXECUTABLE=$(which ruby) -DBISON_EXECUTABLE=$(which bison) -DGPERF_EXECUTABLE=$(which Gperf) -DENABLE_LLINT=1 -DSHARED_CORE=0 -DENABLE_PROMISES=1 -DENABLE_INSPECTOR=0 -DENABLE_JIT=0 -DEXPORT_ONLY_PUBLIC_SYMBOLS=1 -DCMAKE_CXX_FLAGS="-D__STDC_LIMIT_MACROS" -DCMAKE_INSTALL_PREFIX=../AndroidModulesRelease/JavaScriptCore ..
     ```
+
+5. `make -j16`
