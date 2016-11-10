@@ -80,16 +80,6 @@ static UnlinkedFunctionCodeBlock* generateFunctionCodeBlock(
     return result;
 }
 
-unsigned UnlinkedCodeBlock::addOrFindConstant(JSValue v)
-{
-    unsigned numberOfConstants = numberOfConstantRegisters();
-    for (unsigned i = 0; i < numberOfConstants; ++i) {
-        if (getConstant(FirstConstantRegisterIndex + i) == v)
-            return i;
-    }
-    return addConstant(v);
-}
-
 UnlinkedFunctionExecutable::UnlinkedFunctionExecutable(VM* vm, Structure* structure, const SourceCode& source, RefPtr<SourceProvider>&& sourceOverride, FunctionBodyNode* node, UnlinkedFunctionKind kind)
     : Base(*vm, structure)
     , m_name(node->ident())
@@ -471,8 +461,6 @@ void UnlinkedProgramCodeBlock::visitChildren(JSCell* cell, SlotVisitor& visitor)
     UnlinkedProgramCodeBlock* thisObject = jsCast<UnlinkedProgramCodeBlock*>(cell);
     ASSERT_GC_OBJECT_INHERITS(thisObject, info());
     Base::visitChildren(thisObject, visitor);
-    for (size_t i = 0, end = thisObject->m_functionDeclarations.size(); i != end; i++)
-        visitor.append(&thisObject->m_functionDeclarations[i].second);
 }
 
 UnlinkedCodeBlock::~UnlinkedCodeBlock()

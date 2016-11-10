@@ -26,8 +26,6 @@
 #ifndef JSGlobalObjectInspectorController_h
 #define JSGlobalObjectInspectorController_h
 
-#if ENABLE(INSPECTOR)
-
 #include "InspectorAgentRegistry.h"
 #include "InspectorEnvironment.h"
 #include <wtf/Forward.h>
@@ -45,6 +43,7 @@ class Stopwatch;
 
 namespace JSC {
 class ConsoleClient;
+class Exception;
 class ExecState;
 class JSGlobalObject;
 class JSValue;
@@ -83,7 +82,7 @@ public:
     void setIncludesNativeCallStackWhenReportingExceptions(bool includesNativeCallStack) { m_includeNativeCallStackWithExceptions = includesNativeCallStack; }
 
     void pause();
-    void reportAPIException(JSC::ExecState*, JSC::JSValue exception);
+    void reportAPIException(JSC::ExecState*, JSC::Exception*);
 
     JSC::ConsoleClient* consoleClient() const;
 
@@ -126,7 +125,5 @@ private:
 };
 
 } // namespace Inspector
-
-#endif // ENABLE(INSPECTOR)
 
 #endif // !defined(JSGlobalObjectInspectorController_h)

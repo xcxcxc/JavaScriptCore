@@ -50,6 +50,7 @@ public:
         case DoubleRepRealUse:
         case Int52RepUse:
         case NumberUse:
+        case RealNumberUse:
         case BooleanUse:
         case CellUse:
         case ObjectUse:
@@ -154,6 +155,7 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case ArithPow:
     case ArithSqrt:
     case ArithFRound:
+    case ArithRound:
     case ArithSin:
     case ArithCos:
     case ArithLog:
@@ -245,9 +247,9 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case CheckTierUpInLoop:
     case CheckTierUpAtReturn:
     case CheckTierUpAndOSREnter:
+    case CheckTierUpWithNestedTriggerAndOSREnter:
     case LoopHint:
     case StoreBarrier:
-    case StoreBarrierWithNullCheck:
     case InvalidationPoint:
     case NotifyWrite:
     case CheckInBounds:
@@ -273,9 +275,11 @@ bool safeToExecute(AbstractStateType& state, Graph& graph, Node* node)
     case ToIndexString:
     case PhantomNewObject:
     case PhantomNewFunction:
+    case PhantomCreateActivation:
     case PutHint:
     case CheckStructureImmediate:
     case MaterializeNewObject:
+    case MaterializeCreateActivation:
     case PhantomDirectArguments:
     case PhantomClonedArguments:
     case GetMyArgumentByVal:

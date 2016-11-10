@@ -119,7 +119,7 @@ public:
     typedef CaseClauseNode* Clause;
     typedef ConstDeclNode* ConstDeclList;
     typedef std::pair<ExpressionNode*, BinaryOpInfo> BinaryOperand;
-    typedef RefPtr<DeconstructionPatternNode> DeconstructionPattern;
+    typedef RefPtr<DestructuringPatternNode> DestructuringPattern;
     typedef RefPtr<ArrayPatternNode> ArrayPattern;
     typedef RefPtr<ObjectPatternNode> ObjectPattern;
     typedef RefPtr<BindingNode> BindingPattern;
@@ -288,6 +288,13 @@ public:
     {
         return new (m_parserArena) TemplateLiteralNode(location, templateStringList, templateExpressionList);
     }
+
+    ExpressionNode* createTaggedTemplate(const JSTokenLocation& location, ExpressionNode* base, TemplateLiteralNode* templateLiteral, const JSTextPosition& start, const JSTextPosition& divot, const JSTextPosition& end)
+    {
+        auto node = new (m_parserArena) TaggedTemplateNode(location, base, templateLiteral);
+        setExceptionLocation(node, start, divot, end);
+        return node;
+    }
 #endif
 
     ExpressionNode* createRegExp(const JSTokenLocation& location, const Identifier& pattern, const Identifier& flags, const JSTextPosition& start)
@@ -340,7 +347,7 @@ public:
     ExpressionNode* createFunctionExpr(const JSTokenLocation& location, const ParserFunctionInfo<ASTBuilder>& info)
     {
         FuncExprNode* result = new (m_parserArena) FuncExprNode(location, *info.name, info.body,
-            m_sourceCode->subExpression(info.openBraceOffset, info.closeBraceOffset, info.bodyStartLine, info.bodyStartColumn), info.parameters);
+            m_sourceCode->subExpression(info.startFunctionOffset, info.endFunctionOffset, info.bodyStartLine, info.bodyStartColumn), info.parameters);
         info.body->setLoc(info.bodyStartLine, info.bodyEndLine, location.startOffset, location.lineStartOffset);
         return result;
     }
@@ -357,13 +364,26 @@ public:
             inStrictContext, constructorKind);
     }
 
+#if ENABLE(ES6_ARROWFUNCTION_SYNTAX)
+    ExpressionNode* createArrowFunctionExpr(const JSTokenLocation& location, const ParserFunctionInfo<ASTBuilder>& info)
+    {
+        SourceCode source = info.functionBodyType == ArrowFunctionBodyExpression
+            ? m_sourceCode->subArrowExpression(info.arrowFunctionOffset, info.endFunctionOffset, info.bodyStartLine, info.bodyStartColumn)
+            : m_sourceCode->subExpression(info.startFunctionOffset, info.endFunctionOffset, info.bodyStartLine, info.bodyStartColumn);
+
+        FuncExprNode* result = new (m_parserArena) FuncExprNode(location, *info.name, info.body, source, info.parameters);
+        info.body->setLoc(info.bodyStartLine, info.bodyEndLine, location.startOffset, location.lineStartOffset);
+        return result;
+    }
+#endif
+
     NEVER_INLINE PropertyNode* createGetterOrSetterProperty(const JSTokenLocation& location, PropertyNode::Type type, bool,
         const Identifier* name, const ParserFunctionInfo<ASTBuilder>& info, SuperBinding superBinding)
     {
         ASSERT(name);
         info.body->setLoc(info.bodyStartLine, info.bodyEndLine, location.startOffset, location.lineStartOffset);
         info.body->setInferredName(*name);
-        SourceCode source = m_sourceCode->subExpression(info.openBraceOffset, info.closeBraceOffset, info.bodyStartLine, info.bodyStartColumn);
+        SourceCode source = m_sourceCode->subExpression(info.startFunctionOffset, info.endFunctionOffset, info.bodyStartLine, info.bodyStartColumn);
         FuncExprNode* funcExpr = new (m_parserArena) FuncExprNode(location, m_vm->propertyNames->nullIdentifier, info.body, source, info.parameters);
         return new (m_parserArena) PropertyNode(*name, funcExpr, type, PropertyNode::Unknown, superBinding);
     }
@@ -373,7 +393,7 @@ public:
     {
         info.body->setLoc(info.bodyStartLine, info.bodyEndLine, location.startOffset, location.lineStartOffset);
         const Identifier& ident = parserArena.identifierArena().makeNumericIdentifier(vm, name);
-        SourceCode source = m_sourceCode->subExpression(info.openBraceOffset, info.closeBraceOffset, info.bodyStartLine, info.bodyStartColumn);
+        SourceCode source = m_sourceCode->subExpression(info.startFunctionOffset, info.endFunctionOffset, info.bodyStartLine, info.bodyStartColumn);
         FuncExprNode* funcExpr = new (m_parserArena) FuncExprNode(location, vm->propertyNames->nullIdentifier, info.body, source, info.parameters);
         return new (m_parserArena) PropertyNode(ident, funcExpr, type, PropertyNode::Unknown, superBinding);
     }
@@ -400,8 +420,8 @@ public:
     ElementNode* createElementList(int elisions, ExpressionNode* expr) { return new (m_parserArena) ElementNode(elisions, expr); }
     ElementNode* createElementList(ElementNode* elems, int elisions, ExpressionNode* expr) { return new (m_parserArena) ElementNode(elems, elisions, expr); }
 
-    ParameterNode* createFormalParameterList(DeconstructionPattern pattern) { return new (m_parserArena) ParameterNode(pattern); }
-    ParameterNode* createFormalParameterList(ParameterNode* list, DeconstructionPattern pattern) { return new (m_parserArena) ParameterNode(list, pattern); }
+    ParameterNode* createFormalParameterList(DestructuringPattern pattern) { return new (m_parserArena) ParameterNode(pattern); }
+    ParameterNode* createFormalParameterList(ParameterNode* list, DestructuringPattern pattern) { return new (m_parserArena) ParameterNode(list, pattern); }
 
     CaseClauseNode* createClause(ExpressionNode* expr, JSC::SourceElements* statements) { return new (m_parserArena) CaseClauseNode(expr, statements); }
     ClauseListNode* createClauseList(CaseClauseNode* clause) { return new (m_parserArena) ClauseListNode(clause); }
@@ -410,7 +430,7 @@ public:
     StatementNode* createFuncDeclStatement(const JSTokenLocation& location, const ParserFunctionInfo<ASTBuilder>& info)
     {
         FuncDeclNode* decl = new (m_parserArena) FuncDeclNode(location, *info.name, info.body,
-            m_sourceCode->subExpression(info.openBraceOffset, info.closeBraceOffset, info.bodyStartLine, info.bodyStartColumn), info.parameters);
+            m_sourceCode->subExpression(info.startFunctionOffset, info.endFunctionOffset, info.bodyStartLine, info.bodyStartColumn), info.parameters);
         if (*info.name == m_vm->propertyNames->arguments)
             usesArguments();
         m_scope.m_funcDeclarations.append(decl->body());
@@ -466,9 +486,9 @@ public:
         return result;
     }
     
-    StatementNode* createForInLoop(const JSTokenLocation& location, PassRefPtr<DeconstructionPatternNode> pattern, ExpressionNode* iter, StatementNode* statements, const JSTextPosition& eStart, const JSTextPosition& eDivot, const JSTextPosition& eEnd, int start, int end)
+    StatementNode* createForInLoop(const JSTokenLocation& location, PassRefPtr<DestructuringPatternNode> pattern, ExpressionNode* iter, StatementNode* statements, const JSTextPosition& eStart, const JSTextPosition& eDivot, const JSTextPosition& eEnd, int start, int end)
     {
-        auto lexpr = new (m_parserArena) DeconstructingAssignmentNode(location, pattern.get(), 0);
+        auto lexpr = new (m_parserArena) DestructuringAssignmentNode(location, pattern.get(), 0);
         return createForInLoop(location, lexpr, iter, statements, eStart, eDivot, eEnd, start, end);
     }
     
@@ -480,13 +500,13 @@ public:
         return result;
     }
     
-    StatementNode* createForOfLoop(const JSTokenLocation& location, PassRefPtr<DeconstructionPatternNode> pattern, ExpressionNode* iter, StatementNode* statements, const JSTextPosition& eStart, const JSTextPosition& eDivot, const JSTextPosition& eEnd, int start, int end)
+    StatementNode* createForOfLoop(const JSTokenLocation& location, PassRefPtr<DestructuringPatternNode> pattern, ExpressionNode* iter, StatementNode* statements, const JSTextPosition& eStart, const JSTextPosition& eDivot, const JSTextPosition& eEnd, int start, int end)
     {
-        auto lexpr = new (m_parserArena) DeconstructingAssignmentNode(location, pattern.get(), 0);
+        auto lexpr = new (m_parserArena) DestructuringAssignmentNode(location, pattern.get(), 0);
         return createForOfLoop(location, lexpr, iter, statements, eStart, eDivot, eEnd, start, end);
     }
 
-    bool isBindingNode(const DeconstructionPattern& pattern)
+    bool isBindingNode(const DestructuringPattern& pattern)
     {
         return pattern->isBindingNode();
     }
@@ -712,15 +732,15 @@ public:
         assignmentStackDepth--;
         return result;
     }
-    
-    const Identifier* getName(Property property) const { return property->name(); }
-    PropertyNode::Type getType(Property property) const { return property->type(); }
+
+    const Identifier* getName(const Property& property) const { return property->name(); }
+    PropertyNode::Type getType(const Property& property) const { return property->type(); }
 
     bool isResolve(ExpressionNode* expr) const { return expr->isResolveNode(); }
 
-    ExpressionNode* createDeconstructingAssignment(const JSTokenLocation& location, PassRefPtr<DeconstructionPatternNode> pattern, ExpressionNode* initializer)
+    ExpressionNode* createDestructuringAssignment(const JSTokenLocation& location, PassRefPtr<DestructuringPatternNode> pattern, ExpressionNode* initializer)
     {
-        return new (m_parserArena) DeconstructingAssignmentNode(location, pattern.get(), initializer);
+        return new (m_parserArena) DestructuringAssignmentNode(location, pattern.get(), initializer);
     }
     
     ArrayPattern createArrayPattern(const JSTokenLocation&)
@@ -730,12 +750,22 @@ public:
     
     void appendArrayPatternSkipEntry(ArrayPattern node, const JSTokenLocation& location)
     {
-        node->appendIndex(location, 0);
+        node->appendIndex(ArrayPatternNode::BindingType::Elision, location, 0, nullptr);
     }
 
-    void appendArrayPatternEntry(ArrayPattern node, const JSTokenLocation& location, DeconstructionPattern pattern)
+    void appendArrayPatternEntry(ArrayPattern node, const JSTokenLocation& location, DestructuringPattern pattern, ExpressionNode* defaultValue)
     {
-        node->appendIndex(location, pattern.get());
+        node->appendIndex(ArrayPatternNode::BindingType::Element, location, pattern.get(), defaultValue);
+    }
+
+    void appendArrayPatternRestEntry(ArrayPattern node, const JSTokenLocation& location, DestructuringPattern pattern)
+    {
+        node->appendIndex(ArrayPatternNode::BindingType::RestElement, location, pattern.get(), nullptr);
+    }
+
+    void finishArrayPattern(ArrayPattern node, const JSTextPosition& divotStart, const JSTextPosition& divot, const JSTextPosition& divotEnd)
+    {
+        setExceptionLocation(node.get(), divotStart, divot, divotEnd);
     }
     
     ObjectPattern createObjectPattern(const JSTokenLocation&)
@@ -743,9 +773,9 @@ public:
         return ObjectPatternNode::create();
     }
     
-    void appendObjectPatternEntry(ObjectPattern node, const JSTokenLocation& location, bool wasString, const Identifier& identifier, DeconstructionPattern pattern)
+    void appendObjectPatternEntry(ObjectPattern node, const JSTokenLocation& location, bool wasString, const Identifier& identifier, DestructuringPattern pattern, ExpressionNode* defaultValue)
     {
-        node->appendEntry(location, identifier, wasString, pattern.get());
+        node->appendEntry(location, identifier, wasString, pattern.get(), defaultValue);
     }
     
     BindingPattern createBindingLocation(const JSTokenLocation&, const Identifier& boundProperty, const JSTextPosition& start, const JSTextPosition& end)
@@ -1028,7 +1058,7 @@ ExpressionNode* ASTBuilder::makeFunctionCallNode(const JSTokenLocation& location
     }
     if (func->isBracketAccessorNode()) {
         BracketAccessorNode* bracket = static_cast<BracketAccessorNode*>(func);
-        FunctionCallBracketNode* node = new (m_parserArena) FunctionCallBracketNode(location, bracket->base(), bracket->subscript(), args, divot, divotStart, divotEnd);
+        FunctionCallBracketNode* node = new (m_parserArena) FunctionCallBracketNode(location, bracket->base(), bracket->subscript(), bracket->subscriptHasAssignments(), args, divot, divotStart, divotEnd);
         node->setSubexpressionInfo(bracket->divot(), bracket->divotEnd().offset);
         return node;
     }

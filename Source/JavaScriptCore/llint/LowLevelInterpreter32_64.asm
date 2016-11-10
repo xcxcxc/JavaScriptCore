@@ -693,7 +693,7 @@ macro branchIfException(label)
     loadp Callee + PayloadOffset[cfr], t3
     andp MarkedBlockMask, t3
     loadp MarkedBlock::m_weakSet + WeakSet::m_vm[t3], t3
-    bieq VM::m_exception + TagOffset[t3], EmptyValueTag, .noException
+    btiz VM::m_exception[t3], .noException
     jmp label
 .noException:
 end
@@ -745,15 +745,19 @@ _llint_op_create_this:
     loadp FunctionRareData::m_allocationProfile + ObjectAllocationProfile::m_allocator[t4], t1
     loadp FunctionRareData::m_allocationProfile + ObjectAllocationProfile::m_structure[t4], t2
     btpz t1, .opCreateThisSlow
+    loadpFromInstruction(4, t4)
+    bpeq t4, 1, .hasSeenMultipleCallee
+    bpneq t4, t0, .opCreateThisSlow
+.hasSeenMultipleCallee:
     allocateJSObject(t1, t2, t0, t3, .opCreateThisSlow)
     loadi 4[PC], t1
     storei CellTag, TagOffset[cfr, t1, 8]
     storei t0, PayloadOffset[cfr, t1, 8]
-    dispatch(4)
+    dispatch(5)
 
 .opCreateThisSlow:
     callSlowPath(_slow_path_create_this)
-    dispatch(4)
+    dispatch(5)
 
 
 _llint_op_to_this:
@@ -1948,15 +1952,20 @@ _llint_op_catch:
     restoreStackPointerAfterCall()
 
     loadi VM::targetInterpreterPCForThrow[t3], PC
-    loadi VM::m_exception + PayloadOffset[t3], t0
-    loadi VM::m_exception + TagOffset[t3], t1
-    storei 0, VM::m_exception + PayloadOffset[t3]
-    storei EmptyValueTag, VM::m_exception + TagOffset[t3]
+    loadi VM::m_exception[t3], t0
+    storei 0, VM::m_exception[t3]
     loadi 4[PC], t2
     storei t0, PayloadOffset[cfr, t2, 8]
+    storei CellTag, TagOffset[cfr, t2, 8]
+
+    loadi Exception::m_value + TagOffset[t0], t1
+    loadi Exception::m_value + PayloadOffset[t0], t0
+    loadi 8[PC], t2
+    storei t0, PayloadOffset[cfr, t2, 8]
     storei t1, TagOffset[cfr, t2, 8]
+
     traceExecution()  # This needs to be here because we don't want to clobber t0, t1, t2, t3 above.
-    dispatch(2)
+    dispatch(3)
 
 _llint_op_end:
     traceExecution()
@@ -2034,7 +2043,7 @@ macro nativeCallTrampoline(executableOffsetToFunction)
     end
     
     functionEpilogue()
-    bineq VM::m_exception + TagOffset[t3], EmptyValueTag, .handleException
+    btinz VM::m_exception[t3], .handleException
     ret
 
 .handleException:
@@ -2188,7 +2197,6 @@ _llint_op_get_from_scope:
 .gGlobalVarWithVarInjectionChecks:
     bineq t0, GlobalVarWithVarInjectionChecks, .gClosureVarWithVarInjectionChecks
     varInjectionCheck(.gDynamic)
-    loadVariable(2, t2, t1, t0)
     getGlobalVar()
     dispatch(8)
 

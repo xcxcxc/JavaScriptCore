@@ -1,7 +1,7 @@
 /*
  *  Copyright (C) 1999-2001 Harri Porten (porten@kde.org)
  *  Copyright (C) 2001 Peter Kelly (pmk@post.com)
- *  Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2012, 2013, 2014 Apple Inc. All rights reserved.
+ *  Copyright (C) 2003-2009, 2012-2015 Apple Inc. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Library General Public
@@ -145,7 +145,7 @@ public:
     JS_EXPORT_PRIVATE static void put(JSCell*, ExecState*, PropertyName, JSValue, PutPropertySlot&);
     JS_EXPORT_PRIVATE static void putByIndex(JSCell*, ExecState*, unsigned propertyName, JSValue, bool shouldThrow);
         
-    void putByIndexInline(ExecState* exec, unsigned propertyName, JSValue value, bool shouldThrow)
+    ALWAYS_INLINE void putByIndexInline(ExecState* exec, unsigned propertyName, JSValue value, bool shouldThrow)
     {
         if (canSetIndexQuickly(propertyName)) {
             setIndexQuickly(exec->vm(), propertyName, value);
@@ -429,7 +429,7 @@ public:
         case ALL_CONTIGUOUS_INDEXING_TYPES:
             return false;
         case ALL_ARRAY_STORAGE_INDEXING_TYPES:
-            return m_butterfly->arrayStorage()->m_sparseMap;
+            return !!m_butterfly->arrayStorage()->m_sparseMap;
         default:
             RELEASE_ASSERT_NOT_REACHED();
             return false;
@@ -466,6 +466,9 @@ public:
     void putDirectNonIndexAccessor(VM&, PropertyName, JSValue, unsigned attributes);
     void putDirectAccessor(ExecState*, PropertyName, JSValue, unsigned attributes);
     JS_EXPORT_PRIVATE void putDirectCustomAccessor(VM&, PropertyName, JSValue, unsigned attributes);
+
+    void putGetter(ExecState*, PropertyName, JSValue);
+    void putSetter(ExecState*, PropertyName, JSValue);
 
     JS_EXPORT_PRIVATE bool hasProperty(ExecState*, PropertyName) const;
     JS_EXPORT_PRIVATE bool hasProperty(ExecState*, unsigned propertyName) const;
@@ -824,109 +827,16 @@ protected:
             m_butterfly->setPublicLength(length);
     }
         
+    // Call this if you want to shrink the butterfly backing store, and you're
+    // sure that the array is contiguous.
+    void reallocateAndShrinkButterfly(VM&, unsigned length);
+    
     template<IndexingType indexingShape>
     unsigned countElements(Butterfly*);
         
     // This is relevant to undecided, int32, double, and contiguous.
     unsigned countElements();
         
-    // This strange method returns a pointer to the start of the indexed data
-    // as if it contained JSValues. But it won't always contain JSValues.
-    // Make sure you cast this to the appropriate type before using.
-    template<IndexingType indexingType>
-    ContiguousJSValues indexingData()
-    {
-        switch (indexingType) {
-        case ALL_INT32_INDEXING_TYPES:
-        case ALL_DOUBLE_INDEXING_TYPES:
-        case ALL_CONTIGUOUS_INDEXING_TYPES:
-            return m_butterfly->contiguous();
-                
-        case ALL_ARRAY_STORAGE_INDEXING_TYPES:
-            return m_butterfly->arrayStorage()->vector();
-
-        default:
-            CRASH();
-            return ContiguousJSValues();
-        }
-    }
-
-    ContiguousJSValues currentIndexingData()
-    {
-        switch (indexingType()) {
-        case ALL_INT32_INDEXING_TYPES:
-        case ALL_CONTIGUOUS_INDEXING_TYPES:
-            return m_butterfly->contiguous();
-
-        case ALL_ARRAY_STORAGE_INDEXING_TYPES:
-            return m_butterfly->arrayStorage()->vector();
-
-        default:
-            CRASH();
-            return ContiguousJSValues();
-        }
-    }
-        
-    JSValue getHolyIndexQuickly(unsigned i)
-    {
-        ASSERT(i < m_butterfly->vectorLength());
-        switch (indexingType()) {
-        case ALL_INT32_INDEXING_TYPES:
-        case ALL_CONTIGUOUS_INDEXING_TYPES:
-            return m_butterfly->contiguous()[i].get();
-        case ALL_DOUBLE_INDEXING_TYPES: {
-            double value = m_butterfly->contiguousDouble()[i];
-            if (value == value)
-                return JSValue(JSValue::EncodeAsDouble, value);
-            return JSValue();
-        }
-        case ALL_ARRAY_STORAGE_INDEXING_TYPES:
-            return m_butterfly->arrayStorage()->m_vector[i].get();
-        default:
-            CRASH();
-            return JSValue();
-        }
-    }
-        
-    template<IndexingType indexingType>
-    unsigned relevantLength()
-    {
-        switch (indexingType) {
-        case ALL_INT32_INDEXING_TYPES:
-        case ALL_DOUBLE_INDEXING_TYPES:
-        case ALL_CONTIGUOUS_INDEXING_TYPES:
-            return m_butterfly->publicLength();
-                
-        case ALL_ARRAY_STORAGE_INDEXING_TYPES:
-            return std::min(
-                m_butterfly->arrayStorage()->length(),
-                m_butterfly->arrayStorage()->vectorLength());
-                
-        default:
-            CRASH();
-            return 0;
-        }
-    }
-
-    unsigned currentRelevantLength()
-    {
-        switch (indexingType()) {
-        case ALL_INT32_INDEXING_TYPES:
-        case ALL_DOUBLE_INDEXING_TYPES:
-        case ALL_CONTIGUOUS_INDEXING_TYPES:
-            return m_butterfly->publicLength();
-
-        case ALL_ARRAY_STORAGE_INDEXING_TYPES:
-            return std::min(
-                m_butterfly->arrayStorage()->length(),
-                m_butterfly->arrayStorage()->vectorLength());
-
-        default:
-            CRASH();
-            return 0;
-        }
-    }
-
 private:
     friend class LLIntOffsetsExtractor;
         
@@ -1004,7 +914,7 @@ protected:
     void finishCreation(VM& vm)
     {
         Base::finishCreation(vm);
-        ASSERT(!this->structure()->totalStorageCapacity());
+        ASSERT(!this->structure()->hasInlineStorage());
         ASSERT(classInfo());
     }
 };
@@ -1318,8 +1228,12 @@ inline bool JSObject::putDirectInternal(VM& vm, PropertyName propertyName, JSVal
 
             putDirect(vm, offset, value);
             structure->didReplaceProperty(offset);
-            
             slot.setExistingProperty(this, offset);
+
+            if ((attributes & Accessor) != (currentAttributes & Accessor)) {
+                ASSERT(!(attributes & ReadOnly));
+                setStructure(vm, Structure::attributeChangeTransition(vm, structure, propertyName, attributes));
+            }
             return true;
         }
 
@@ -1369,6 +1283,11 @@ inline bool JSObject::putDirectInternal(VM& vm, PropertyName propertyName, JSVal
         structure->didReplaceProperty(offset);
         slot.setExistingProperty(this, offset);
         putDirect(vm, offset, value);
+
+        if ((attributes & Accessor) != (currentAttributes & Accessor)) {
+            ASSERT(!(attributes & ReadOnly));
+            setStructure(vm, Structure::attributeChangeTransition(vm, structure, propertyName, attributes));
+        }
         return true;
     }
 
@@ -1452,18 +1371,15 @@ inline JSValue JSObject::toPrimitive(ExecState* exec, PreferredPrimitiveType pre
     return methodTable()->defaultValue(this, exec, preferredType);
 }
 
-ALWAYS_INLINE JSObject* Register::function() const
+ALWAYS_INLINE JSObject* Register::object() const
 {
-    if (!jsValue())
-        return 0;
     return asObject(jsValue());
 }
 
-ALWAYS_INLINE Register Register::withCallee(JSObject* callee)
+ALWAYS_INLINE Register& Register::operator=(JSObject* object)
 {
-    Register r;
-    r = JSValue(callee);
-    return r;
+    u.value = JSValue::encode(JSValue(object));
+    return *this;
 }
 
 inline size_t offsetInButterfly(PropertyOffset offset)
@@ -1559,6 +1475,12 @@ ALWAYS_INLINE Identifier makeIdentifier(VM&, const Identifier& name)
 // intrinsic.
 #define JSC_NATIVE_FUNCTION(jsName, cppName, attributes, length) \
     JSC_NATIVE_INTRINSIC_FUNCTION(jsName, cppName, (attributes), (length), NoIntrinsic)
+
+// Identical helpers but for builtins. Note that currently, we don't support builtins that are
+// also intrinsics, but we probably will do that eventually.
+#define JSC_BUILTIN_FUNCTION(jsName, generatorName, attributes) \
+    putDirectBuiltinFunction(\
+        vm, globalObject, makeIdentifier(vm, (jsName)), (generatorName)(vm), (attributes))
 
 } // namespace JSC
 

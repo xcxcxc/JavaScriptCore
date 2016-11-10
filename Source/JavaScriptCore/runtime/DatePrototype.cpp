@@ -42,7 +42,7 @@
 #include <wtf/MathExtras.h>
 #include <wtf/StringExtras.h>
 
-#if HAVE(LANGINFO_H) && !PLATFORM(ANDROID)
+#if HAVE(LANGINFO_H)
 #include <langinfo.h>
 #endif
 

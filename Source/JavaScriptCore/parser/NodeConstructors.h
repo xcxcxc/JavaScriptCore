@@ -143,6 +143,13 @@ namespace JSC {
         , m_templateExpressions(templateExpressions)
     {
     }
+
+    inline TaggedTemplateNode::TaggedTemplateNode(const JSTokenLocation& location, ExpressionNode* tag, TemplateLiteralNode* templateLiteral)
+        : ExpressionNode(location)
+        , m_tag(tag)
+        , m_templateLiteral(templateLiteral)
+    {
+    }
 #endif
 
     inline RegExpNode::RegExpNode(const JSTokenLocation& location, const Identifier& pattern, const Identifier& flags)
@@ -341,12 +348,13 @@ namespace JSC {
     {
     }
 
-    inline FunctionCallBracketNode::FunctionCallBracketNode(const JSTokenLocation& location, ExpressionNode* base, ExpressionNode* subscript, ArgumentsNode* args, const JSTextPosition& divot, const JSTextPosition& divotStart, const JSTextPosition& divotEnd)
+    inline FunctionCallBracketNode::FunctionCallBracketNode(const JSTokenLocation& location, ExpressionNode* base, ExpressionNode* subscript, bool subscriptHasAssignments, ArgumentsNode* args, const JSTextPosition& divot, const JSTextPosition& divotStart, const JSTextPosition& divotEnd)
         : ExpressionNode(location)
         , ThrowableSubExpressionData(divot, divotStart, divotEnd)
         , m_base(base)
         , m_subscript(subscript)
         , m_args(args)
+        , m_subscriptHasAssignments(subscriptHasAssignments)
     {
     }
 
@@ -803,29 +811,29 @@ namespace JSC {
     {
     }
 
-    inline TryNode::TryNode(const JSTokenLocation& location, StatementNode* tryBlock, const Identifier& exceptionIdent, StatementNode* catchBlock, StatementNode* finallyBlock)
+    inline TryNode::TryNode(const JSTokenLocation& location, StatementNode* tryBlock, const Identifier& thrownValueIdent, StatementNode* catchBlock, StatementNode* finallyBlock)
         : StatementNode(location)
         , m_tryBlock(tryBlock)
-        , m_exceptionIdent(exceptionIdent)
+        , m_thrownValueIdent(thrownValueIdent)
         , m_catchBlock(catchBlock)
         , m_finallyBlock(finallyBlock)
     {
     }
 
-    inline ParameterNode::ParameterNode(PassRefPtr<DeconstructionPatternNode> pattern)
+    inline ParameterNode::ParameterNode(PassRefPtr<DestructuringPatternNode> pattern)
         : m_pattern(pattern)
         , m_next(0)
     {
         ASSERT(m_pattern);
     }
 
-    inline ParameterNode::ParameterNode(ParameterNode* l, PassRefPtr<DeconstructionPatternNode> pattern)
+    inline ParameterNode::ParameterNode(ParameterNode* previous, PassRefPtr<DestructuringPatternNode> pattern)
         : m_pattern(pattern)
         , m_next(0)
     {
-        l->m_next = this;
+        previous->m_next = this;
         ASSERT(m_pattern);
-        ASSERT(l->m_pattern);
+        ASSERT(previous->m_pattern);
     }
 
     inline FuncExprNode::FuncExprNode(const JSTokenLocation& location, const Identifier& ident, FunctionBodyNode* body, const SourceCode& source, ParameterNode* parameter)
@@ -926,44 +934,44 @@ namespace JSC {
     {
     }
     
-    inline DeconstructionPatternNode::DeconstructionPatternNode()
+    inline DestructuringPatternNode::DestructuringPatternNode()
     {
     }
 
     inline ArrayPatternNode::ArrayPatternNode()
-        : DeconstructionPatternNode()
+        : DestructuringPatternNode()
     {
     }
     
-    inline PassRefPtr<ArrayPatternNode> ArrayPatternNode::create()
+    inline Ref<ArrayPatternNode> ArrayPatternNode::create()
     {
-        return adoptRef(new ArrayPatternNode);
+        return adoptRef(*new ArrayPatternNode);
     }
     
     inline ObjectPatternNode::ObjectPatternNode()
-        : DeconstructionPatternNode()
+        : DestructuringPatternNode()
     {
     }
     
-    inline PassRefPtr<ObjectPatternNode> ObjectPatternNode::create()
+    inline Ref<ObjectPatternNode> ObjectPatternNode::create()
     {
-        return adoptRef(new ObjectPatternNode);
+        return adoptRef(*new ObjectPatternNode);
     }
 
-    inline PassRefPtr<BindingNode> BindingNode::create(const Identifier& boundProperty, const JSTextPosition& start, const JSTextPosition& end)
+    inline Ref<BindingNode> BindingNode::create(const Identifier& boundProperty, const JSTextPosition& start, const JSTextPosition& end)
     {
-        return adoptRef(new BindingNode(boundProperty, start, end));
+        return adoptRef(*new BindingNode(boundProperty, start, end));
     }
     
     inline BindingNode::BindingNode(const Identifier& boundProperty, const JSTextPosition& start, const JSTextPosition& end)
-        : DeconstructionPatternNode()
+        : DestructuringPatternNode()
         , m_divotStart(start)
         , m_divotEnd(end)
         , m_boundProperty(boundProperty)
     {
     }
     
-    inline DeconstructingAssignmentNode::DeconstructingAssignmentNode(const JSTokenLocation& location, PassRefPtr<DeconstructionPatternNode> bindings, ExpressionNode* initializer)
+    inline DestructuringAssignmentNode::DestructuringAssignmentNode(const JSTokenLocation& location, PassRefPtr<DestructuringPatternNode> bindings, ExpressionNode* initializer)
         : ExpressionNode(location)
         , m_bindings(bindings)
         , m_initializer(initializer)

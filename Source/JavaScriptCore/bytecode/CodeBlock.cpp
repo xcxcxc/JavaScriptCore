@@ -66,6 +66,7 @@
 #include <wtf/CommaPrinter.h>
 #include <wtf/StringExtras.h>
 #include <wtf/StringPrintStream.h>
+#include <wtf/text/UniquedStringImpl.h>
 
 #if ENABLE(DFG_JIT)
 #include "DFGOperations.h"
@@ -527,7 +528,7 @@ void CodeBlock::printCallOp(PrintStream& out, ExecState* exec, int location, con
         }
 #if ENABLE(JIT)
         if (CallLinkInfo* info = map.get(CodeOrigin(location))) {
-            JSFunction* target = info->lastSeenCallee.get();
+            JSFunction* target = info->lastSeenCallee();
             if (target)
                 out.printf(" jit(%p, exec %p)", target, target->executable());
         }
@@ -653,7 +654,9 @@ void CodeBlock::dumpBytecode(PrintStream& out)
         out.printf("\nException Handlers:\n");
         unsigned i = 0;
         do {
-            out.printf("\t %d: { start: [%4d] end: [%4d] target: [%4d] depth: [%4d] }\n", i + 1, m_rareData->m_exceptionHandlers[i].start, m_rareData->m_exceptionHandlers[i].end, m_rareData->m_exceptionHandlers[i].target, m_rareData->m_exceptionHandlers[i].scopeDepth);
+            HandlerInfo& handler = m_rareData->m_exceptionHandlers[i];
+            out.printf("\t %d: { start: [%4d] end: [%4d] target: [%4d] depth: [%4d] } %s\n",
+                i + 1, handler.start, handler.end, handler.target, handler.scopeDepth, handler.typeName());
             ++i;
         } while (i < m_rareData->m_exceptionHandlers.size());
     }
@@ -795,8 +798,9 @@ void CodeBlock::dumpBytecode(
             int r0 = (++it)->u.operand;
             int r1 = (++it)->u.operand;
             unsigned inferredInlineCapacity = (++it)->u.operand;
+            unsigned cachedFunction = (++it)->u.operand;
             printLocationAndOp(out, exec, location, it, "create_this");
-            out.printf("%s, %s, %u", registerName(r0).data(), registerName(r1).data(), inferredInlineCapacity);
+            out.printf("%s, %s, %u, %u", registerName(r0).data(), registerName(r1).data(), inferredInlineCapacity, cachedFunction);
             break;
         }
         case op_to_this: {
@@ -1108,6 +1112,22 @@ void CodeBlock::dumpBytecode(
         case op_put_by_id_transition_normal_out_of_line: {
             printPutByIdOp(out, exec, location, it, "put_by_id_transition_normal_out_of_line");
             printPutByIdCacheStatus(out, exec, location, stubInfos);
+            break;
+        }
+        case op_put_getter_by_id: {
+            int r0 = (++it)->u.operand;
+            int id0 = (++it)->u.operand;
+            int r1 = (++it)->u.operand;
+            printLocationAndOp(out, exec, location, it, "put_getter_by_id");
+            out.printf("%s, %s, %s", registerName(r0).data(), idName(id0, identifier(id0)).data(), registerName(r1).data());
+            break;
+        }
+        case op_put_setter_by_id: {
+            int r0 = (++it)->u.operand;
+            int id0 = (++it)->u.operand;
+            int r1 = (++it)->u.operand;
+            printLocationAndOp(out, exec, location, it, "put_setter_by_id");
+            out.printf("%s, %s, %s", registerName(r0).data(), idName(id0, identifier(id0)).data(), registerName(r1).data());
             break;
         }
         case op_put_getter_setter: {
@@ -1464,7 +1484,9 @@ void CodeBlock::dumpBytecode(
         }
         case op_catch: {
             int r0 = (++it)->u.operand;
-            printLocationOpAndRegisterOperand(out, exec, location, it, "catch", r0);
+            int r1 = (++it)->u.operand;
+            printLocationAndOp(out, exec, location, it, "catch");
+            out.printf("%s, %s", registerName(r0).data(), registerName(r1).data());
             break;
         }
         case op_throw: {
@@ -1801,13 +1823,13 @@ CodeBlock::CodeBlock(ScriptExecutable* ownerExecutable, UnlinkedCodeBlock* unlin
             m_rareData->m_exceptionHandlers.resizeToFit(count);
             size_t nonLocalScopeDepth = scope->depth();
             for (size_t i = 0; i < count; i++) {
-                const UnlinkedHandlerInfo& handler = unlinkedCodeBlock->exceptionHandler(i);
-                m_rareData->m_exceptionHandlers[i].start = handler.start;
-                m_rareData->m_exceptionHandlers[i].end = handler.end;
-                m_rareData->m_exceptionHandlers[i].target = handler.target;
-                m_rareData->m_exceptionHandlers[i].scopeDepth = nonLocalScopeDepth + handler.scopeDepth;
+                const UnlinkedHandlerInfo& unlinkedHandler = unlinkedCodeBlock->exceptionHandler(i);
+                HandlerInfo& handler = m_rareData->m_exceptionHandlers[i];
 #if ENABLE(JIT)
-                m_rareData->m_exceptionHandlers[i].nativeCode = CodeLocationLabel(MacroAssemblerCodePtr::createFromExecutableAddress(LLInt::getCodePtr(op_catch)));
+                handler.initialize(unlinkedHandler, nonLocalScopeDepth,
+                    CodeLocationLabel(MacroAssemblerCodePtr::createFromExecutableAddress(LLInt::getCodePtr(op_catch))));
+#else
+                handler.initialize(unlinkedHandler, nonLocalScopeDepth);
 #endif
             }
         }
@@ -2005,9 +2027,8 @@ CodeBlock::CodeBlock(ScriptExecutable* ownerExecutable, UnlinkedCodeBlock* unlin
                 if (static_cast<unsigned>(pc[2].u.operand) != UINT_MAX) {
                     RELEASE_ASSERT(didCloneSymbolTable);
                     const Identifier& ident = identifier(pc[2].u.operand);
-                    StringImpl* uid = ident.impl();
                     ConcurrentJITLocker locker(m_symbolTable->m_lock);
-                    SymbolTable::Map::iterator iter = m_symbolTable->find(locker, uid);
+                    SymbolTable::Map::iterator iter = m_symbolTable->find(locker, ident.impl());
                     ASSERT(iter != m_symbolTable->end(locker));
                     iter->value.prepareToWatch();
                     instructions[i + 5].u.watchpointSet = iter->value.watchpointSet();
@@ -2553,6 +2574,18 @@ void CodeBlock::finalizeUnconditionally()
                 curInstruction[3].u.toThisStatus = merge(
                     curInstruction[3].u.toThisStatus, ToThisClearedByGC);
                 break;
+            case op_create_this: {
+                auto& cacheWriteBarrier = curInstruction[4].u.jsCell;
+                if (!cacheWriteBarrier || cacheWriteBarrier.unvalidatedGet() == JSCell::seenMultipleCalleeObjects())
+                    break;
+                JSCell* cachedFunction = cacheWriteBarrier.get();
+                if (Heap::isMarked(cachedFunction))
+                    break;
+                if (Options::verboseOSR())
+                    dataLogF("Clearing LLInt create_this with cached callee %p.\n", cachedFunction);
+                cacheWriteBarrier.clear();
+                break;
+            }
             case op_resolve_scope: {
                 // Right now this isn't strictly necessary. Any symbol tables that this will refer to
                 // are for outer functions, and we refer to those functions strongly, and they refer
@@ -2580,7 +2613,8 @@ void CodeBlock::finalizeUnconditionally()
                 break;
             }
             default:
-                RELEASE_ASSERT_NOT_REACHED();
+                OpcodeID opcodeID = interpreter->getOpcodeID(curInstruction[0].u.opcode);
+                ASSERT_WITH_MESSAGE_UNUSED(opcodeID, false, "Unhandled opcode in CodeBlock::finalizeUnconditionally, %s(%d) at bc %u", opcodeNames[opcodeID], opcodeID, propertyAccessInstructions[i]);
             }
         }
 
@@ -2742,7 +2776,7 @@ void CodeBlock::resetStubDuringGCInternal(RepatchBuffer& repatchBuffer, Structur
 CallLinkInfo* CodeBlock::getCallLinkInfoForBytecodeIndex(unsigned index)
 {
     for (auto iter = m_callLinkInfos.begin(); !!iter; ++iter) {
-        if ((*iter)->codeOrigin == CodeOrigin(index))
+        if ((*iter)->codeOrigin() == CodeOrigin(index))
             return *iter;
     }
     return nullptr;
@@ -2767,6 +2801,13 @@ void CodeBlock::stronglyVisitStrongReferences(SlotVisitor& visitor)
 
 #if ENABLE(DFG_JIT)
     if (JITCode::isOptimizingJIT(jitType())) {
+        // FIXME: This is an antipattern for two reasons. References introduced by the DFG
+        // that aren't in the original CodeBlock being compiled should be weakly referenced.
+        // Inline call frames aren't in the original CodeBlock, so they qualify as weak. Also,
+        // those weak references should already be tracked in the DFG as weak FrozenValues. So,
+        // there is probably no need for this. We already have assertions that this should be
+        // unnecessary.
+        // https://bugs.webkit.org/show_bug.cgi?id=146613
         DFG::CommonData* dfgCommon = m_jitCode->dfgCommon();
         if (dfgCommon->inlineCallFrames.get())
             dfgCommon->inlineCallFrames->visitAggregate(visitor);
@@ -2846,7 +2887,7 @@ bool CodeBlock::hasOptimizedReplacement()
 }
 #endif
 
-HandlerInfo* CodeBlock::handlerForBytecodeOffset(unsigned bytecodeOffset)
+HandlerInfo* CodeBlock::handlerForBytecodeOffset(unsigned bytecodeOffset, RequiredHandler requiredHandler)
 {
     RELEASE_ASSERT(bytecodeOffset < instructions().size());
 
@@ -2855,10 +2896,14 @@ HandlerInfo* CodeBlock::handlerForBytecodeOffset(unsigned bytecodeOffset)
     
     Vector<HandlerInfo>& exceptionHandlers = m_rareData->m_exceptionHandlers;
     for (size_t i = 0; i < exceptionHandlers.size(); ++i) {
+        HandlerInfo& handler = exceptionHandlers[i];
+        if ((requiredHandler == RequiredHandler::CatchHandler) && !handler.isCatchHandler())
+            continue;
+
         // Handlers are ordered innermost first, so the first handler we encounter
         // that contains the source address is the correct handler to use.
-        if (exceptionHandlers[i].start <= bytecodeOffset && exceptionHandlers[i].end > bytecodeOffset)
-            return &exceptionHandlers[i];
+        if (handler.start <= bytecodeOffset && handler.end > bytecodeOffset)
+            return &handler;
     }
 
     return 0;
@@ -2924,27 +2969,6 @@ void CodeBlock::shrinkToFit(ShrinkMode shrinkMode)
             m_rareData->m_stringSwitchJumpTables.shrinkToFit();
         }
     } // else don't shrink these, because we would have already pointed pointers into these tables.
-}
-
-unsigned CodeBlock::addOrFindConstant(JSValue v)
-{
-    unsigned result;
-    if (findConstant(v, result))
-        return result;
-    return addConstant(v);
-}
-
-bool CodeBlock::findConstant(JSValue v, unsigned& index)
-{
-    unsigned numberOfConstants = numberOfConstantRegisters();
-    for (unsigned i = 0; i < numberOfConstants; ++i) {
-        if (getConstant(FirstConstantRegisterIndex + i) == v) {
-            index = i;
-            return true;
-        }
-    }
-    index = numberOfConstants;
-    return false;
 }
 
 #if ENABLE(JIT)
@@ -3809,7 +3833,7 @@ String CodeBlock::nameForRegister(VirtualRegister virtualRegister)
         if (ptr->value.varOffset() == VarOffset(virtualRegister)) {
             // FIXME: This won't work from the compilation thread.
             // https://bugs.webkit.org/show_bug.cgi?id=115300
-            return String(ptr->key);
+            return ptr->key.get();
         }
     }
     if (virtualRegister == thisRegister())

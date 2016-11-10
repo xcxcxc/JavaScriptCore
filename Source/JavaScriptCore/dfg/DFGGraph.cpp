@@ -62,7 +62,6 @@ Graph::Graph(VM& vm, Plan& plan, LongLivedState& longLivedState)
     , m_codeBlock(m_plan.codeBlock.get())
     , m_profiledBlock(m_codeBlock->alternative())
     , m_allocator(longLivedState.m_allocator)
-    , m_mustHandleValues(OperandsLike, plan.mustHandleValues)
     , m_nextMachineLocal(0)
     , m_fixpointState(BeforeFixpoint)
     , m_structureRegistrationState(HaveNotStartedRegistering)
@@ -72,9 +71,6 @@ Graph::Graph(VM& vm, Plan& plan, LongLivedState& longLivedState)
 {
     ASSERT(m_profiledBlock);
     
-    for (unsigned i = m_mustHandleValues.size(); i--;)
-        m_mustHandleValues[i] = freezeFragile(plan.mustHandleValues[i]);
-
     m_hasDebuggerEnabled = m_profiledBlock->globalObject()->hasDebugger()
         || Options::forceDebuggerBytecodeGeneration();
 }
@@ -529,6 +525,12 @@ void Graph::dump(PrintStream& out, DumpContext* context)
         out.print("\n");
     }
     
+    out.print("GC Values:\n");
+    for (FrozenValue* value : m_frozenValues) {
+        if (value->pointsToHeap())
+            out.print("    ", inContext(*value, &myContext), "\n");
+    }
+    
     if (!myContext.isEmpty()) {
         myContext.dump(out);
         out.print("\n");
@@ -974,6 +976,8 @@ JSValue Graph::tryGetConstantProperty(
     
     for (unsigned i = structureSet.size(); i--;) {
         Structure* structure = structureSet[i];
+        assertIsRegistered(structure);
+        
         WatchpointSet* set = structure->propertyReplacementWatchpointSet(offset);
         if (!set || !set->isStillValid())
             return JSValue();
@@ -1106,13 +1110,13 @@ void Graph::registerFrozenValues()
     m_codeBlock->constants().resize(0);
     m_codeBlock->constantsSourceCodeRepresentation().resize(0);
     for (FrozenValue* value : m_frozenValues) {
-        if (value->structure())
-            ASSERT(m_plan.weakReferences.contains(value->structure()));
+        if (!value->pointsToHeap())
+            continue;
+        
+        ASSERT(value->structure());
+        ASSERT(m_plan.weakReferences.contains(value->structure()));
         
         switch (value->strength()) {
-        case FragileValue: {
-            break;
-        }
         case WeakValue: {
             m_plan.weakReferences.addLazily(value->value().asCell());
             break;
@@ -1202,7 +1206,7 @@ void Graph::visitChildren(SlotVisitor& visitor)
     }
 }
 
-FrozenValue* Graph::freezeFragile(JSValue value)
+FrozenValue* Graph::freeze(JSValue value)
 {
     if (UNLIKELY(!value))
         return FrozenValue::emptySingleton();
@@ -1210,20 +1214,20 @@ FrozenValue* Graph::freezeFragile(JSValue value)
     auto result = m_frozenValueMap.add(JSValue::encode(value), nullptr);
     if (LIKELY(!result.isNewEntry))
         return result.iterator->value;
-    
-    return result.iterator->value = m_frozenValues.add(FrozenValue::freeze(value));
-}
 
-FrozenValue* Graph::freeze(JSValue value)
-{
-    FrozenValue* result = freezeFragile(value);
-    result->strengthenTo(WeakValue);
-    return result;
+    if (value.isUInt32())
+        m_uint32ValuesInUse.append(value.asUInt32());
+    
+    FrozenValue frozenValue = FrozenValue::freeze(value);
+    if (Structure* structure = frozenValue.structure())
+        registerStructure(structure);
+    
+    return result.iterator->value = m_frozenValues.add(frozenValue);
 }
 
 FrozenValue* Graph::freezeStrong(JSValue value)
 {
-    FrozenValue* result = freezeFragile(value);
+    FrozenValue* result = freeze(value);
     result->strengthenTo(StrongValue);
     return result;
 }
@@ -1255,6 +1259,10 @@ StructureRegistrationResult Graph::registerStructure(Structure* structure)
 
 void Graph::assertIsRegistered(Structure* structure)
 {
+    // It's convenient to be able to call this with a maybe-null structure.
+    if (!structure)
+        return;
+    
     if (m_structureRegistrationState == HaveNotStartedRegistering)
         return;
     

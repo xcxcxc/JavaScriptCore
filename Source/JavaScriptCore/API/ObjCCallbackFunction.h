@@ -29,7 +29,7 @@
 
 #if JSC_OBJC_API_ENABLED
 
-#import "JSCallbackFunction.h"
+#import <JavaScriptCore/JSCallbackFunction.h>
 
 #if defined(__OBJC__)
 JSObjectRef objCCallbackFunctionForMethod(JSContext *, Class, Protocol *, BOOL isInstanceMethod, SEL, const char* types);

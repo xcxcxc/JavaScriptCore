@@ -282,6 +282,8 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_put_by_index)
         case op_put_by_val_direct:
         DEFINE_OP(op_put_by_val)
+        DEFINE_OP(op_put_getter_by_id)
+        DEFINE_OP(op_put_setter_by_id)
         DEFINE_OP(op_put_getter_setter)
         case op_init_global_const_nop:
             NEXT_OPCODE(op_init_global_const_nop);
@@ -676,9 +678,9 @@ CompilationResult JIT::privateCompile(JITCompilationEffort effort)
     for (unsigned i = 0; i < m_callCompilationInfo.size(); ++i) {
         CallCompilationInfo& compilationInfo = m_callCompilationInfo[i];
         CallLinkInfo& info = *compilationInfo.callLinkInfo;
-        info.callReturnLocation = patchBuffer.locationOfNearCall(compilationInfo.callReturnLocation);
-        info.hotPathBegin = patchBuffer.locationOf(compilationInfo.hotPathBegin);
-        info.hotPathOther = patchBuffer.locationOfNearCall(compilationInfo.hotPathOther);
+        info.setCallLocations(patchBuffer.locationOfNearCall(compilationInfo.callReturnLocation),
+            patchBuffer.locationOf(compilationInfo.hotPathBegin),
+            patchBuffer.locationOfNearCall(compilationInfo.hotPathOther));
     }
 
     CompactJITCodeMap::Encoder jitCodeMapEncoder;

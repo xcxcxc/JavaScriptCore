@@ -32,23 +32,10 @@
 #include <wtf/RandomNumberSeed.h>
 #include <wtf/Vector.h>
 
-
 namespace JSC {
-#ifdef ANDROID
-float log2f(float x) {
-    return logf(x) / logf(2);
-}
-double log2(double x) {
-    return log(x) / log(2);
-}
-long double log2l(long double x) {
-    return logl(x) / logl(2);
-}
-#endif
 
 STATIC_ASSERT_IS_TRIVIALLY_DESTRUCTIBLE(MathObject);
 
-EncodedJSValue JSC_HOST_CALL mathProtoFuncAbs(ExecState*);
 EncodedJSValue JSC_HOST_CALL mathProtoFuncACos(ExecState*);
 EncodedJSValue JSC_HOST_CALL mathProtoFuncACosh(ExecState*);
 EncodedJSValue JSC_HOST_CALL mathProtoFuncASin(ExecState*);
@@ -63,7 +50,6 @@ EncodedJSValue JSC_HOST_CALL mathProtoFuncCos(ExecState*);
 EncodedJSValue JSC_HOST_CALL mathProtoFuncCosh(ExecState*);
 EncodedJSValue JSC_HOST_CALL mathProtoFuncExp(ExecState*);
 EncodedJSValue JSC_HOST_CALL mathProtoFuncExpm1(ExecState*);
-EncodedJSValue JSC_HOST_CALL mathProtoFuncFloor(ExecState*);
 EncodedJSValue JSC_HOST_CALL mathProtoFuncFround(ExecState*);
 EncodedJSValue JSC_HOST_CALL mathProtoFuncHypot(ExecState*);
 EncodedJSValue JSC_HOST_CALL mathProtoFuncLog(ExecState*);
@@ -282,9 +268,7 @@ EncodedJSValue JSC_HOST_CALL mathProtoFuncRandom(ExecState* exec)
 
 EncodedJSValue JSC_HOST_CALL mathProtoFuncRound(ExecState* exec)
 {
-    double arg = exec->argument(0).toNumber(exec);
-    double integer = ceil(arg);
-    return JSValue::encode(jsNumber(integer - (integer - arg > 0.5)));
+    return JSValue::encode(jsNumber(jsRound(exec->argument(0).toNumber(exec))));
 }
 
 EncodedJSValue JSC_HOST_CALL mathProtoFuncSign(ExecState* exec)

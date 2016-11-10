@@ -37,6 +37,7 @@
 #include "StructureChain.h"
 #include "StructureRareDataInlines.h"
 #include "SymbolPrototype.h"
+#include "TemplateRegistry.h"
 #include "VM.h"
 #include "Watchpoint.h"
 #include <JavaScriptCore/JSBase.h>
@@ -104,21 +105,28 @@ struct HashTable;
     DEFINE_STANDARD_BUILTIN(macro, WeakMap, weakMap) \
     DEFINE_STANDARD_BUILTIN(macro, WeakSet, weakSet) \
 
-#define FOR_EACH_SIMPLE_BUILTIN_TYPE(macro) \
-    FOR_EACH_SIMPLE_BUILTIN_TYPE_WITH_CONSTRUCTOR(macro) \
-    FOR_EACH_EXPERIMENTAL_BUILTIN_TYPE_WITH_CONSTRUCTOR(macro) \
+#define FOR_EACH_BUILTIN_DERIVED_ITERATOR_TYPE(macro) \
     DEFINE_STANDARD_BUILTIN(macro, ArrayIterator, arrayIterator) \
     DEFINE_STANDARD_BUILTIN(macro, MapIterator, mapIterator) \
     DEFINE_STANDARD_BUILTIN(macro, SetIterator, setIterator) \
     DEFINE_STANDARD_BUILTIN(macro, StringIterator, stringIterator) \
 
+#define FOR_EACH_BUILTIN_ITERATOR_TYPE(macro) \
+    DEFINE_STANDARD_BUILTIN(macro, Iterator, iterator) \
+    FOR_EACH_BUILTIN_DERIVED_ITERATOR_TYPE(macro) \
+
+#define FOR_EACH_SIMPLE_BUILTIN_TYPE(macro) \
+    FOR_EACH_SIMPLE_BUILTIN_TYPE_WITH_CONSTRUCTOR(macro) \
+    FOR_EACH_EXPERIMENTAL_BUILTIN_TYPE_WITH_CONSTRUCTOR(macro) \
 
 #define DECLARE_SIMPLE_BUILTIN_TYPE(capitalName, lowerName, properName, instanceType, jsName) \
     class JS ## capitalName; \
     class capitalName ## Prototype; \
     class capitalName ## Constructor;
 
+class IteratorPrototype;
 FOR_EACH_SIMPLE_BUILTIN_TYPE(DECLARE_SIMPLE_BUILTIN_TYPE)
+FOR_EACH_BUILTIN_DERIVED_ITERATOR_TYPE(DECLARE_SIMPLE_BUILTIN_TYPE)
 
 #undef DECLARE_SIMPLE_BUILTIN_TYPE
 
@@ -193,12 +201,17 @@ protected:
     WriteBarrier<JSFunction> m_applyFunction;
     WriteBarrier<JSFunction> m_definePropertyFunction;
     WriteBarrier<JSFunction> m_arrayProtoValuesFunction;
+#if ENABLE(PROMISES)
+    WriteBarrier<JSFunction> m_initializePromiseFunction;
+    WriteBarrier<JSFunction> m_newPromiseDeferredFunction;
+#endif
     WriteBarrier<GetterSetter> m_throwTypeErrorGetterSetter;
 
     WriteBarrier<ObjectPrototype> m_objectPrototype;
     WriteBarrier<FunctionPrototype> m_functionPrototype;
     WriteBarrier<ArrayPrototype> m_arrayPrototype;
     WriteBarrier<RegExpPrototype> m_regExpPrototype;
+    WriteBarrier<IteratorPrototype> m_iteratorPrototype;
 #if ENABLE(PROMISES)
     WriteBarrier<JSPromisePrototype> m_promisePrototype;
 #endif
@@ -239,6 +252,8 @@ protected:
     
     WriteBarrier<Structure> m_iteratorResultStructure;
 
+    WriteBarrier<Structure> m_regExpMatchesArrayStructure;
+
 #if ENABLE(PROMISES)
     WriteBarrier<Structure> m_promiseStructure;
 #endif // ENABLE(PROMISES)
@@ -248,6 +263,7 @@ protected:
     WriteBarrier<Structure> m_ ## properName ## Structure;
 
     FOR_EACH_SIMPLE_BUILTIN_TYPE(DEFINE_STORAGE_FOR_SIMPLE_TYPE)
+    FOR_EACH_BUILTIN_DERIVED_ITERATOR_TYPE(DEFINE_STORAGE_FOR_SIMPLE_TYPE)
 
 #undef DEFINE_STORAGE_FOR_SIMPLE_TYPE
 
@@ -283,6 +299,8 @@ protected:
     std::unique_ptr<JSGlobalObjectRareData> m_rareData;
 
     WeakRandom m_weakRandom;
+
+    TemplateRegistry m_templateRegistry;
 
     bool m_evalEnabled;
     String m_evalDisabledErrorMessage;
@@ -338,11 +356,7 @@ protected:
         setGlobalThis(vm, thisValue);
     }
 
-    struct NewGlobalVar {
-        ScopeOffset offset;
-        WatchpointSet* set;
-    };
-    NewGlobalVar addGlobalVar(const Identifier&, ConstantMode);
+    void addGlobalVar(const Identifier&, ConstantMode);
 
 public:
     JS_EXPORT_PRIVATE ~JSGlobalObject();
@@ -374,7 +388,7 @@ public:
         if (!hasProperty(exec, propertyName))
             addGlobalVar(propertyName, IsConstant);
     }
-    void addFunction(ExecState*, const Identifier&, JSValue);
+    void addFunction(ExecState*, const Identifier&);
 
     // The following accessors return pristine values, even if a script 
     // replaces the global object's associated property.
@@ -403,6 +417,10 @@ public:
     JSFunction* applyFunction() const { return m_applyFunction.get(); }
     JSFunction* definePropertyFunction() const { return m_definePropertyFunction.get(); }
     JSFunction* arrayProtoValuesFunction() const { return m_arrayProtoValuesFunction.get(); }
+#if ENABLE(PROMISES)
+    JSFunction* initializePromiseFunction() const { return m_initializePromiseFunction.get(); }
+    JSFunction* newPromiseDeferredFunction() const { return m_newPromiseDeferredFunction.get(); }
+#endif
     GetterSetter* throwTypeErrorGetterSetter(VM& vm)
     {
         if (!m_throwTypeErrorGetterSetter)
@@ -420,6 +438,7 @@ public:
     DatePrototype* datePrototype() const { return m_datePrototype.get(); }
     RegExpPrototype* regExpPrototype() const { return m_regExpPrototype.get(); }
     ErrorPrototype* errorPrototype() const { return m_errorPrototype.get(); }
+    IteratorPrototype* iteratorPrototype() const { return m_iteratorPrototype.get(); }
 #if ENABLE(PROMISES)
     JSPromisePrototype* promisePrototype() const { return m_promisePrototype.get(); }
 #endif
@@ -479,6 +498,7 @@ public:
     Structure* symbolObjectStructure() const { return m_symbolObjectStructure.get(); }
     Structure* iteratorResultStructure() const { return m_iteratorResultStructure.get(); }
     static ptrdiff_t iteratorResultStructureOffset() { return OBJECT_OFFSETOF(JSGlobalObject, m_iteratorResultStructure); }
+    Structure* regExpMatchesArrayStructure() const { return m_regExpMatchesArrayStructure.get(); }
 
 #if ENABLE(PROMISES)
     Structure* promiseStructure() const { return m_promiseStructure.get(); }
@@ -509,6 +529,7 @@ public:
     Structure* properName ## Structure() { return m_ ## properName ## Structure.get(); }
 
     FOR_EACH_SIMPLE_BUILTIN_TYPE(DEFINE_ACCESSORS_FOR_SIMPLE_TYPE)
+    FOR_EACH_BUILTIN_DERIVED_ITERATOR_TYPE(DEFINE_ACCESSORS_FOR_SIMPLE_TYPE)
 
 #undef DEFINE_ACCESSORS_FOR_SIMPLE_TYPE
 
@@ -612,6 +633,8 @@ public:
         return m_rareData->opaqueJSClassData;
     }
 
+    TemplateRegistry& templateRegistry() { return m_templateRegistry; }
+
     double weakRandomNumber() { return m_weakRandom.get(); }
     unsigned weakRandomInteger() { return m_weakRandom.getUint32(); }
 
@@ -672,7 +695,7 @@ inline bool JSGlobalObject::symbolTableHasProperty(PropertyName propertyName)
 
 inline JSArray* constructEmptyArray(ExecState* exec, ArrayAllocationProfile* profile, JSGlobalObject* globalObject, unsigned initialLength = 0)
 {
-    return ArrayAllocationProfile::updateLastAllocationFor(profile, JSArray::create(exec->vm(), initialLength >= MIN_SPARSE_ARRAY_INDEX ? globalObject->arrayStructureForIndexingTypeDuringAllocation(ArrayWithArrayStorage) : globalObject->arrayStructureForProfileDuringAllocation(profile), initialLength));
+    return ArrayAllocationProfile::updateLastAllocationFor(profile, JSArray::create(exec->vm(), initialLength >= MIN_ARRAY_STORAGE_CONSTRUCTION_LENGTH ? globalObject->arrayStructureForIndexingTypeDuringAllocation(ArrayWithArrayStorage) : globalObject->arrayStructureForProfileDuringAllocation(profile), initialLength));
 }
 
 inline JSArray* constructEmptyArray(ExecState* exec, ArrayAllocationProfile* profile, unsigned initialLength = 0)

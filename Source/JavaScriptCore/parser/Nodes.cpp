@@ -124,7 +124,7 @@ ProgramNode::ProgramNode(ParserArena& parserArena, const JSTokenLocation& startL
 {
 }
 
-void ProgramNode::setClosedVariables(Vector<RefPtr<StringImpl>>&& closedVariables)
+void ProgramNode::setClosedVariables(Vector<RefPtr<UniquedStringImpl>>&& closedVariables)
 {
     m_closedVariables = WTF::move(closedVariables);
 }
@@ -139,15 +139,15 @@ EvalNode::EvalNode(ParserArena& parserArena, const JSTokenLocation& startLocatio
 
 // ------------------------------ FunctionBodyNode -----------------------------
 
-PassRefPtr<FunctionParameters> FunctionParameters::create(ParameterNode* firstParameter)
+Ref<FunctionParameters> FunctionParameters::create(ParameterNode* firstParameter)
 {
     unsigned parameterCount = 0;
     for (ParameterNode* parameter = firstParameter; parameter; parameter = parameter->nextParam())
         ++parameterCount;
 
-    size_t objectSize = sizeof(FunctionParameters) - sizeof(void*) + sizeof(DeconstructionPatternNode*) * parameterCount;
+    size_t objectSize = sizeof(FunctionParameters) - sizeof(void*) + sizeof(DestructuringPatternNode*) * parameterCount;
     void* slot = fastMalloc(objectSize);
-    return adoptRef(new (slot) FunctionParameters(firstParameter, parameterCount));
+    return adoptRef(*new (slot) FunctionParameters(firstParameter, parameterCount));
 }
 
 FunctionParameters::FunctionParameters(ParameterNode* firstParameter, unsigned size)

@@ -44,6 +44,11 @@ public:
     
     bool run()
     {
+        // We need to set this before this phase finishes. This phase doesn't do anything
+        // conditioned on this field, except for assertIsRegistered() below. We intend for that
+        // method to behave as if the phase was already finished. So, we set this up here.
+        m_graph.m_structureRegistrationState = AllStructuresAreRegistered;
+        
         // These are pretty dumb, but needed to placate subsequent assertions. We don't actually
         // have to watch these because there is no way to transition away from it, but they are
         // watchable and so we will assert if they aren't watched.
@@ -52,7 +57,7 @@ public:
         registerStructure(m_graph.m_vm.getterSetterStructure.get());
         
         for (FrozenValue* value : m_graph.m_frozenValues)
-            registerStructure(value->structure());
+            assertIsRegistered(value->structure());
         
         for (BlockIndex blockIndex = m_graph.numBlocks(); blockIndex--;) {
             BasicBlock* block = m_graph.block(blockIndex);
@@ -64,7 +69,7 @@ public:
             
                 switch (node->op()) {
                 case CheckStructure:
-                    registerStructures(node->structureSet());
+                    assertAreRegistered(node->structureSet());
                     break;
                 
                 case NewObject:
@@ -141,22 +146,32 @@ public:
             }
         }
         
-        m_graph.m_structureRegistrationState = AllStructuresAreRegistered;
-        
         return true;
     }
 
 private:
     void registerStructures(const StructureSet& set)
     {
-        for (unsigned i = set.size(); i--;)
-            registerStructure(set[i]);
+        for (Structure* structure : set)
+            registerStructure(structure);
     }
     
     void registerStructure(Structure* structure)
     {
         if (structure)
             m_graph.registerStructure(structure);
+    }
+
+    void assertAreRegistered(const StructureSet& set)
+    {
+        for (Structure* structure : set)
+            assertIsRegistered(structure);
+    }
+
+    void assertIsRegistered(Structure* structure)
+    {
+        if (structure)
+            m_graph.assertIsRegistered(structure);
     }
 };
 

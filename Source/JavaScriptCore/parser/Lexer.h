@@ -87,6 +87,9 @@ public:
     void setIsReparsing() { m_isReparsing = true; }
     bool isReparsing() const { return m_isReparsing; }
 
+#if ENABLE(ES6_ARROWFUNCTION_SYNTAX)
+    void setTokenPosition(JSToken* tokenRecord);
+#endif
     JSTokenType lex(JSToken*, unsigned, bool strictMode);
     bool nextTokenIsColon();
     int lineNumber() const { return m_lineNumber; }
@@ -97,12 +100,14 @@ public:
         return JSTextPosition(m_lineNumber, currentOffset(), currentLineStartOffset());
     }
     JSTextPosition positionBeforeLastNewline() const { return m_positionBeforeLastNewline; }
+    JSTokenLocation lastTokenLocation() const { return m_lastTockenLocation; }
     void setLastLineNumber(int lastLineNumber) { m_lastLineNumber = lastLineNumber; }
     int lastLineNumber() const { return m_lastLineNumber; }
     bool prevTerminator() const { return m_terminator; }
     bool scanRegExp(const Identifier*& pattern, const Identifier*& flags, UChar patternPrefix = 0);
 #if ENABLE(ES6_TEMPLATE_LITERAL_SYNTAX)
-    JSTokenType scanTrailingTemplateString(JSToken*);
+    enum class RawStringsBuildMode { BuildRawStrings, DontBuildRawStrings };
+    JSTokenType scanTrailingTemplateString(JSToken*, RawStringsBuildMode);
 #endif
     bool skipRegExp();
 
@@ -129,6 +134,10 @@ public:
     void setLineNumber(int line)
     {
         m_lineNumber = line;
+    }
+    void setTerminator(bool terminator)
+    {
+        m_terminator = terminator;
     }
 
     SourceProvider* sourceProvider() const { return m_source->provider(); }
@@ -166,6 +175,7 @@ private:
     ALWAYS_INLINE const Identifier* makeLCharIdentifier(const UChar* characters, size_t length);
     ALWAYS_INLINE const Identifier* makeRightSizedIdentifier(const UChar* characters, size_t length, UChar orAllChars);
     ALWAYS_INLINE const Identifier* makeIdentifierLCharFromUChar(const UChar* characters, size_t length);
+    ALWAYS_INLINE const Identifier* makeEmptyIdentifier();
 
     ALWAYS_INLINE bool lastTokenWasRestrKeyword() const;
 
@@ -184,7 +194,7 @@ private:
     enum class EscapeParseMode { Template, String };
     template <bool shouldBuildStrings> ALWAYS_INLINE StringParseResult parseComplexEscape(EscapeParseMode, bool strictMode, T stringQuoteCharacter);
 #if ENABLE(ES6_TEMPLATE_LITERAL_SYNTAX)
-    template <bool shouldBuildStrings> ALWAYS_INLINE StringParseResult parseTemplateLiteral(JSTokenData*);
+    template <bool shouldBuildStrings> ALWAYS_INLINE StringParseResult parseTemplateLiteral(JSTokenData*, RawStringsBuildMode);
 #endif
     ALWAYS_INLINE void parseHex(double& returnValue);
     ALWAYS_INLINE bool parseBinary(double& returnValue);
@@ -201,6 +211,7 @@ private:
 
     Vector<LChar> m_buffer8;
     Vector<UChar> m_buffer16;
+    Vector<UChar> m_bufferForRawTemplateString16;
     bool m_terminator;
     int m_lastToken;
 
@@ -212,6 +223,7 @@ private:
     const T* m_codeStartPlusOffset;
     const T* m_lineStart;
     JSTextPosition m_positionBeforeLastNewline;
+    JSTokenLocation m_lastTockenLocation;
     bool m_isReparsing;
     bool m_atLineStart;
     bool m_error;
@@ -287,6 +299,12 @@ ALWAYS_INLINE const Identifier* Lexer<UChar>::makeRightSizedIdentifier(const UCh
         return &m_arena->makeIdentifierLCharFromUChar(m_vm, characters, length);
 
     return &m_arena->makeIdentifier(m_vm, characters, length);
+}
+
+template <typename T>
+ALWAYS_INLINE const Identifier* Lexer<T>::makeEmptyIdentifier()
+{
+    return &m_arena->makeEmptyIdentifier(m_vm);
 }
 
 template <>

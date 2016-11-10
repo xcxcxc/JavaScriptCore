@@ -398,7 +398,7 @@ public:
     }
 
     void installCode(CodeBlock*);
-    PassRefPtr<CodeBlock> newCodeBlockFor(CodeSpecializationKind, JSFunction*, JSScope*, JSObject*& exception);
+    RefPtr<CodeBlock> newCodeBlockFor(CodeSpecializationKind, JSFunction*, JSScope*, JSObject*& exception);
     PassRefPtr<CodeBlock> newReplacementCodeBlockFor(CodeSpecializationKind);
     
     JSObject* prepareForExecution(ExecState* exec, JSFunction* function, JSScope* scope, CodeSpecializationKind kind)
@@ -637,8 +637,7 @@ public:
     size_t parameterCount() const { return m_unlinkedExecutable->parameterCount(); } // Excluding 'this'!
     SymbolTable* symbolTable(CodeSpecializationKind);
 
-    void clearCodeIfNotCompiling();
-    void clearUnlinkedCodeForRecompilationIfNotCompiling();
+    void clearUnlinkedCodeForRecompilation();
     static void visitChildren(JSCell*, SlotVisitor&);
     static Structure* createStructure(VM& vm, JSGlobalObject* globalObject, JSValue proto)
     {
@@ -668,17 +667,6 @@ private:
         unsigned lastLine, unsigned startColumn, unsigned endColumn);
     
     void finishCreation(VM&);
-
-    bool isCompiling()
-    {
-#if ENABLE(JIT)
-        if (!m_jitCodeForCall && m_codeBlockForCall)
-            return true;
-        if (!m_jitCodeForConstruct && m_codeBlockForConstruct)
-            return true;
-#endif
-        return false;
-    }
 
     friend class ScriptExecutable;
     

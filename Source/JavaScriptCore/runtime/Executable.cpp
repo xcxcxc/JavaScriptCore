@@ -52,8 +52,8 @@ void ExecutableBase::destroy(JSCell* cell)
 void ExecutableBase::clearCode()
 {
 #if ENABLE(JIT)
-    m_jitCodeForCall.clear();
-    m_jitCodeForConstruct.clear();
+    m_jitCodeForCall = nullptr;
+    m_jitCodeForConstruct = nullptr;
     m_jitCodeForCallWithArityCheck = MacroAssemblerCodePtr();
     m_jitCodeForConstructWithArityCheck = MacroAssemblerCodePtr();
     m_jitCodeForCallWithArityCheckAndPreserveRegs = MacroAssemblerCodePtr();
@@ -199,7 +199,7 @@ void ScriptExecutable::installCode(CodeBlock* genericCodeBlock)
     Heap::heap(this)->writeBarrier(this);
 }
 
-PassRefPtr<CodeBlock> ScriptExecutable::newCodeBlockFor(
+RefPtr<CodeBlock> ScriptExecutable::newCodeBlockFor(
     CodeSpecializationKind kind, JSFunction* function, JSScope* scope, JSObject*& exception)
 {
     VM* vm = scope->vm();
@@ -244,7 +244,7 @@ PassRefPtr<CodeBlock> ScriptExecutable::newCodeBlockFor(
         exception = vm->throwException(
             globalObject->globalExec(),
             error.toErrorObject(globalObject, executable->m_source));
-        return 0;
+        return nullptr;
     }
 
     // Parsing reveals whether our function uses features that require a separate function name object in the scope chain.
@@ -464,7 +464,7 @@ void EvalExecutable::unlinkCalls()
 
 void EvalExecutable::clearCode()
 {
-    m_evalCodeBlock.clear();
+    m_evalCodeBlock = nullptr;
     m_unlinkedEvalCodeBlock.clear();
     Base::clearCode();
 }
@@ -510,12 +510,11 @@ JSObject* ProgramExecutable::initializeGlobalProperties(VM& vm, CallFrame* callF
     BatchedTransitionOptimizer optimizer(vm, globalObject);
 
     const UnlinkedProgramCodeBlock::VariableDeclations& variableDeclarations = unlinkedCodeBlock->variableDeclarations();
-    const UnlinkedProgramCodeBlock::FunctionDeclations& functionDeclarations = unlinkedCodeBlock->functionDeclarations();
 
-    for (size_t i = 0; i < functionDeclarations.size(); ++i) {
-        UnlinkedFunctionExecutable* unlinkedFunctionExecutable = functionDeclarations[i].second.get();
-        JSValue value = JSFunction::create(vm, unlinkedFunctionExecutable->link(vm, m_source), scope);
-        globalObject->addFunction(callFrame, functionDeclarations[i].first, value);
+    for (size_t i = 0, numberOfFunctions = unlinkedCodeBlock->numberOfFunctionDecls(); i < numberOfFunctions; ++i) {
+        UnlinkedFunctionExecutable* unlinkedFunctionExecutable = unlinkedCodeBlock->functionDecl(i);
+        ASSERT(!unlinkedFunctionExecutable->name().isEmpty());
+        globalObject->addFunction(callFrame, unlinkedFunctionExecutable->name());
         if (vm.typeProfiler() || vm.controlFlowProfiler()) {
             vm.functionHasExecutedCache()->insertUnexecutedRange(sourceID(), 
                 unlinkedFunctionExecutable->typeProfilingStartOffset(), 
@@ -544,7 +543,7 @@ void ProgramExecutable::visitChildren(JSCell* cell, SlotVisitor& visitor)
 
 void ProgramExecutable::clearCode()
 {
-    m_programCodeBlock.clear();
+    m_programCodeBlock = nullptr;
     m_unlinkedProgramCodeBlock.clear();
     Base::clearCode();
 }
@@ -581,24 +580,15 @@ SymbolTable* FunctionExecutable::symbolTable(CodeSpecializationKind kind)
     return codeBlockFor(kind)->symbolTable();
 }
 
-void FunctionExecutable::clearCodeIfNotCompiling()
+void FunctionExecutable::clearUnlinkedCodeForRecompilation()
 {
-    if (isCompiling())
-        return;
-    clearCode();
-}
-
-void FunctionExecutable::clearUnlinkedCodeForRecompilationIfNotCompiling()
-{
-    if (isCompiling())
-        return;
     m_unlinkedExecutable->clearCodeForRecompilation();
 }
 
 void FunctionExecutable::clearCode()
 {
-    m_codeBlockForCall.clear();
-    m_codeBlockForConstruct.clear();
+    m_codeBlockForCall = nullptr;
+    m_codeBlockForConstruct = nullptr;
     Base::clearCode();
 }
 

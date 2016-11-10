@@ -297,8 +297,8 @@ EncodedJSValue JIT_OPERATION operationGetByVal(ExecState* exec, EncodedJSValue e
         } else if (property.isString()) {
             Structure& structure = *base->structure(vm);
             if (JSCell::canUseFastGetOwnProperty(structure)) {
-                if (AtomicStringImpl* existingAtomicString = asString(property)->toExistingAtomicString(exec)) {
-                    if (JSValue result = base->fastGetOwnProperty(vm, structure, existingAtomicString))
+                if (RefPtr<AtomicStringImpl> existingAtomicString = asString(property)->toExistingAtomicString(exec)) {
+                    if (JSValue result = base->fastGetOwnProperty(vm, structure, existingAtomicString.get()))
                         return JSValue::encode(result);
                 }
             }
@@ -331,8 +331,8 @@ EncodedJSValue JIT_OPERATION operationGetByValCell(ExecState* exec, JSCell* base
     } else if (property.isString()) {
         Structure& structure = *base->structure(vm);
         if (JSCell::canUseFastGetOwnProperty(structure)) {
-            if (AtomicStringImpl* existingAtomicString = asString(property)->toExistingAtomicString(exec)) {
-                if (JSValue result = base->fastGetOwnProperty(vm, structure, existingAtomicString))
+            if (RefPtr<AtomicStringImpl> existingAtomicString = asString(property)->toExistingAtomicString(exec)) {
+                if (JSValue result = base->fastGetOwnProperty(vm, structure, existingAtomicString.get()))
                     return JSValue::encode(result);
             }
         }
@@ -1351,7 +1351,7 @@ static void triggerFTLReplacementCompile(VM* vm, CodeBlock* codeBlock, JITCode* 
         Operands<JSValue>(), ToFTLDeferredCompilationCallback::create(codeBlock));
 }
 
-void JIT_OPERATION triggerTierUpNow(ExecState* exec)
+static void triggerTierUpNowCommon(ExecState* exec, bool inLoop)
 {
     VM* vm = &exec->vm();
     NativeCallFrameTracer tracer(vm, exec);
@@ -1370,8 +1370,20 @@ void JIT_OPERATION triggerTierUpNow(ExecState* exec)
             *codeBlock, ": Entered triggerTierUpNow with executeCounter = ",
             jitCode->tierUpCounter, "\n");
     }
-    
+    if (inLoop)
+        jitCode->nestedTriggerIsSet = 1;
+
     triggerFTLReplacementCompile(vm, codeBlock, jitCode);
+}
+
+void JIT_OPERATION triggerTierUpNow(ExecState* exec)
+{
+    triggerTierUpNowCommon(exec, false);
+}
+
+void JIT_OPERATION triggerTierUpNowInLoop(ExecState* exec)
+{
+    triggerTierUpNowCommon(exec, true);
 }
 
 char* JIT_OPERATION triggerOSREntryNow(
@@ -1388,6 +1400,7 @@ char* JIT_OPERATION triggerOSREntryNow(
     }
     
     JITCode* jitCode = codeBlock->jitCode()->dfg();
+    jitCode->nestedTriggerIsSet = 0;
     
     if (Options::verboseOSR()) {
         dataLog(
@@ -1434,7 +1447,7 @@ char* JIT_OPERATION triggerOSREntryNow(
         
         // OSR entry failed. Oh no! This implies that we need to retry. We retry
         // without exponential backoff and we only do this for the entry code block.
-        jitCode->osrEntryBlock.clear();
+        jitCode->osrEntryBlock = nullptr;
         jitCode->osrEntryRetry = 0;
         return 0;
     }

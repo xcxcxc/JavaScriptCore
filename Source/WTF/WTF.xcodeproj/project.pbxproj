@@ -44,7 +44,7 @@
 		143F611F1565F0F900DB514A /* RAMSize.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 143F611D1565F0F900DB514A /* RAMSize.cpp */; };
 		143F61201565F0F900DB514A /* RAMSize.h in Headers */ = {isa = PBXBuildFile; fileRef = 143F611E1565F0F900DB514A /* RAMSize.h */; settings = {ATTRIBUTES = (); }; };
 		1447AEC618FCE57700B3D7FF /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 1447AEC518FCE57700B3D7FF /* Foundation.framework */; };
-		1447AEC718FCE58000B3D7FF /* lib.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D247B6214689B8600E78B76 /* lib.a */; };
+		1447AEC718FCE58000B3D7FF /* libWTF.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D247B6214689B8600E78B76 /* libWTF.a */; };
 		1447AEC918FCE59400B3D7FF /* mbmalloc.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 1447AEC818FCE59400B3D7FF /* mbmalloc.cpp */; };
 		1447AECB18FCE5B900B3D7FF /* libicucore.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 1447AECA18FCE5B900B3D7FF /* libicucore.dylib */; };
 		1469419216EAAF6D0024E146 /* RunLoopTimer.h in Headers */ = {isa = PBXBuildFile; fileRef = 1469419016EAAF6D0024E146 /* RunLoopTimer.h */; settings = {ATTRIBUTES = (); }; };
@@ -355,7 +355,7 @@
 		430B47871AAAAC1A001223DA /* StringCommon.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = StringCommon.h; sourceTree = "<group>"; };
 		579B925A1DD2C2AE00214000 /* WTF-iOS-Static.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "WTF-iOS-Static.xcconfig"; path = "../WTF-iOS-Static.xcconfig"; sourceTree = "<group>"; };
 		579B925B1DD2C35B00214000 /* libstdc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libstdc++.tbd"; path = "usr/lib/libstdc++.tbd"; sourceTree = SDKROOT; };
-		5D247B6214689B8600E78B76 /* lib.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = lib.a; sourceTree = BUILT_PRODUCTS_DIR; };
+		5D247B6214689B8600E78B76 /* libWTF.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libWTF.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		5D247B6E14689C4700E78B76 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		5D247B7014689C4700E78B76 /* DebugRelease.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = DebugRelease.xcconfig; sourceTree = "<group>"; };
 		5D247B7314689C4700E78B76 /* WTF.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = WTF.xcconfig; sourceTree = "<group>"; };
@@ -573,7 +573,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				1447AECB18FCE5B900B3D7FF /* libicucore.dylib in Frameworks */,
-				1447AEC718FCE58000B3D7FF /* lib.a in Frameworks */,
+				1447AEC718FCE58000B3D7FF /* libWTF.a in Frameworks */,
 				1447AEC618FCE57700B3D7FF /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -632,7 +632,7 @@
 		5D247B6314689B8600E78B76 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				5D247B6214689B8600E78B76 /* lib.a */,
+				5D247B6214689B8600E78B76 /* libWTF.a */,
 				1447AEBE18FCE56900B3D7FF /* libmbmalloc.dylib */,
 			);
 			name = Products;
@@ -1240,7 +1240,7 @@
 			);
 			name = WTF;
 			productName = WTF;
-			productReference = 5D247B6214689B8600E78B76 /* lib.a */;
+			productReference = 5D247B6214689B8600E78B76 /* libWTF.a */;
 			productType = "com.apple.product-type.library.static";
 		};
 /* End PBXNativeTarget section */

@@ -73,7 +73,7 @@ void JSLockHolder::init()
 JSLockHolder::~JSLockHolder()
 {
     RefPtr<JSLock> apiLock(&m_vm->apiLock());
-    m_vm.clear();
+    m_vm = nullptr;
     apiLock->unlock();
 }
 
@@ -212,8 +212,6 @@ unsigned JSLock::dropAllLocks(DropAllLocks* dropper)
         return 0;
     }
 
-    // Check if this thread is currently holding the lock.
-    // FIXME: Maybe we want to require this, guard with an ASSERT?
     if (!currentThreadIsHoldingLock())
         return 0;
 
@@ -265,7 +263,7 @@ JSLock::DropAllLocks::DropAllLocks(VM* vm)
     if (!m_vm)
         return;
     wtfThreadData().resetCurrentAtomicStringTable();
-    RELEASE_ASSERT(!m_vm->isCollectorBusy());
+    RELEASE_ASSERT(!m_vm->apiLock().currentThreadIsHoldingLock() || !m_vm->isCollectorBusy());
     m_droppedLockCount = m_vm->apiLock().dropAllLocks(this);
 }
 
