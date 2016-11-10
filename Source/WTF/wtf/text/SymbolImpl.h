@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2015 Yusuke Suzuki <utatane.tea@gmail.com>.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,53 +23,39 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "config.h"
-#include "BinarySemaphore.h"
+#ifndef SymbolImpl_h
+#define SymbolImpl_h
+
+#include <wtf/text/UniquedStringImpl.h>
 
 namespace WTF {
 
-BinarySemaphore::BinarySemaphore()
-    : m_event(::CreateEventW(0, FALSE, FALSE, 0))
-{
-}
+// SymbolImpl is used to represent the symbol string impl.
+// It is uniqued string impl, but is not registered in Atomic String tables, so it's not atomic.
+class SymbolImpl : public UniquedStringImpl {
+private:
+    SymbolImpl() = delete;
+};
 
-BinarySemaphore::~BinarySemaphore()
-{
-    ::CloseHandle(m_event);
-}
+#if !ASSERT_DISABLED
+// SymbolImpls created from StaticASCIILiteral will ASSERT
+// in the generic ValueCheck<T>::checkConsistency
+// as they are not allocated by fastMalloc.
+// We don't currently have any way to detect that case
+// so we ignore the consistency check for all SymbolImpls*.
+template<> struct
+ValueCheck<SymbolImpl*> {
+    static void checkConsistency(const SymbolImpl*) { }
+};
 
-void BinarySemaphore::signal()
-{
-    ::SetEvent(m_event);
-}
-
-bool BinarySemaphore::wait(double absoluteTime)
-{
-    DWORD interval = absoluteTimeToWaitTimeoutInterval(absoluteTime);
-    if (!interval) {
-        // Consider the wait to have timed out, even if the event has already been signaled, to
-        // match the WTF::ThreadCondition implementation.
-        return false;
-    }
-
-    DWORD result = ::WaitForSingleObject(m_event, interval);
-    switch (result) {
-    case WAIT_OBJECT_0:
-        // The event was signaled.
-        return true;
-
-    case WAIT_TIMEOUT:
-        // The wait timed out.
-        return false;
-
-    case WAIT_FAILED:
-        ASSERT_WITH_MESSAGE(false, "::WaitForSingleObject failed with error %lu", ::GetLastError());
-        return false;
-
-    default:
-        ASSERT_WITH_MESSAGE(false, "::WaitForSingleObject returned unexpected result %lu", result);
-        return false;
-    }
-}
+template<> struct
+ValueCheck<const SymbolImpl*> {
+    static void checkConsistency(const SymbolImpl*) { }
+};
+#endif
 
 } // namespace WTF
+
+using WTF::SymbolImpl;
+
+#endif // SymbolImpl_h

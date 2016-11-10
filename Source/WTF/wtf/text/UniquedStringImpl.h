@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Samsung Electronics
+ * Copyright (C) 2015 Yusuke Suzuki <utatane.tea@gmail.com>.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,47 +23,39 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef UniquePtrEfl_h
-#define UniquePtrEfl_h
+#ifndef UniquedStringImpl_h
+#define UniquedStringImpl_h
 
-#include <Ecore.h>
-#include <Ecore_Evas.h>
-#include <Ecore_IMF.h>
-#include <Eina.h>
-#include <Evas.h>
+#include <wtf/text/StringImpl.h>
 
 namespace WTF {
 
-template<typename T> struct EflPtrDeleter {
-    void operator()(T* ptr) const = delete;
+// It represents that the string impl is uniqued in some ways.
+// When the given 2 string impls are both uniqued string impls, we can compare it just using pointer comparison.
+class UniquedStringImpl : public StringImpl {
+private:
+    UniquedStringImpl() = delete;
 };
 
-template<typename T>
-using EflUniquePtr = std::unique_ptr<T, EflPtrDeleter<T>>;
+#if !ASSERT_DISABLED
+// UniquedStringImpls created from StaticASCIILiteral will ASSERT
+// in the generic ValueCheck<T>::checkConsistency
+// as they are not allocated by fastMalloc.
+// We don't currently have any way to detect that case
+// so we ignore the consistency check for all UniquedStringImpls*.
+template<> struct
+ValueCheck<UniquedStringImpl*> {
+    static void checkConsistency(const UniquedStringImpl*) { }
+};
 
-#define FOR_EACH_EFL_DELETER(macro) \
-    macro(Ecore_Evas, ecore_evas_free) \
-    macro(Ecore_IMF_Context, ecore_imf_context_del) \
-    macro(Ecore_Pipe, ecore_pipe_del) \
-    macro(Eina_Hash, eina_hash_free) \
-    macro(Eina_Module, eina_module_free) \
-    macro(Evas_Object, evas_object_del) \
-
-#define WTF_DEFINE_EFLPTR_DELETER(typeName, deleterFunc) \
-    template<> struct EflPtrDeleter<typeName> \
-    { \
-        void operator() (typeName* ptr) const \
-        { \
-            if (ptr) \
-                deleterFunc(ptr); \
-        } \
-    };
-
-FOR_EACH_EFL_DELETER(WTF_DEFINE_EFLPTR_DELETER)
-#undef FOR_EACH_EFL_DELETER
+template<> struct
+ValueCheck<const UniquedStringImpl*> {
+    static void checkConsistency(const UniquedStringImpl*) { }
+};
+#endif
 
 } // namespace WTF
 
-using WTF::EflUniquePtr;
+using WTF::UniquedStringImpl;
 
-#endif // UniquePtrEfl_h
+#endif // UniquedStringImpl_h

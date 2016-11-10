@@ -101,26 +101,13 @@ void fastAlignedFree(void* p)
     _aligned_free(p);
 }
 
-#elif (!defined(ANDROID) && (ANDROID_NATIVE_API_LEVEL > 15))
+#else
 
 void* fastAlignedMalloc(size_t alignment, size_t size) 
 {
     void* p = nullptr;
     posix_memalign(&p, alignment, size);
     return p;
-}
-
-void fastAlignedFree(void* p) 
-{
-    free(p);
-}
-
-#else
-
-void* fastAlignedMalloc(size_t alignment, size_t size) 
-{
-    void* p = nullptr;
-    return memalign(alignment, size);
 }
 
 void fastAlignedFree(void* p) 
@@ -235,7 +222,6 @@ size_t fastMallocSize(const void*)
 
 size_t fastMallocGoodSize(size_t size)
 {
-    // FIXME: This is non-helpful; fastMallocGoodSize will be removed soon.
     return size;
 }
 

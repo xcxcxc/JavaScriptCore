@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Samsung Electronics
+ * Copyright (C) 2012 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,47 +23,34 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef UniquePtrEfl_h
-#define UniquePtrEfl_h
+#include "config.h"
+#include <wtf/text/AtomicStringImpl.h>
 
-#include <Ecore.h>
-#include <Ecore_Evas.h>
-#include <Ecore_IMF.h>
-#include <Eina.h>
-#include <Evas.h>
+#if USE(CF)
+
+#include <CoreFoundation/CoreFoundation.h>
+#include <wtf/text/CString.h>
 
 namespace WTF {
 
-template<typename T> struct EflPtrDeleter {
-    void operator()(T* ptr) const = delete;
-};
+RefPtr<AtomicStringImpl> AtomicStringImpl::add(CFStringRef string)
+{
+    if (!string)
+        return nullptr;
 
-template<typename T>
-using EflUniquePtr = std::unique_ptr<T, EflPtrDeleter<T>>;
+    CFIndex length = CFStringGetLength(string);
 
-#define FOR_EACH_EFL_DELETER(macro) \
-    macro(Ecore_Evas, ecore_evas_free) \
-    macro(Ecore_IMF_Context, ecore_imf_context_del) \
-    macro(Ecore_Pipe, ecore_pipe_del) \
-    macro(Eina_Hash, eina_hash_free) \
-    macro(Eina_Module, eina_module_free) \
-    macro(Evas_Object, evas_object_del) \
+    if (const LChar* ptr = reinterpret_cast<const LChar*>(CFStringGetCStringPtr(string, kCFStringEncodingISOLatin1)))
+        return add(ptr, length);
 
-#define WTF_DEFINE_EFLPTR_DELETER(typeName, deleterFunc) \
-    template<> struct EflPtrDeleter<typeName> \
-    { \
-        void operator() (typeName* ptr) const \
-        { \
-            if (ptr) \
-                deleterFunc(ptr); \
-        } \
-    };
+    if (const UniChar* ptr = CFStringGetCharactersPtr(string))
+        return add(reinterpret_cast<const UChar*>(ptr), length);
 
-FOR_EACH_EFL_DELETER(WTF_DEFINE_EFLPTR_DELETER)
-#undef FOR_EACH_EFL_DELETER
+    Vector<UniChar, 1024> ucharBuffer(length);
+    CFStringGetCharacters(string, CFRangeMake(0, length), ucharBuffer.data());
+    return add(reinterpret_cast<const UChar*>(ucharBuffer.data()), length);
+}
 
 } // namespace WTF
 
-using WTF::EflUniquePtr;
-
-#endif // UniquePtrEfl_h
+#endif // USE(CF)

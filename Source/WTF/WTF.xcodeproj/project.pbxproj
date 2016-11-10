@@ -74,6 +74,14 @@
 		2CDED0F318115C85004DBA70 /* RunLoop.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2CDED0F118115C85004DBA70 /* RunLoop.cpp */; };
 		2CDED0F418115C85004DBA70 /* RunLoop.h in Headers */ = {isa = PBXBuildFile; fileRef = 2CDED0F218115C85004DBA70 /* RunLoop.h */; };
 		430B47891AAAAC1A001223DA /* StringCommon.h in Headers */ = {isa = PBXBuildFile; fileRef = 430B47871AAAAC1A001223DA /* StringCommon.h */; };
+		5778C64D1DD4A33A00EB4931 /* TinyPtrSet.h in Headers */ = {isa = PBXBuildFile; fileRef = 5778C64C1DD4A33900EB4931 /* TinyPtrSet.h */; };
+		5778C6501DD4A36A00EB4931 /* AtomicString.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5778C64E1DD4A36A00EB4931 /* AtomicString.cpp */; };
+		5778C6511DD4A36A00EB4931 /* AtomicString.h in Headers */ = {isa = PBXBuildFile; fileRef = 5778C64F1DD4A36A00EB4931 /* AtomicString.h */; };
+		5778C6551DD4A3A400EB4931 /* AtomicStringImpl.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5778C6541DD4A3A400EB4931 /* AtomicStringImpl.cpp */; };
+		5778C6571DD4A3BC00EB4931 /* SymbolImpl.h in Headers */ = {isa = PBXBuildFile; fileRef = 5778C6561DD4A3BC00EB4931 /* SymbolImpl.h */; };
+		5778C6591DD4A3CE00EB4931 /* UniquedStringImpl.h in Headers */ = {isa = PBXBuildFile; fileRef = 5778C6581DD4A3CE00EB4931 /* UniquedStringImpl.h */; };
+		5778C65B1DD4A3F700EB4931 /* AtomicStringImplCF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5778C65A1DD4A3F700EB4931 /* AtomicStringImplCF.cpp */; };
+		5778C65D1DD4A40C00EB4931 /* NakedPtr.h in Headers */ = {isa = PBXBuildFile; fileRef = 5778C65C1DD4A40C00EB4931 /* NakedPtr.h */; };
 		70A993FE1AD7151300FA615B /* SymbolRegistry.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 70A993FC1AD7151300FA615B /* SymbolRegistry.cpp */; };
 		70A993FF1AD7151300FA615B /* SymbolRegistry.h in Headers */ = {isa = PBXBuildFile; fileRef = 70A993FD1AD7151300FA615B /* SymbolRegistry.h */; };
 		7CBBA07419BB7FDC00BBF025 /* OSObjectPtr.h in Headers */ = {isa = PBXBuildFile; fileRef = 7CBBA07319BB7FDC00BBF025 /* OSObjectPtr.h */; };
@@ -94,7 +102,6 @@
 		9BD8F40B176C2B470002D865 /* AtomicStringTable.h in Headers */ = {isa = PBXBuildFile; fileRef = 9BD8F40A176C2AD80002D865 /* AtomicStringTable.h */; };
 		A5BA15F3182433A900A82E69 /* StringMac.mm in Sources */ = {isa = PBXBuildFile; fileRef = A5BA15F2182433A900A82E69 /* StringMac.mm */; };
 		A5BA15F51824348000A82E69 /* StringImplMac.mm in Sources */ = {isa = PBXBuildFile; fileRef = A5BA15F41824348000A82E69 /* StringImplMac.mm */; };
-		A5BA15FA182435A600A82E69 /* AtomicStringCF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A5BA15F7182435A600A82E69 /* AtomicStringCF.cpp */; };
 		A5BA15FB182435A600A82E69 /* StringCF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A5BA15F8182435A600A82E69 /* StringCF.cpp */; };
 		A5BA15FC182435A600A82E69 /* StringImplCF.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A5BA15F9182435A600A82E69 /* StringImplCF.cpp */; };
 		A70DA0841799F04D00529A9B /* Insertion.h in Headers */ = {isa = PBXBuildFile; fileRef = A70DA0821799F04D00529A9B /* Insertion.h */; };
@@ -218,8 +225,6 @@
 		A8A4742D151A825B004123FF /* StringHasher.h in Headers */ = {isa = PBXBuildFile; fileRef = A8A47314151A825B004123FF /* StringHasher.h */; };
 		A8A47433151A825B004123FF /* TemporaryChange.h in Headers */ = {isa = PBXBuildFile; fileRef = A8A4731A151A825B004123FF /* TemporaryChange.h */; };
 		A8A47434151A825B004123FF /* ASCIIFastPath.h in Headers */ = {isa = PBXBuildFile; fileRef = A8A4731C151A825B004123FF /* ASCIIFastPath.h */; };
-		A8A47435151A825B004123FF /* AtomicString.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A8A4731D151A825B004123FF /* AtomicString.cpp */; };
-		A8A47436151A825B004123FF /* AtomicString.h in Headers */ = {isa = PBXBuildFile; fileRef = A8A4731E151A825B004123FF /* AtomicString.h */; };
 		A8A47437151A825B004123FF /* AtomicStringHash.h in Headers */ = {isa = PBXBuildFile; fileRef = A8A4731F151A825B004123FF /* AtomicStringHash.h */; };
 		A8A47438151A825B004123FF /* AtomicStringImpl.h in Headers */ = {isa = PBXBuildFile; fileRef = A8A47320151A825B004123FF /* AtomicStringImpl.h */; };
 		A8A47439151A825B004123FF /* CString.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A8A47321151A825B004123FF /* CString.cpp */; };
@@ -353,6 +358,15 @@
 		2CDED0F118115C85004DBA70 /* RunLoop.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = RunLoop.cpp; sourceTree = "<group>"; };
 		2CDED0F218115C85004DBA70 /* RunLoop.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RunLoop.h; sourceTree = "<group>"; };
 		430B47871AAAAC1A001223DA /* StringCommon.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = StringCommon.h; sourceTree = "<group>"; };
+		5778C64C1DD4A33900EB4931 /* TinyPtrSet.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TinyPtrSet.h; sourceTree = "<group>"; };
+		5778C64E1DD4A36A00EB4931 /* AtomicString.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AtomicString.cpp; sourceTree = "<group>"; };
+		5778C64F1DD4A36A00EB4931 /* AtomicString.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = AtomicString.h; sourceTree = "<group>"; };
+		5778C6521DD4A38200EB4931 /* AtomicString.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = AtomicString.cpp; path = text/AtomicString.cpp; sourceTree = "<group>"; };
+		5778C6541DD4A3A400EB4931 /* AtomicStringImpl.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = AtomicStringImpl.cpp; path = text/AtomicStringImpl.cpp; sourceTree = "<group>"; };
+		5778C6561DD4A3BC00EB4931 /* SymbolImpl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = SymbolImpl.h; path = text/SymbolImpl.h; sourceTree = "<group>"; };
+		5778C6581DD4A3CE00EB4931 /* UniquedStringImpl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = UniquedStringImpl.h; path = text/UniquedStringImpl.h; sourceTree = "<group>"; };
+		5778C65A1DD4A3F700EB4931 /* AtomicStringImplCF.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = AtomicStringImplCF.cpp; sourceTree = "<group>"; };
+		5778C65C1DD4A40C00EB4931 /* NakedPtr.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = NakedPtr.h; sourceTree = "<group>"; };
 		579B925A1DD2C2AE00214000 /* WTF-iOS-Static.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "WTF-iOS-Static.xcconfig"; path = "../WTF-iOS-Static.xcconfig"; sourceTree = "<group>"; };
 		579B925B1DD2C35B00214000 /* libstdc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libstdc++.tbd"; path = "usr/lib/libstdc++.tbd"; sourceTree = SDKROOT; };
 		5D247B6214689B8600E78B76 /* libWTF.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libWTF.a; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -380,7 +394,6 @@
 		9BD8F40A176C2AD80002D865 /* AtomicStringTable.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AtomicStringTable.h; sourceTree = "<group>"; };
 		A5BA15F2182433A900A82E69 /* StringMac.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = StringMac.mm; path = mac/StringMac.mm; sourceTree = "<group>"; };
 		A5BA15F41824348000A82E69 /* StringImplMac.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = StringImplMac.mm; path = mac/StringImplMac.mm; sourceTree = "<group>"; };
-		A5BA15F7182435A600A82E69 /* AtomicStringCF.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = AtomicStringCF.cpp; path = cf/AtomicStringCF.cpp; sourceTree = "<group>"; };
 		A5BA15F8182435A600A82E69 /* StringCF.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = StringCF.cpp; path = cf/StringCF.cpp; sourceTree = "<group>"; };
 		A5BA15F9182435A600A82E69 /* StringImplCF.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = StringImplCF.cpp; path = cf/StringImplCF.cpp; sourceTree = "<group>"; };
 		A70DA0821799F04D00529A9B /* Insertion.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Insertion.h; sourceTree = "<group>"; };
@@ -609,6 +622,7 @@
 		2CDED0F018115C3F004DBA70 /* cf */ = {
 			isa = PBXGroup;
 			children = (
+				5778C65A1DD4A3F700EB4931 /* AtomicStringImplCF.cpp */,
 				2CDED0EE18115C38004DBA70 /* RunLoopCF.cpp */,
 				1AFDE647195201C300C48FFA /* TypeCastsCF.h */,
 			);
@@ -672,7 +686,6 @@
 		A5BA15F61824359E00A82E69 /* cf */ = {
 			isa = PBXGroup;
 			children = (
-				A5BA15F7182435A600A82E69 /* AtomicStringCF.cpp */,
 				A5BA15F8182435A600A82E69 /* StringCF.cpp */,
 				A5BA15F9182435A600A82E69 /* StringImplCF.cpp */,
 				93934BD418A1F16900D0D6A1 /* StringViewCF.cpp */,
@@ -693,7 +706,13 @@
 				A8A47348151A825B004123FF /* unicode */,
 				CEF4820C19DA347600CC04B8 /* spi */,
 				A8A4725A151A825A004123FF /* ASCIICType.h */,
+				5778C64C1DD4A33900EB4931 /* TinyPtrSet.h */,
+				5778C6581DD4A3CE00EB4931 /* UniquedStringImpl.h */,
+				5778C65C1DD4A40C00EB4931 /* NakedPtr.h */,
 				A8A4725B151A825A004123FF /* Assertions.cpp */,
+				5778C6541DD4A3A400EB4931 /* AtomicStringImpl.cpp */,
+				5778C6561DD4A3BC00EB4931 /* SymbolImpl.h */,
+				5778C6521DD4A38200EB4931 /* AtomicString.cpp */,
 				A8A4725C151A825A004123FF /* Assertions.h */,
 				A8A4725D151A825A004123FF /* Atomics.h */,
 				1469419A16EAB10A0024E146 /* AutodrainedPool.h */,
@@ -919,6 +938,8 @@
 				A5BA15F61824359E00A82E69 /* cf */,
 				A5BA15F11824339F00A82E69 /* mac */,
 				A8A4731C151A825B004123FF /* ASCIIFastPath.h */,
+				5778C64E1DD4A36A00EB4931 /* AtomicString.cpp */,
+				5778C64F1DD4A36A00EB4931 /* AtomicString.h */,
 				A8A4731D151A825B004123FF /* AtomicString.cpp */,
 				A8A4731E151A825B004123FF /* AtomicString.h */,
 				A8A4731F151A825B004123FF /* AtomicStringHash.h */,
@@ -1034,7 +1055,6 @@
 				A8A47434151A825B004123FF /* ASCIIFastPath.h in Headers */,
 				A8A47387151A825B004123FF /* Assertions.h in Headers */,
 				A8A47388151A825B004123FF /* Atomics.h in Headers */,
-				A8A47436151A825B004123FF /* AtomicString.h in Headers */,
 				7CDD7FF8186D291E007433CD /* IteratorAdaptors.h in Headers */,
 				A8A47437151A825B004123FF /* AtomicStringHash.h in Headers */,
 				A8A47438151A825B004123FF /* AtomicStringImpl.h in Headers */,
@@ -1077,8 +1097,10 @@
 				A8A473A7151A825B004123FF /* DoublyLinkedList.h in Headers */,
 				A8A473BB151A825B004123FF /* dtoa.h in Headers */,
 				A8A473C1151A825B004123FF /* ExportMacros.h in Headers */,
+				5778C6511DD4A36A00EB4931 /* AtomicString.h in Headers */,
 				A8A473B4151A825B004123FF /* fast-dtoa.h in Headers */,
 				0FD81AC5154FB22E00983E72 /* FastBitVector.h in Headers */,
+				5778C65D1DD4A40C00EB4931 /* NakedPtr.h in Headers */,
 				A8A473C4151A825B004123FF /* FastMalloc.h in Headers */,
 				B38FD7BD168953E80065C969 /* FeatureDefines.h in Headers */,
 				0F9D3361165DBA73005AD387 /* FilePrintStream.h in Headers */,
@@ -1137,6 +1159,7 @@
 				143F61201565F0F900DB514A /* RAMSize.h in Headers */,
 				A8A47415151A825B004123FF /* RandomNumber.h in Headers */,
 				A8A47416151A825B004123FF /* RandomNumberSeed.h in Headers */,
+				5778C6591DD4A3CE00EB4931 /* UniquedStringImpl.h in Headers */,
 				0F87105A16643F190090B0AD /* RawPointer.h in Headers */,
 				A8A47417151A825B004123FF /* RedBlackTree.h in Headers */,
 				A8A47418151A825B004123FF /* RefCounted.h in Headers */,
@@ -1150,6 +1173,7 @@
 				14F3B0F715E45E4600210069 /* SaturatedArithmetic.h in Headers */,
 				1469419616EAAFF80024E146 /* SchedulePair.h in Headers */,
 				A8A4741F151A825B004123FF /* SegmentedVector.h in Headers */,
+				5778C64D1DD4A33A00EB4931 /* TinyPtrSet.h in Headers */,
 				A8A47420151A825B004123FF /* SentinelLinkedList.h in Headers */,
 				A8A47422151A825B004123FF /* SHA1.h in Headers */,
 				1AFDE648195201C300C48FFA /* TypeCastsCF.h in Headers */,
@@ -1169,6 +1193,7 @@
 				A8A4742C151A825B004123FF /* StringExtras.h in Headers */,
 				A8A4743F151A825B004123FF /* StringHash.h in Headers */,
 				A748745417A0BDAE00FA04CB /* StringHashDumpContext.h in Headers */,
+				5778C6571DD4A3BC00EB4931 /* SymbolImpl.h in Headers */,
 				A8A4742D151A825B004123FF /* StringHasher.h in Headers */,
 				A8A47441151A825B004123FF /* StringImpl.h in Headers */,
 				A8A47442151A825B004123FF /* StringOperators.h in Headers */,
@@ -1301,7 +1326,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				A8A47386151A825B004123FF /* Assertions.cpp in Sources */,
-				A8A47435151A825B004123FF /* AtomicString.cpp in Sources */,
 				9BC70F05176C379D00101DEC /* AtomicStringTable.cpp in Sources */,
 				A5BA15FB182435A600A82E69 /* StringCF.cpp in Sources */,
 				1469419D16EAB10A0024E146 /* AutodrainedPoolMac.mm in Sources */,
@@ -1328,7 +1352,6 @@
 				E4A0AD3D1A96253C00536DF6 /* WorkQueueCocoa.cpp in Sources */,
 				A8A473B3151A825B004123FF /* fast-dtoa.cc in Sources */,
 				A8A473C3151A825B004123FF /* FastMalloc.cpp in Sources */,
-				A5BA15FA182435A600A82E69 /* AtomicStringCF.cpp in Sources */,
 				E15556F518A0CC18006F48FB /* CryptographicUtilities.cpp in Sources */,
 				0F9D3360165DBA73005AD387 /* FilePrintStream.cpp in Sources */,
 				A8A473B5151A825B004123FF /* fixed-dtoa.cc in Sources */,
@@ -1337,6 +1360,7 @@
 				A8A473D8151A825B004123FF /* HashTable.cpp in Sources */,
 				A8A473E5151A825B004123FF /* MainThread.cpp in Sources */,
 				A8A473E4151A825B004123FF /* MainThreadMac.mm in Sources */,
+				5778C6501DD4A36A00EB4931 /* AtomicString.cpp in Sources */,
 				A8A473E9151A825B004123FF /* MD5.cpp in Sources */,
 				CD5497AC15857D0300B5BC30 /* MediaTime.cpp in Sources */,
 				A8A473EC151A825B004123FF /* MetaAllocator.cpp in Sources */,
@@ -1359,6 +1383,7 @@
 				A748745217A0BDAE00FA04CB /* SixCharacterHash.cpp in Sources */,
 				A8A47425151A825B004123FF /* SizeLimits.cpp in Sources */,
 				A8A47427151A825B004123FF /* StackBounds.cpp in Sources */,
+				5778C6551DD4A3A400EB4931 /* AtomicStringImpl.cpp in Sources */,
 				FEDACD3D1630F83F00C69634 /* StackStats.cpp in Sources */,
 				A8A4743C151A825B004123FF /* StringBuilder.cpp in Sources */,
 				A8A47440151A825B004123FF /* StringImpl.cpp in Sources */,
@@ -1370,6 +1395,7 @@
 				A8A47443151A825B004123FF /* StringStatics.cpp in Sources */,
 				93934BD518A1F16900D0D6A1 /* StringViewCF.cpp in Sources */,
 				93934BD318A1E8C300D0D6A1 /* StringViewObjC.mm in Sources */,
+				5778C65B1DD4A3F700EB4931 /* AtomicStringImplCF.cpp in Sources */,
 				A8A473B7151A825B004123FF /* strtod.cc in Sources */,
 				A8A47448151A825B004123FF /* ThreadIdentifierDataPthreads.cpp in Sources */,
 				1ACADD841884480100D8B71D /* DeprecatedSymbolsUsedBySafari.mm in Sources */,

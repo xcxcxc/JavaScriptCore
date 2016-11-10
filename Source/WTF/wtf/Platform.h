@@ -82,7 +82,7 @@
 
 /* CPU(MIPS) - MIPS 32-bit and 64-bit */
 #if (defined(mips) || defined(__mips__) || defined(MIPS) || defined(_MIPS_) || defined(__mips64))
-#if defined(_MIPS_SIM_ABI64) && (_MIPS_SIM == _MIPS_SIM_ABI64)
+#if defined(_ABI64) && (_MIPS_SIM == _ABI64)
 #define WTF_CPU_MIPS64 1
 #define WTF_MIPS_ARCH __mips64
 #else
@@ -401,10 +401,6 @@
 #define WTF_OS_SOLARIS 1
 #endif
 
-#if defined(ANDROID)
-#define WTF_OS_ANDROID 1
-#endif
-
 /* OS(WINDOWS) - Any version of Windows */
 #if defined(WIN32) || defined(_WIN32)
 #define WTF_OS_WINDOWS 1
@@ -450,8 +446,6 @@
 #endif
 #elif OS(WINDOWS)
 #define WTF_PLATFORM_WIN 1
-#elif OS(ANDROID)
-#define WTF_PLATFORM_ANDROID 1
 #endif
 
 /* PLATFORM(COCOA) */
@@ -494,8 +488,18 @@
 #define USE_WEBP 1
 #endif
 
+#if PLATFORM(EFL)
+#define GLIB_VERSION_MIN_REQUIRED GLIB_VERSION_2_38
+#elif PLATFORM(GTK)
+#define GLIB_VERSION_MIN_REQUIRED GLIB_VERSION_2_36
+#endif
+
 #if PLATFORM(GTK) && !defined(GTK_API_VERSION_2)
 #define GDK_VERSION_MIN_REQUIRED GDK_VERSION_3_6
+#endif
+
+#if USE(SOUP)
+#define SOUP_VERSION_MIN_REQUIRED SOUP_VERSION_2_42
 #endif
 
 /* On Windows, use QueryPerformanceCounter by default */
@@ -551,7 +555,7 @@
 #define USE_WEB_THREAD 1
 #define USE_QUICK_LOOK 1
 
-#if __IPHONE_OS_VERSION_MIN_REQUIRED >= 90000
+#if defined(TARGET_OS_IOS) && TARGET_OS_IOS && __IPHONE_OS_VERSION_MIN_REQUIRED >= 90000
 #define HAVE_APP_LINKS 1
 #endif
 
@@ -611,7 +615,11 @@
 #endif
 #endif
 
-#if !OS(WINDOWS) && !OS(SOLARIS) && !OS(ANDROID) // unless android api level 21
+#if OS(DARWIN) || OS(FREEBSD) || OS(NETBSD)
+#define HAVE_STAT_BIRTHTIME 1
+#endif
+
+#if !OS(WINDOWS) && !OS(SOLARIS)
 #define HAVE_TM_GMTOFF 1
 #define HAVE_TM_ZONE 1
 #define HAVE_TIMEGM 1
@@ -951,7 +959,7 @@
 #endif
 
 #if USE(GLIB)
-#include <wtf/gobject/GTypedefs.h>
+#include <wtf/glib/GTypedefs.h>
 #endif
 
 #if PLATFORM(EFL)
@@ -1046,7 +1054,7 @@
 
 #ifndef HAVE_QOS_CLASSES
 #if PLATFORM(IOS) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101000)
-#define HAVE_QOS_CLASSES 0
+#define HAVE_QOS_CLASSES 1
 #endif
 #endif
 
@@ -1058,7 +1066,7 @@
 
 #define USE_GRAMMAR_CHECKING 1
 
-#if PLATFORM(COCOA) || PLATFORM(EFL)
+#if PLATFORM(COCOA) || PLATFORM(EFL) || PLATFORM(GTK)
 #define USE_UNIFIED_TEXT_CHECKING 1
 #endif
 #if PLATFORM(MAC)
@@ -1077,6 +1085,10 @@
 
 #if PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101000
 #define USE_INSERTION_UNDO_GROUPING 1
+#endif
+
+#if (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100) || (PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 90000)
+#define HAVE_TIMINGDATAOPTIONS 1
 #endif
 
 #if PLATFORM(IOS)
@@ -1137,6 +1149,11 @@
 
 #if PLATFORM(IOS) && __IPHONE_OS_VERSION_MIN_REQUIRED >= 90000
 #define ENABLE_VIDEO_PRESENTATION_MODE 1
+#endif
+
+/* While 10.10 has support for fences, it is missing some API important for our integration of them. */
+#if PLATFORM(IOS) || (PLATFORM(MAC) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 101100)
+#define HAVE_COREANIMATION_FENCES 1
 #endif
 
 #endif /* WTF_Platform_h */

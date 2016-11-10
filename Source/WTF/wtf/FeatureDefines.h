@@ -87,7 +87,7 @@
 #endif
 
 #if !defined(ENABLE_INSPECTOR_ALTERNATE_DISPATCHERS)
-#define ENABLE_INSPECTOR_ALTERNATE_DISPATCHERS 0
+#define ENABLE_INSPECTOR_ALTERNATE_DISPATCHERS 1
 #endif
 
 #if !defined(ENABLE_LETTERPRESS)
@@ -127,7 +127,7 @@
 #endif
 
 #if !defined(ENABLE_REMOTE_INSPECTOR)
-#define ENABLE_REMOTE_INSPECTOR 0
+#define ENABLE_REMOTE_INSPECTOR 1
 #endif
 
 #if !defined(ENABLE_RESPECT_EXIF_ORIENTATION)
@@ -164,6 +164,10 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 the public iOS SDK. We will also need to update the FeatureDefines.xcconfig files. */
 #if !defined(ENABLE_XSLT) && !USE(APPLE_INTERNAL_SDK)
 #define ENABLE_XSLT 0
+#endif
+
+#if !defined(ENABLE_PRIMARY_SNAPSHOTTED_PLUGIN_HEURISTIC)
+#define ENABLE_PRIMARY_SNAPSHOTTED_PLUGIN_HEURISTIC 1
 #endif
 
 #endif /* PLATFORM(IOS) */
@@ -235,15 +239,19 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #endif
 
 #if !defined(ENABLE_INPUT_TYPE_COLOR)
-#define ENABLE_INPUT_TYPE_COLOR 1
+#define ENABLE_INPUT_TYPE_COLOR 0
 #endif
 
 #if !defined(ENABLE_INPUT_TYPE_COLOR_POPOVER)
-#define ENABLE_INPUT_TYPE_COLOR_POPOVER 1
+#define ENABLE_INPUT_TYPE_COLOR_POPOVER 0
 #endif
 
 #if !defined(ENABLE_FILE_REPLACEMENT)
 #define ENABLE_FILE_REPLACEMENT 1
+#endif
+
+#if !defined(ENABLE_PRIMARY_SNAPSHOTTED_PLUGIN_HEURISTIC)
+#define ENABLE_PRIMARY_SNAPSHOTTED_PLUGIN_HEURISTIC 1
 #endif
 
 #endif /* PLATFORM(MAC) */
@@ -343,6 +351,10 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 
 #if !defined(ENABLE_CHANNEL_MESSAGING)
 #define ENABLE_CHANNEL_MESSAGING 1
+#endif
+
+#if !defined(ENABLE_ES6_ARROWFUNCTION_SYNTAX)
+#define ENABLE_ES6_ARROWFUNCTION_SYNTAX 0
 #endif
 
 #if !defined(ENABLE_ES6_CLASS_SYNTAX)
@@ -524,11 +536,15 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #endif
 
 #if !defined(ENABLE_INSPECTOR)
-#define ENABLE_INSPECTOR 0
+#define ENABLE_INSPECTOR 1
 #endif
 
 #if !defined(ENABLE_INSPECTOR_ALTERNATE_DISPATCHERS)
 #define ENABLE_INSPECTOR_ALTERNATE_DISPATCHERS 0
+#endif
+
+#if !defined(ENABLE_INTL)
+#define ENABLE_INTL 0
 #endif
 
 #if !defined(ENABLE_JAVASCRIPT_I18N_API)
@@ -600,7 +616,7 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #endif
 
 #if !defined(ENABLE_NAVIGATOR_HWCONCURRENCY)
-#define ENABLE_NAVIGATOR_HWCONCURRENCY 1
+#define ENABLE_NAVIGATOR_HWCONCURRENCY 0
 #endif
 
 #if !defined(ENABLE_NETSCAPE_PLUGIN_API)
@@ -682,7 +698,7 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #endif
 
 #if !defined(ENABLE_STREAMS_API)
-#define ENABLE_STREAMS_API 1
+#define ENABLE_STREAMS_API 0
 #endif
 
 #if !defined(ENABLE_SVG_FONTS)
@@ -745,6 +761,10 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #define ENABLE_WEBGL 0
 #endif
 
+#if !defined(ENABLE_WEBGL2)
+#define ENABLE_WEBGL2 0
+#endif
+
 #if !defined(ENABLE_GRAPHICS_CONTEXT_3D)
 #define ENABLE_GRAPHICS_CONTEXT_3D ENABLE_WEBGL
 #endif
@@ -765,16 +785,12 @@ the public iOS SDK. We will also need to update the FeatureDefines.xcconfig file
 #define ENABLE_WEB_SOCKETS 1
 #endif
 
-#if !defined(ENABLE_PICTURE_SIZES)
-#define ENABLE_PICTURE_SIZES 1
-#endif
-
 #if !defined(ENABLE_WEB_TIMING)
 #define ENABLE_WEB_TIMING 0
 #endif
 
 #if !defined(ENABLE_WILL_REVEAL_EDGE_EVENTS)
-#define ENABLE_WILL_REVEAL_EDGE_EVENTS 1
+#define ENABLE_WILL_REVEAL_EDGE_EVENTS 0
 #endif
 
 #if !defined(ENABLE_XHR_TIMEOUT)
