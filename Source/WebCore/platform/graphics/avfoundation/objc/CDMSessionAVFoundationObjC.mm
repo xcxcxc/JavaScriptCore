@@ -36,7 +36,7 @@
 #import "SoftLinking.h"
 #import "UUID.h"
 #import <AVFoundation/AVFoundation.h>
-#import <objc/objc-runtime.h>
+#import <objc/runtime.h>
 
 SOFT_LINK_FRAMEWORK_OPTIONAL(AVFoundation)
 SOFT_LINK_CLASS(AVFoundation, AVURLAsset)

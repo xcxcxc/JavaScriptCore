@@ -947,7 +947,6 @@
 		2ADFA26318EF3540004F9FCC /* GCLogging.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2ADFA26218EF3540004F9FCC /* GCLogging.cpp */; };
 		2AF7382C18BBBF92008A5A37 /* StructureIDTable.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 2AF7382A18BBBF92008A5A37 /* StructureIDTable.cpp */; };
 		2AF7382D18BBBF92008A5A37 /* StructureIDTable.h in Headers */ = {isa = PBXBuildFile; fileRef = 2AF7382B18BBBF92008A5A37 /* StructureIDTable.h */; settings = {ATTRIBUTES = (Private, ); }; };
-		371D842D17C98B6E00ECF994 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 371D842C17C98B6E00ECF994 /* libz.dylib */; };
 		41359CF30FDD89AD00206180 /* DateConversion.h in Headers */ = {isa = PBXBuildFile; fileRef = D21202290AD4310C00ED79B6 /* DateConversion.h */; };
 		4340A4841A9051AF00D73CCA /* MathCommon.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 4340A4821A9051AF00D73CCA /* MathCommon.cpp */; };
 		4340A4851A9051AF00D73CCA /* MathCommon.h in Headers */ = {isa = PBXBuildFile; fileRef = 4340A4831A9051AF00D73CCA /* MathCommon.h */; };
@@ -965,6 +964,7 @@
 		52C0611F1AA51E1C00B4ADBA /* RuntimeType.h in Headers */ = {isa = PBXBuildFile; fileRef = 52C0611D1AA51E1B00B4ADBA /* RuntimeType.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		52C952B719A289850069B386 /* TypeProfiler.h in Headers */ = {isa = PBXBuildFile; fileRef = 52C952B619A289850069B386 /* TypeProfiler.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		52C952B919A28A1C0069B386 /* TypeProfiler.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 52C952B819A28A1C0069B386 /* TypeProfiler.cpp */; };
+		571CBF231DD46DDB004F38B0 /* DFGCleanUpPhase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F9D36921AE9CC33000D4DFB /* DFGCleanUpPhase.cpp */; };
 		5B67E3C81AEFB29800ECC475 /* A64DOpcode.h in Headers */ = {isa = PBXBuildFile; fileRef = 652A3A231651C69700A80AFE /* A64DOpcode.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E3C91AEFB29800ECC475 /* AbstractMacroAssembler.h in Headers */ = {isa = PBXBuildFile; fileRef = 860161DF0F3A83C100F84710 /* AbstractMacroAssembler.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E3CA1AEFB29800ECC475 /* ScopedArgumentsTable.h in Headers */ = {isa = PBXBuildFile; fileRef = 0FE050201AA9095600D33B33 /* ScopedArgumentsTable.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -2070,7 +2070,6 @@
 		5B67E8181AEFB29800ECC475 /* DFGPlan.cpp in Sources */ = {isa = PBXBuildFile; fileRef = A78A9772179738B8009DF744 /* DFGPlan.cpp */; };
 		5B67E8191AEFB29800ECC475 /* DFGPredictionInjectionPhase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FBE0F6D16C1DB010082C5E8 /* DFGPredictionInjectionPhase.cpp */; };
 		5B67E81A1AEFB29800ECC475 /* DFGPredictionPropagationPhase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0FFFC95114EF909500C72532 /* DFGPredictionPropagationPhase.cpp */; };
-		5B67E81B1AEFB29800ECC475 /* (null) in Sources */ = {isa = PBXBuildFile; };
 		5B67E81C1AEFB29800ECC475 /* DFGSafepoint.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F2FCCF418A60070001A27F8 /* DFGSafepoint.cpp */; };
 		5B67E81D1AEFB29800ECC475 /* DFGSpeculativeJIT.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 86EC9DC21328DF82002B2AD7 /* DFGSpeculativeJIT.cpp */; };
 		5B67E81E1AEFB29800ECC475 /* DFGSpeculativeJIT32_64.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 86880F1B14328BB900B08D42 /* DFGSpeculativeJIT32_64.cpp */; };
@@ -2458,7 +2457,6 @@
 		5B67E99C1AEFB29800ECC475 /* SlotVisitor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = C225494215F7DBAA0065E898 /* SlotVisitor.cpp */; };
 		5B67E99D1AEFB29800ECC475 /* SmallStrings.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 93303FE80E6A72B500786E6A /* SmallStrings.cpp */; };
 		5B67E99E1AEFB29800ECC475 /* SourceCode.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F8F2B9D17306C8B007DBDA5 /* SourceCode.cpp */; };
-		5B67E99F1AEFB29800ECC475 /* (null) in Sources */ = {isa = PBXBuildFile; };
 		5B67E9A01AEFB29800ECC475 /* SourceProvider.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F493AF816D0CAD10084508B /* SourceProvider.cpp */; };
 		5B67E9A11AEFB29800ECC475 /* SourceProviderCache.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E49DC15512EF277200184A1F /* SourceProviderCache.cpp */; };
 		5B67E9A21AEFB29800ECC475 /* SparseArrayValueMap.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F0CD4C315F6B6B50032F1C0 /* SparseArrayValueMap.cpp */; };
@@ -2528,17 +2526,13 @@
 		5B67E9E21AEFB29800ECC475 /* YarrSyntaxChecker.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 86704B4012DB8A8100A9FE7B /* YarrSyntaxChecker.cpp */; };
 		5B67E9E41AEFB29800ECC475 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6560A4CF04B3B3E7008AE952 /* CoreFoundation.framework */; };
 		5B67E9E51AEFB29800ECC475 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 51F0EB6105C86C6B00E6DF1B /* Foundation.framework */; };
-		5B67E9E61AEFB29800ECC475 /* libicucore.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 9322A00306C341D3009067BB /* libicucore.dylib */; };
-		5B67E9E71AEFB29800ECC475 /* libobjc.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 51F0EC0705C86C9A00E6DF1B /* libobjc.dylib */; };
 		5B67E9E81AEFB29800ECC475 /* libWTF.a in Frameworks */ = {isa = PBXBuildFile; fileRef = A8A4748D151A8306004123FF /* libWTF.a */; };
-		5B67E9E91AEFB29800ECC475 /* libz.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 371D842C17C98B6E00ECF994 /* libz.dylib */; };
 		5B67EA231AEFB4F900ECC475 /* LLIntOffsetsExtractor.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F4680A114BA7F8200BFE272 /* LLIntOffsetsExtractor.cpp */; };
 		5BBF465C1AF079D8007D5BAF /* JSTypedArray.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5BBF465A1AF079D8007D5BAF /* JSTypedArray.cpp */; };
 		5BBF465D1AF079D8007D5BAF /* JSTypedArray.h in Headers */ = {isa = PBXBuildFile; fileRef = 5BBF465B1AF079D8007D5BAF /* JSTypedArray.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		5BBF465E1AF0821F007D5BAF /* JSTypedArray.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 5BBF465A1AF079D8007D5BAF /* JSTypedArray.cpp */; };
 		5BBF465F1AF08230007D5BAF /* JSTypedArray.h in Headers */ = {isa = PBXBuildFile; fileRef = 5BBF465B1AF079D8007D5BAF /* JSTypedArray.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		5D53726F0E1C54880021E549 /* Tracing.h in Headers */ = {isa = PBXBuildFile; fileRef = 5D53726E0E1C54880021E549 /* Tracing.h */; };
-		5D5D8AD10E0D0EBE00F9C692 /* libedit.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D5D8AD00E0D0EBE00F9C692 /* libedit.dylib */; };
 		5DBB151B131D0B310056AD36 /* testapi.js in Copy Support Script */ = {isa = PBXBuildFile; fileRef = 14D857740A4696C80032146C /* testapi.js */; };
 		5DBB1525131D0BD70056AD36 /* minidom.js in Copy Support Script */ = {isa = PBXBuildFile; fileRef = 1412110D0A48788700480255 /* minidom.js */; };
 		5DE6E5B30E1728EC00180407 /* create_hash_table in Headers */ = {isa = PBXBuildFile; fileRef = F692A8540255597D01FF60F7 /* create_hash_table */; settings = {ATTRIBUTES = (); }; };
@@ -2546,7 +2540,6 @@
 		62D2D3901ADF103F000206C1 /* FunctionRareData.h in Headers */ = {isa = PBXBuildFile; fileRef = 62D2D38E1ADF103F000206C1 /* FunctionRareData.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		6507D29E0E871E5E00D7D896 /* JSTypeInfo.h in Headers */ = {isa = PBXBuildFile; fileRef = 6507D2970E871E4A00D7D896 /* JSTypeInfo.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		651122FD14046A4C002B101D /* JavaScriptCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 932F5BD90822A1C700736975 /* JavaScriptCore.framework */; };
-		651122FE14046A4C002B101D /* libedit.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 5D5D8AD00E0D0EBE00F9C692 /* libedit.dylib */; };
 		6511230714046B0A002B101D /* testRegExp.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 651122E5140469BA002B101D /* testRegExp.cpp */; };
 		6514F21918B3E1670098FF8B /* Bytecodes.h in Headers */ = {isa = PBXBuildFile; fileRef = 6514F21718B3E1670098FF8B /* Bytecodes.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		65303D641447B9E100D3F904 /* ParserTokens.h in Headers */ = {isa = PBXBuildFile; fileRef = 65303D631447B9E100D3F904 /* ParserTokens.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -2698,8 +2691,6 @@
 		93052C340FB792190048FDC3 /* ParserArena.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 93052C320FB792190048FDC3 /* ParserArena.cpp */; };
 		93052C350FB792190048FDC3 /* ParserArena.h in Headers */ = {isa = PBXBuildFile; fileRef = 93052C330FB792190048FDC3 /* ParserArena.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		932F5BD30822A1C700736975 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6560A4CF04B3B3E7008AE952 /* CoreFoundation.framework */; };
-		932F5BD60822A1C700736975 /* libobjc.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 51F0EC0705C86C9A00E6DF1B /* libobjc.dylib */; };
-		932F5BD70822A1C700736975 /* libicucore.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 9322A00306C341D3009067BB /* libicucore.dylib */; };
 		932F5BDD0822A1C700736975 /* jsc.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 45E12D8806A49B0F00E9DF84 /* jsc.cpp */; };
 		932F5BEA0822A1C700736975 /* JavaScriptCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 932F5BD90822A1C700736975 /* JavaScriptCore.framework */; };
 		933040040E6A749400786E6A /* SmallStrings.h in Headers */ = {isa = PBXBuildFile; fileRef = 93303FEA0E6A72C000786E6A /* SmallStrings.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -4263,14 +4254,12 @@
 		2ADFA26218EF3540004F9FCC /* GCLogging.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = GCLogging.cpp; sourceTree = "<group>"; };
 		2AF7382A18BBBF92008A5A37 /* StructureIDTable.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = StructureIDTable.cpp; sourceTree = "<group>"; };
 		2AF7382B18BBBF92008A5A37 /* StructureIDTable.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = StructureIDTable.h; sourceTree = "<group>"; };
-		371D842C17C98B6E00ECF994 /* libz.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libz.dylib; path = usr/lib/libz.dylib; sourceTree = SDKROOT; };
 		4340A4821A9051AF00D73CCA /* MathCommon.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MathCommon.cpp; sourceTree = "<group>"; };
 		4340A4831A9051AF00D73CCA /* MathCommon.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MathCommon.h; sourceTree = "<group>"; };
 		449097EE0F8F81B50076A327 /* FeatureDefines.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = FeatureDefines.xcconfig; sourceTree = "<group>"; };
 		451539B812DC994500EF7AC4 /* Yarr.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = Yarr.h; path = yarr/Yarr.h; sourceTree = "<group>"; };
 		45E12D8806A49B0F00E9DF84 /* jsc.cpp */ = {isa = PBXFileReference; fileEncoding = 30; indentWidth = 4; lastKnownFileType = sourcecode.cpp.cpp; path = jsc.cpp; sourceTree = "<group>"; tabWidth = 4; };
 		51F0EB6105C86C6B00E6DF1B /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = /System/Library/Frameworks/Foundation.framework; sourceTree = "<absolute>"; };
-		51F0EC0705C86C9A00E6DF1B /* libobjc.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libobjc.dylib; path = /usr/lib/libobjc.dylib; sourceTree = "<absolute>"; };
 		52678F8C1A031009006A306D /* BasicBlockLocation.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = BasicBlockLocation.cpp; sourceTree = "<group>"; };
 		52678F8D1A031009006A306D /* BasicBlockLocation.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = BasicBlockLocation.h; sourceTree = "<group>"; };
 		52678F901A04177C006A306D /* ControlFlowProfiler.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ControlFlowProfiler.h; sourceTree = "<group>"; };
@@ -4284,6 +4273,11 @@
 		52C952B619A289850069B386 /* TypeProfiler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = TypeProfiler.h; sourceTree = "<group>"; };
 		52C952B819A28A1C0069B386 /* TypeProfiler.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = TypeProfiler.cpp; sourceTree = "<group>"; };
 		5540758418F4A37500602A5D /* CompileRuntimeToLLVMIR.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; path = CompileRuntimeToLLVMIR.xcconfig; sourceTree = "<group>"; };
+		575169791DD4205C0009CF81 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS9.3.sdk/usr/lib/libz.tbd; sourceTree = DEVELOPER_DIR; };
+		5751697B1DD420610009CF81 /* libicucore.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libicucore.tbd; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS9.3.sdk/usr/lib/libicucore.tbd; sourceTree = DEVELOPER_DIR; };
+		5751697D1DD420660009CF81 /* libobjc.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libobjc.tbd; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS9.3.sdk/usr/lib/libobjc.tbd; sourceTree = DEVELOPER_DIR; };
+		5751697F1DD420CC0009CF81 /* libedit.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libedit.tbd; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS9.3.sdk/usr/lib/libedit.tbd; sourceTree = DEVELOPER_DIR; };
+		576109BA1DD205F200CCF4CF /* JavaScriptCore-iOS-Static.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = "JavaScriptCore-iOS-Static.xcconfig"; path = "../JavaScriptCore-iOS-Static.xcconfig"; sourceTree = "<group>"; };
 		593D43CCA0BBE06D89C59707 /* MapDataInlines.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MapDataInlines.h; sourceTree = "<group>"; };
 		5B67E9F31AEFB29800ECC475 /* libJavaScriptCore iOS.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libJavaScriptCore iOS.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B67E9F41AEFB29900ECC475 /* JavaScriptCoreiOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = JavaScriptCoreiOS.plist; path = "/Users/hoolai/WebKit-GIT/Source/JavaScriptCore/JavaScriptCoreiOS.plist"; sourceTree = "<absolute>"; };
@@ -4294,7 +4288,6 @@
 		5D53726D0E1C546B0021E549 /* Tracing.d */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Tracing.d; sourceTree = "<group>"; };
 		5D53726E0E1C54880021E549 /* Tracing.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Tracing.h; sourceTree = "<group>"; };
 		5D53727D0E1C55EC0021E549 /* TracingDtrace.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TracingDtrace.h; sourceTree = "<group>"; };
-		5D5D8AD00E0D0EBE00F9C692 /* libedit.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libedit.dylib; path = /usr/lib/libedit.dylib; sourceTree = "<absolute>"; };
 		5DAFD6CB146B686300FBEFB4 /* JSC.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = JSC.xcconfig; sourceTree = "<group>"; };
 		5DDDF44614FEE72200B4FB4D /* LLIntDesiredOffsets.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = LLIntDesiredOffsets.h; path = LLIntOffsets/LLIntDesiredOffsets.h; sourceTree = BUILT_PRODUCTS_DIR; };
 		5DE3D0F40DD8DDFB00468714 /* WebKitAvailability.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = WebKitAvailability.h; sourceTree = "<group>"; };
@@ -4496,7 +4489,6 @@
 		93052C320FB792190048FDC3 /* ParserArena.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = ParserArena.cpp; sourceTree = "<group>"; };
 		93052C330FB792190048FDC3 /* ParserArena.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ParserArena.h; sourceTree = "<group>"; };
 		930DAD030FB1EB1A0082D205 /* NodeConstructors.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = NodeConstructors.h; sourceTree = "<group>"; };
-		9322A00306C341D3009067BB /* libicucore.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libicucore.dylib; path = /usr/lib/libicucore.dylib; sourceTree = "<absolute>"; };
 		932F5BD80822A1C700736975 /* Info.plist */ = {isa = PBXFileReference; indentWidth = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; tabWidth = 8; usesTabs = 1; };
 		932F5BD90822A1C700736975 /* JavaScriptCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = JavaScriptCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		932F5BE10822A1C700736975 /* jsc */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = jsc; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -5152,10 +5144,7 @@
 			files = (
 				5B67E9E41AEFB29800ECC475 /* CoreFoundation.framework in Frameworks */,
 				5B67E9E51AEFB29800ECC475 /* Foundation.framework in Frameworks */,
-				5B67E9E61AEFB29800ECC475 /* libicucore.dylib in Frameworks */,
-				5B67E9E71AEFB29800ECC475 /* libobjc.dylib in Frameworks */,
 				5B67E9E81AEFB29800ECC475 /* libWTF.a in Frameworks */,
-				5B67E9E91AEFB29800ECC475 /* libz.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -5171,7 +5160,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				651122FD14046A4C002B101D /* JavaScriptCore.framework in Frameworks */,
-				651122FE14046A4C002B101D /* libedit.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -5181,10 +5169,7 @@
 			files = (
 				932F5BD30822A1C700736975 /* CoreFoundation.framework in Frameworks */,
 				A731B25A130093880040A7FA /* Foundation.framework in Frameworks */,
-				932F5BD70822A1C700736975 /* libicucore.dylib in Frameworks */,
-				932F5BD60822A1C700736975 /* libobjc.dylib in Frameworks */,
 				A8A4748E151A8306004123FF /* libWTF.a in Frameworks */,
-				371D842D17C98B6E00ECF994 /* libz.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -5193,7 +5178,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				932F5BEA0822A1C700736975 /* JavaScriptCore.framework in Frameworks */,
-				5D5D8AD10E0D0EBE00F9C692 /* libedit.dylib in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -5221,6 +5205,7 @@
 		0867D691FE84028FC02AAC07 /* JavaScriptCore */ = {
 			isa = PBXGroup;
 			children = (
+				576109BA1DD205F200CCF4CF /* JavaScriptCore-iOS-Static.xcconfig */,
 				6529FB3018B2D63900C61102 /* generate-bytecode-files */,
 				8604F4F2143A6C4400B295F5 /* ChangeLog */,
 				F692A8540255597D01FF60F7 /* create_hash_table */,
@@ -5268,13 +5253,13 @@
 		0867D69AFE84028FC02AAC07 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				5751697F1DD420CC0009CF81 /* libedit.tbd */,
+				5751697D1DD420660009CF81 /* libobjc.tbd */,
+				5751697B1DD420610009CF81 /* libicucore.tbd */,
+				575169791DD4205C0009CF81 /* libz.tbd */,
 				6560A4CF04B3B3E7008AE952 /* CoreFoundation.framework */,
 				51F0EB6105C86C6B00E6DF1B /* Foundation.framework */,
-				5D5D8AD00E0D0EBE00F9C692 /* libedit.dylib */,
-				9322A00306C341D3009067BB /* libicucore.dylib */,
-				51F0EC0705C86C9A00E6DF1B /* libobjc.dylib */,
 				A8A4748D151A8306004123FF /* libWTF.a */,
-				371D842C17C98B6E00ECF994 /* libz.dylib */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -9670,6 +9655,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				571CBF231DD46DDB004F38B0 /* DFGCleanUpPhase.cpp in Sources */,
 				5B67E7741AEFB29800ECC475 /* InitializeLLVMMac.cpp in Sources */,
 				5B67E7751AEFB29800ECC475 /* BundlePath.mm in Sources */,
 				5B67E7761AEFB29800ECC475 /* TypeLocationCache.cpp in Sources */,
@@ -9838,7 +9824,6 @@
 				5B67E8181AEFB29800ECC475 /* DFGPlan.cpp in Sources */,
 				5B67E8191AEFB29800ECC475 /* DFGPredictionInjectionPhase.cpp in Sources */,
 				5B67E81A1AEFB29800ECC475 /* DFGPredictionPropagationPhase.cpp in Sources */,
-				5B67E81B1AEFB29800ECC475 /* (null) in Sources */,
 				5B67E81C1AEFB29800ECC475 /* DFGSafepoint.cpp in Sources */,
 				5B67E81D1AEFB29800ECC475 /* DFGSpeculativeJIT.cpp in Sources */,
 				5B67E81E1AEFB29800ECC475 /* DFGSpeculativeJIT32_64.cpp in Sources */,
@@ -10226,7 +10211,6 @@
 				5B67E99C1AEFB29800ECC475 /* SlotVisitor.cpp in Sources */,
 				5B67E99D1AEFB29800ECC475 /* SmallStrings.cpp in Sources */,
 				5B67E99E1AEFB29800ECC475 /* SourceCode.cpp in Sources */,
-				5B67E99F1AEFB29800ECC475 /* (null) in Sources */,
 				5B67E9A01AEFB29800ECC475 /* SourceProvider.cpp in Sources */,
 				5B67E9A11AEFB29800ECC475 /* SourceProviderCache.cpp in Sources */,
 				5B67E9A21AEFB29800ECC475 /* SparseArrayValueMap.cpp in Sources */,
@@ -11326,9 +11310,11 @@
 					JSC_OBJC_API_AVAILABLE_MAC_OS_X_1080,
 					"$(FEATURE_DEFINES)",
 					"$(GCC_PREPROCESSOR_DEFINITIONS)",
-					"JSC_OBJC_API_ENABLED=0",
+					"JSC_OBJC_API_ENABLED=1",
+					"ENABLE_DFG_JIT=1",
 				);
 				INFOPLIST_FILE = JavaScriptCoreiOS.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
 				PRODUCT_NAME = "JavaScriptCore iOS";
 				SDKROOT = iphoneos;
 				STRIP_STYLE = all;
@@ -11350,9 +11336,11 @@
 					JSC_OBJC_API_AVAILABLE_MAC_OS_X_1080,
 					"$(FEATURE_DEFINES)",
 					"$(GCC_PREPROCESSOR_DEFINITIONS)",
-					"JSC_OBJC_API_ENABLED=0",
+					"JSC_OBJC_API_ENABLED=1",
+					"ENABLE_DFG_JIT=1",
 				);
 				INFOPLIST_FILE = JavaScriptCoreiOS.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
 				PRODUCT_NAME = "JavaScriptCore iOS";
 				SDKROOT = iphoneos;
 				STRIP_STYLE = all;
@@ -11365,6 +11353,7 @@
 			buildSettings = {
 				ARCHS = armv7;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_OPTIMIZATION_LEVEL = s;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
 					"WEBKIT_VERSION_MIN_REQUIRED=WEBKIT_VERSION_LATEST",
@@ -11372,9 +11361,11 @@
 					JSC_OBJC_API_AVAILABLE_MAC_OS_X_1080,
 					"$(FEATURE_DEFINES)",
 					"$(GCC_PREPROCESSOR_DEFINITIONS)",
-					"JSC_OBJC_API_ENABLED=0",
+					"JSC_OBJC_API_ENABLED=1",
+					"ENABLE_DFG_JIT=1",
 				);
 				INFOPLIST_FILE = JavaScriptCoreiOS.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
 				PRODUCT_NAME = "JavaScriptCore iOS";
 				SDKROOT = iphoneos;
 				STRIP_STYLE = all;
@@ -11383,11 +11374,13 @@
 		};
 		5B67E9F21AEFB29800ECC475 /* Production */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
+			baseConfigurationReference = 576109BA1DD205F200CCF4CF /* JavaScriptCore-iOS-Static.xcconfig */;
 			buildSettings = {
 				ARCHS = armv7;
 				BUILD_VARIANTS = normal;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_OPTIMIZATION_LEVEL = s;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"$(DEBUG_DEFINES)",
 					"WEBKIT_VERSION_MIN_REQUIRED=WEBKIT_VERSION_LATEST",
@@ -11395,12 +11388,15 @@
 					JSC_OBJC_API_AVAILABLE_MAC_OS_X_1080,
 					"$(FEATURE_DEFINES)",
 					"$(GCC_PREPROCESSOR_DEFINITIONS)",
-					"JSC_OBJC_API_ENABLED=0",
+					"JSC_OBJC_API_ENABLED=1",
+					"ENABLE_DFG_JIT=1",
 				);
 				INFOPLIST_FILE = JavaScriptCoreiOS.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 7.0;
 				PRODUCT_NAME = "JavaScriptCore iOS";
 				SDKROOT = iphoneos;
 				STRIP_STYLE = all;
+				"SYSTEM_VERSION_PREFIX[sdk=iphone*]" = 7;
 			};
 			name = Production;
 		};
@@ -11433,7 +11429,7 @@
 		};
 		5B67EA1B1AEFB4ED00ECC475 /* Production */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 1C9051430BA9E8A70081E9D0 /* JavaScriptCore.xcconfig */;
+			baseConfigurationReference = 576109BA1DD205F200CCF4CF /* JavaScriptCore-iOS-Static.xcconfig */;
 			buildSettings = {
 				INFOPLIST_FILE = "Offline Assembler iOS-Info.plist";
 				PRODUCT_NAME = "Offline Assembler copy";

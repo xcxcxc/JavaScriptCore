@@ -40,7 +40,7 @@
 #import <AVFoundation/AVError.h>
 #import <CoreMedia/CMBase.h>
 #import <cstdlib>
-#import <objc/objc-runtime.h>
+#import <objc/runtime.h>
 #import <wtf/NeverDestroyed.h>
 #import <runtime/TypedArrayInlines.h>
 

@@ -30,7 +30,7 @@
 
 #import "QuickLookHandleClient.h"
 #import "ResourceRequest.h"
-#import <objc/objc-runtime.h>
+#import <objc/runtime.h>
 #import <wtf/RefPtr.h>
 
 OBJC_CLASS NSData;

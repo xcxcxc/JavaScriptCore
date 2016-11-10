@@ -353,6 +353,8 @@
 		2CDED0F118115C85004DBA70 /* RunLoop.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = RunLoop.cpp; sourceTree = "<group>"; };
 		2CDED0F218115C85004DBA70 /* RunLoop.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = RunLoop.h; sourceTree = "<group>"; };
 		430B47871AAAAC1A001223DA /* StringCommon.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = StringCommon.h; sourceTree = "<group>"; };
+		579B925A1DD2C2AE00214000 /* WTF-iOS-Static.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = "WTF-iOS-Static.xcconfig"; path = "../WTF-iOS-Static.xcconfig"; sourceTree = "<group>"; };
+		579B925B1DD2C35B00214000 /* libstdc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libstdc++.tbd"; path = "usr/lib/libstdc++.tbd"; sourceTree = SDKROOT; };
 		5D247B6214689B8600E78B76 /* libWTF.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libWTF.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		5D247B6E14689C4700E78B76 /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Base.xcconfig; sourceTree = "<group>"; };
 		5D247B7014689C4700E78B76 /* DebugRelease.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = DebugRelease.xcconfig; sourceTree = "<group>"; };
@@ -616,6 +618,8 @@
 		5D247B5714689B8600E78B76 = {
 			isa = PBXGroup;
 			children = (
+				579B925B1DD2C35B00214000 /* libstdc++.tbd */,
+				579B925A1DD2C2AE00214000 /* WTF-iOS-Static.xcconfig */,
 				1447AECA18FCE5B900B3D7FF /* libicucore.dylib */,
 				1447AEC518FCE57700B3D7FF /* Foundation.framework */,
 				5D247B6D14689C4700E78B76 /* Configurations */,
@@ -1436,7 +1440,7 @@
 		};
 		5D247B6714689B8600E78B76 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5D247B7314689C4700E78B76 /* WTF.xcconfig */;
+			baseConfigurationReference = 579B925A1DD2C2AE00214000 /* WTF-iOS-Static.xcconfig */;
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
 				GCC_ENABLE_OBJC_GC_macosx_Debug_or_Release_YES = NO;
@@ -1446,7 +1450,7 @@
 		};
 		5D247B6814689B8600E78B76 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 5D247B7314689C4700E78B76 /* WTF.xcconfig */;
+			baseConfigurationReference = 579B925A1DD2C2AE00214000 /* WTF-iOS-Static.xcconfig */;
 			buildSettings = {
 				ARCHS = "$(ARCHS_STANDARD)";
 				GCC_ENABLE_OBJC_GC_macosx_Debug_or_Release_YES = NO;

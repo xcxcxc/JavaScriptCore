@@ -33,7 +33,7 @@
 #import <WebCore/GeolocationPosition.h>
 #import <WebCore/SoftLinking.h>
 #import <WebKitLogging.h>
-#import <objc/objc-runtime.h>
+#import <objc/runtime.h>
 #import <wtf/RefPtr.h>
 #import <wtf/RetainPtr.h>
 

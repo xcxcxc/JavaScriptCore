@@ -29,7 +29,7 @@
 #import "SoftLinking.h"
 #import "WebCoreObjCExtras.h"
 #import <CoreLocation/CoreLocation.h>
-#import <objc/objc-runtime.h>
+#import <objc/runtime.h>
 #import <wtf/MathExtras.h>
 #import <wtf/PassRefPtr.h>
 #import <wtf/RetainPtr.h>

@@ -26,7 +26,7 @@
 #if JSC_OBJC_API_ENABLED
 #import <JavaScriptCore/JavaScriptCore.h>
 #import <JSValueInternal.h>
-#import <objc/objc-runtime.h>
+#import <objc/runtime.h>
 
 @interface JSWrapperMap : NSObject
 
