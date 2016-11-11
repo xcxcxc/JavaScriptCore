@@ -107,18 +107,34 @@ private:
     virtual void set(NSInvocation *invocation, NSInteger argumentNumber, JSContext *context, JSValueRef argument, JSValueRef* exception) override
     {
         JSGlobalContextRef contextRef = [context JSGlobalContextRef];
-
+        
         id object = tryUnwrapObjcObject(contextRef, argument);
+        
+        if ([NSStringFromClass(m_class.get()) isEqualToString:@"JSValue"]) {
+            JSValue *value = [JSValue valueWithJSValueRef:argument inContext:context];
+            [invocation setArgument:&value atIndex:argumentNumber];
+            return;
+        }
+        
         if (object && [object isKindOfClass:m_class.get()]) {
             [invocation setArgument:&object atIndex:argumentNumber];
             return;
         }
-
+        
         if (JSValueIsNull(contextRef, argument) || JSValueIsUndefined(contextRef, argument)) {
             object = nil;
             [invocation setArgument:&object atIndex:argumentNumber];
             return;
         }
+        NSLog(@"m_class %@", m_class.get());
+        NSLog(@"context %@", context);
+        NSLog(@"invocation %@", invocation);
+        NSLog(@"invocation %@", invocation.target);
+        NSLog(@"invocation %@", invocation.methodSignature);
+        NSLog(@"argumentNumber %d", argumentNumber);
+        NSLog(@"JSValueIsNull %d", JSValueIsNull(contextRef, argument));
+        NSLog(@"JSValueIsUndefined %d", JSValueIsUndefined(contextRef, argument));
+//        NSLog(@"%@", [NSThread callStackSymbols]);
 
         *exception = toRef(JSC::createTypeError(toJS(contextRef), ASCIILiteral("Argument does not match Objective-C Class")));
     }
