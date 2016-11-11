@@ -985,6 +985,8 @@
 		570B86831DD4A07700578D94 /* Exception.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 570B86811DD4A07700578D94 /* Exception.cpp */; };
 		570B86841DD4A07700578D94 /* Exception.h in Headers */ = {isa = PBXBuildFile; fileRef = 570B86821DD4A07700578D94 /* Exception.h */; };
 		571CBF231DD46DDB004F38B0 /* DFGCleanUpPhase.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0F9D36921AE9CC33000D4DFB /* DFGCleanUpPhase.cpp */; };
+		57955BB51DD565E6005BB3D6 /* TemplateRegistry.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 57955BB31DD565E6005BB3D6 /* TemplateRegistry.cpp */; };
+		57955BB61DD565E6005BB3D6 /* TemplateRegistry.h in Headers */ = {isa = PBXBuildFile; fileRef = 57955BB41DD565E6005BB3D6 /* TemplateRegistry.h */; };
 		5B67E3C81AEFB29800ECC475 /* A64DOpcode.h in Headers */ = {isa = PBXBuildFile; fileRef = 652A3A231651C69700A80AFE /* A64DOpcode.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E3C91AEFB29800ECC475 /* AbstractMacroAssembler.h in Headers */ = {isa = PBXBuildFile; fileRef = 860161DF0F3A83C100F84710 /* AbstractMacroAssembler.h */; settings = {ATTRIBUTES = (Private, ); }; };
 		5B67E3CA1AEFB29800ECC475 /* ScopedArgumentsTable.h in Headers */ = {isa = PBXBuildFile; fileRef = 0FE050201AA9095600D33B33 /* ScopedArgumentsTable.h */; settings = {ATTRIBUTES = (Private, ); }; };
@@ -4283,6 +4285,8 @@
 		5751697D1DD420660009CF81 /* libobjc.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libobjc.tbd; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS9.3.sdk/usr/lib/libobjc.tbd; sourceTree = DEVELOPER_DIR; };
 		5751697F1DD420CC0009CF81 /* libedit.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libedit.tbd; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS9.3.sdk/usr/lib/libedit.tbd; sourceTree = DEVELOPER_DIR; };
 		576109BA1DD205F200CCF4CF /* JavaScriptCore-iOS-Static.xcconfig */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xcconfig; name = "JavaScriptCore-iOS-Static.xcconfig"; path = "../JavaScriptCore-iOS-Static.xcconfig"; sourceTree = "<group>"; };
+		57955BB31DD565E6005BB3D6 /* TemplateRegistry.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = TemplateRegistry.cpp; sourceTree = "<group>"; };
+		57955BB41DD565E6005BB3D6 /* TemplateRegistry.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TemplateRegistry.h; sourceTree = "<group>"; };
 		593D43CCA0BBE06D89C59707 /* MapDataInlines.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MapDataInlines.h; sourceTree = "<group>"; };
 		5B67E9F31AEFB29800ECC475 /* libJavaScriptCore iOS.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libJavaScriptCore iOS.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		5B67E9F41AEFB29900ECC475 /* JavaScriptCoreiOS.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; name = JavaScriptCoreiOS.plist; path = "/Users/hoolai/WebKit-GIT/Source/JavaScriptCore/JavaScriptCoreiOS.plist"; sourceTree = "<absolute>"; };
@@ -5945,6 +5949,8 @@
 		7EF6E0BB0EB7A1EC0079AFAF /* runtime */ = {
 			isa = PBXGroup;
 			children = (
+				57955BB31DD565E6005BB3D6 /* TemplateRegistry.cpp */,
+				57955BB41DD565E6005BB3D6 /* TemplateRegistry.h */,
 				570B86811DD4A07700578D94 /* Exception.cpp */,
 				570B86821DD4A07700578D94 /* Exception.h */,
 				570B867D1DD49FD500578D94 /* JSTemplateRegistryKey.cpp */,
@@ -7557,6 +7563,7 @@
 				5B67E5151AEFB29800ECC475 /* Float32Array.h in Headers */,
 				5B67E5161AEFB29800ECC475 /* Float64Array.h in Headers */,
 				5B67E5171AEFB29800ECC475 /* FPRInfo.h in Headers */,
+				57955BB61DD565E6005BB3D6 /* TemplateRegistry.h in Headers */,
 				5B67E5181AEFB29800ECC475 /* BytecodeIntrinsicRegistry.h in Headers */,
 				5B67E5191AEFB29800ECC475 /* FTLAbbreviatedTypes.h in Headers */,
 				5B67E51A1AEFB29800ECC475 /* FTLAbbreviations.h in Headers */,
@@ -9823,6 +9830,7 @@
 				5B67E82C1AEFB29800ECC475 /* PutByIdVariant.cpp in Sources */,
 				5B67E82D1AEFB29800ECC475 /* JSWeakSet.cpp in Sources */,
 				5B67E82E1AEFB29800ECC475 /* DFGTierUpCheckInjectionPhase.cpp in Sources */,
+				57955BB51DD565E6005BB3D6 /* TemplateRegistry.cpp in Sources */,
 				5B67E82F1AEFB29800ECC475 /* DFGToFTLDeferredCompilationCallback.cpp in Sources */,
 				5B67E8301AEFB29800ECC475 /* DFGPureValue.cpp in Sources */,
 				5B67E8311AEFB29800ECC475 /* DFGToFTLForOSREntryDeferredCompilationCallback.cpp in Sources */,
